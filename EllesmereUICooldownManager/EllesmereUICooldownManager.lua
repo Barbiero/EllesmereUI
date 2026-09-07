@@ -6368,12 +6368,13 @@ end
 function ns.ResolveCastableInterrupt(sid)
     if type(sid) ~= "number" or sid <= 0 then return nil end
     local knownInBook = ns.IsSpellInPlayerBook
-    if knownInBook(sid) then return sid end
-    -- Talented into a replacement, stored id is the base form.
+    -- Resolve replacements first: Command Demon can remain known while its
+    -- active pet command has the cooldown we need to check.
     if C_SpellBook and C_SpellBook.FindSpellOverrideByID then
         local ovr = C_SpellBook.FindSpellOverrideByID(sid)
         if ovr and ovr > 0 and ovr ~= sid and knownInBook(ovr) then return ovr end
     end
+    if knownInBook(sid) then return sid end
     -- Talented back out, stored id is the replacement form.
     if C_Spell and C_Spell.GetBaseSpell then
         local base = C_Spell.GetBaseSpell(sid)
