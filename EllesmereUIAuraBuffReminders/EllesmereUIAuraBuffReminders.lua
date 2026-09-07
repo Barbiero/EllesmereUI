@@ -2049,6 +2049,9 @@ local defaults = {
             -- set for the class specials (open world on).
             whereToShow = { open_world = false },
             specialsWhereToShow = {},
+            -- Warlock-section reminders (Soulstone and Wrong Demon) have
+            -- their own visibility settings.
+            warlockWhereToShow = {},
             -- Pets allowed by the wrong-demon reminder. Absent/false = not allowed.
             wrongPetAllowed = { felguard = true },
             preferredFlask = "last_used",
@@ -3335,11 +3338,14 @@ end
 local function CollectAuras(missing, playerClass, specID, inInstance, inCombat)
 local au = db.profile.auras
 do
-    if not EABR.SectionShows(au.whereToShow, inInstance) then return end
+    local auraSectionShows = EABR.SectionShows(au.whereToShow, inInstance)
     for _, aura in ipairs(AURAS) do
         if aura.standalone then
             -- Handled by standalone system, skip
         elseif au.enabled[aura.key] and (aura.class == playerClass)
+           and ((aura.key == "soulstone"
+                 and EABR.SectionShows(db.profile.consumables.warlockWhereToShow, inInstance))
+                or (aura.key ~= "soulstone" and auraSectionShows))
            and ((aura.isStance and GetStanceState(aura.castSpell)) or (not aura.isStance and Known(aura.castSpell)))
            and not (aura.notIfKnown and Known(aura.notIfKnown))
            and not (aura.requireTalent and not Known(aura.requireTalent))
@@ -4007,6 +4013,7 @@ local function Refresh()
             end
             if not suppress and playerClass == "WARLOCK"
                and co.enabled.wrong_pet ~= false
+               and EABR.SectionShows(co.warlockWhereToShow, inInstance)
                and UnitExists("pet") and not UnitIsDead("pet") then
                 local _, familyID = UnitCreatureFamily("pet")
                 familyID = familyID and not (issecretvalue and issecretvalue(familyID)) and familyID or nil
