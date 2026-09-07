@@ -2433,17 +2433,14 @@ do
     HookPixelSnap(hookFrame:CreateFontString())
     HookPixelSnap(hookFrame:CreateMaskTexture())
 
-    -- Enumerate all existing frame types to catch any we missed
-    local hookedTypes = { Frame = true }
-    local enumObj = EnumerateFrames()
-    while enumObj do
-        local objType = enumObj:GetObjectType()
-        if not enumObj:IsForbidden() and not hookedTypes[objType] then
-            HookPixelSnap(enumObj)
-            hookedTypes[objType] = true
-        end
-        enumObj = EnumerateFrames(enumObj)
-    end
+    -- No frame-tree enumeration here, deliberately. An EnumerateFrames() walk
+    -- used to run at this point "to catch any type we missed": 11,305 frames,
+    -- 248 ms of a 419 ms load, and its only new metatable was StatusBar, which
+    -- the explicit hook below already covers (measured 2026-09-07, identical in
+    -- open world and in a M+ key). It also never saw ItemButton,
+    -- ScrollingMessageFrame or AuraContainer, which this suite creates later, so
+    -- it was not the net it claimed to be. HookPixelSnap dedupes by metatable,
+    -- so every type sharing one hooked here is covered anyway.
 
     -- Also hook ScrollFrame and StatusBar metatables
     HookPixelSnap(CreateFrame("ScrollFrame"))

@@ -6799,3 +6799,33 @@ L["Debuffs with the Disease dispel type"] = "Debuffs com o tipo de dissipação 
 L["Debuffs with the Magic dispel type"] = "Debuffs com o tipo de dissipação Magia"
 L["Debuffs with the Poison dispel type"] = "Debuffs com o tipo de dissipação Veneno"
 L["Debuffs your own class is able to apply"] = "Debuffs que sua própria classe é capaz de aplicar"
+
+-- == Bags / Auto Split and Stack Splitter ==========================================
+L["Auto Split"] = "Divisão Automática"
+L["Shift-click a stack in the bags or bank to open a split dialog with an Auto Split button, which splits the stack into empty slots repeatedly until only the chosen amount or less remains. Off uses the default split popup."] = "Shift + clique em uma pilha nas bolsas ou no banco para abrir uma caixa de diálogo de divisão com um botão de Divisão Automática, que divide a pilha em espaços vazios repetidamente até restar apenas a quantidade escolhida ou menos. Desativado usa o pop-up de divisão padrão."
+L["Split Stack"] = "Dividir Pilha"
+L["Split this stack into empty slots repeatedly until only the chosen amount or less remains. Alt+Enter does the same."] = "Divide esta pilha em espaços vazios repetidamente até restar apenas a quantidade escolhida ou menos. Alt+Enter faz o mesmo."
+L["Stack Splitter"] = "Divisor de Pilha"
+
+-- == Cooldown Manager / Show Glows Only in Combat (global) =========================
+L["Hide every Cooldown Manager glow while you are out of combat: proc glows, active state, max stacks, buff and pandemic glows, cooldown ready glows and bar glows.\n\nThey come back the moment you enter combat, including a glow that started before the pull.\n\nApplies to every CDM bar and to the Tracking Bars at once. Glows from other EllesmereUI modules are not affected.\n\nThe Bar Glows page keeps its own per-mapping Only In Combat toggle; this one applies on top of it."] = "Oculta todo brilho do Gerenciador de Recarga enquanto você está fora de combate: brilhos de proc, estado ativo, pilhas máximas, brilhos de buff e de pandemia, brilhos de recarga pronta e brilhos de barra.\n\nEles voltam no momento em que você entra em combate, incluindo um brilho que começou antes do pull.\n\nAplica-se a todas as barras do CDM e às Barras de Status de uma vez. Brilhos de outros módulos da EllesmereUI não são afetados.\n\nA página de Brilhos de Barra mantém seu próprio alternador de Somente em Combate por mapeamento; este se aplica por cima dele."
+L["Show Glows Only in Combat (global)"] = "Mostrar Brilhos Somente em Combate (global)"
+
+-- == Damage Meters / Show/Hide Windows Keybind =====================================
+L["Hide and show every damage meter window at once. The state is not saved; a reload restores the configured visibility.\n\nThe bound key is taken over while it is set. Use the cog to include the combat timer and Spell History.\n\nLeft-click to set a keybind.\nRight-click to unbind."] = "Oculta e mostra toda janela de medidor de dano de uma vez. O estado não é salvo; um recarregamento restaura a visibilidade configurada.\n\nA tecla vinculada é assumida enquanto estiver definida. Use a engrenagem para incluir o cronômetro de combate e o Histórico de feitiços.\n\nClique esquerdo para definir um atalho.\nClique direito para remover."
+L["Include Combat Timer"] = "Incluir Cronômetro de Combate"
+L["Include Spell History"] = "Incluir Histórico de feitiços"
+L["Keybind Scope"] = "Escopo do Atalho"
+L["Show/Hide Windows Keybind"] = "Atalho de Mostrar/Ocultar Janelas"
+
+-- == QoL / Battle Res Ready Icon ====================================================
+L["Once the lockout expires, show a Ready label on the icon in place of the countdown. The visibility rule above still applies."] = "Quando o bloqueio expirar, mostra um rótulo de Pronto no ícone no lugar da contagem regressiva. A regra de visibilidade acima ainda se aplica."
+L["Ready Position"] = "Posição de Pronto"
+L["Ready Size"] = "Tamanho de Pronto"
+L["Show Icon when Sated"] = "Mostrar Ícone quando Saciado"
+L["Show Icon with Ready Text"] = "Mostrar Ícone com Texto de Pronto"
+L["Show the Sated/Exhaustion lockout countdown on the icon."] = "Mostra a contagem regressiva de bloqueio de Saciado/Exaustão no ícone."
+
+-- == Quickdraw / Outfits Category ===================================================
+L["Outfit"] = "Roupa"
+L["Outfits"] = "Roupas"
