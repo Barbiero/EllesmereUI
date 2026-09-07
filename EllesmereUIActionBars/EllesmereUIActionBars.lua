@@ -5057,9 +5057,12 @@ do
             -- bug whenever One Button Assist sits on a bar). Leading edge passes
             -- immediately (drag-drop/spec-swap bursts hit distinct slots, each passing
             -- instantly); repeats for the SAME slot inside the window defer to ONE
-            -- trailing re-dispatch, so the slot's final content always paints. arg1
-            -- == 0 ("all slots") is rare and always passes.
-            if event == "ACTIONBAR_SLOT_CHANGED" and arg1 and arg1 ~= 0 then
+            -- trailing re-dispatch, so the slot's final content always paints. arg1 == 0
+            -- ("all slots") shares this throttle under its own key (0 is not a real
+            -- slot number): a loadout swap changing talents/gear/bars at once can fire
+            -- it repeatedly, and unthrottled that was a full ~140-button walk per
+            -- firing with no coalescing (freeze reported via BTWLoadouts, Embrace 9.0.7).
+            if event == "ACTIONBAR_SLOT_CHANGED" and arg1 then
                 local now = GetTime()
                 local nextAt = ns._slotNext
                 if not nextAt then nextAt = {}; ns._slotNext = nextAt end
