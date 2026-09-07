@@ -3400,6 +3400,17 @@ do
                     elseif aura.check == "ownGroupOrSelf" then
                         local hasOwnBuff = EABR.PlayerOwnBuffOnGroupOrSelf(aura.buffIDs)
                         isMissing = hasOwnBuff == false
+                        if isMissing and aura.key == "soulstone" then
+                            local cooldown = C_Spell.GetSpellCooldown(aura.castSpell)
+                            if cooldown and cooldown.isActive then
+                                -- Ignore the ordinary GCD. If duration is restricted,
+                                -- conservatively hide until the active cooldown ends.
+                                local duration = cooldown.duration
+                                if isSecret(duration) or (duration and duration > 1.5) then
+                                    isMissing = false
+                                end
+                            end
+                        end
                     elseif aura.check == "playerSelfCast" then
                         isMissing = not PlayerHasSelfCastAuraByID(aura.buffIDs)
                     elseif aura.isStance then
@@ -5193,6 +5204,11 @@ mainFrame:SetScript("OnEvent", function(_, e, arg1, arg2, arg3)
         C_Timer.After(2.1, RequestRefresh)
     end
 
+    if e == "SPELL_UPDATE_COOLDOWN" then
+        if _cachedPlayerClass == "WARLOCK" then RequestRefresh() end
+        return
+    end
+
     -- All other events: just refresh
     RequestRefresh()
 end)
@@ -5237,6 +5253,7 @@ mainFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 mainFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 mainFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 mainFrame:RegisterEvent("SPELLS_CHANGED")
+mainFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 mainFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
 mainFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 mainFrame:RegisterEvent("PLAYER_LEVEL_CHANGED")
