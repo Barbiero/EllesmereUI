@@ -8341,9 +8341,7 @@ initFrame:SetScript("OnEvent", function(self)
             pf.spellText:ClearAllPoints()
             pf.spellText:SetJustifyH(jh)
             pf.spellText:SetPoint(pt, pf.bar, pt, xb + (cb.spellTextX or 0), cb.spellTextY or 0)
-            if cbSpellSide == "center" then
-                pf.spellText:SetWidth(cbBarW * 0.6)
-            elseif cbBarW > 0 then
+            if cbBarW > 0 then
                 pf.spellText:SetWidth(cbBarW - 8 - (cb.showTimer and cbTimerW or 0))
             end
             pf.spellText:SetText(EllesmereUI.L("Spell Name"))
