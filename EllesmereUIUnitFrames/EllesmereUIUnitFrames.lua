@@ -4367,7 +4367,8 @@ local function ApplyAbsorbStyle(absorbBar, style, settings)
     local tiled = (style == "stripedReversed" or style == "stripedThick" or style == "stripedThickR" or style == "largeStripes" or style == "largeStripesR" or style == "largeOutlinedStripes" or style == "largeOutlinedStripesR")
     local mask = absorbBar._absorbMask
     absorbBar:SetStatusBarTexture(tex)
-    absorbBar:SetStatusBarColor(ac.r, ac.g, ac.b, alpha)
+    -- Per-component default: a partial colour table would throw here.
+    absorbBar:SetStatusBarColor(ac.r or 1, ac.g or 1, ac.b or 1, alpha)
     local fill = absorbBar:GetStatusBarTexture()
     if fill then
         fill:SetDrawLayer("ARTWORK", 1)

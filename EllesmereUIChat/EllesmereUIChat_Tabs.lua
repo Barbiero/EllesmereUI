@@ -277,7 +277,10 @@ end
 local function SuppressTabRegions(tab)
     for i = 1, select("#", tab:GetRegions()) do
         local region = select(i, tab:GetRegions())
-        if region and region.SetAlpha and region:GetAlpha() ~= 0 then
+        -- GetAlpha reads secret on chat-roleset widgets in lockdown; a
+        -- secret skips the compare and re-asserts.
+        local a = region and region.SetAlpha and region:GetAlpha()
+        if a and ((issecretvalue and issecretvalue(a)) or a ~= 0) then
             region:SetAlpha(0)
         end
     end

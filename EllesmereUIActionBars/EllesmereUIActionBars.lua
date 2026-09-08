@@ -3148,13 +3148,16 @@ end
 local function SetupBar(info, skipProtected)
     local key = info.key
     local frame = CreateBarFrame(info)
-    -- A bar that can never become visible gets no buttons at load: the button
-    -- loop is 95 % of such a bar's setup cost, and most of that is Blizzard's
-    -- CreateFrame on the action button template, which only a lower button
-    -- count can reach. The frame IS still built, so barFrames[key] stays
-    -- non-nil for its 52 indexing sites and barButtons[key] is empty, not nil.
-    -- RefreshRuntimeVisibility builds them when the bar leaves the Never set.
-    if ns.IsNeverBar(info) then
+    -- A bar that can never become visible AND has no key bound gets no buttons
+    -- at load: the button loop is 95 % of such a bar's setup cost, and most of
+    -- that is Blizzard's CreateFrame on the action button template, which only
+    -- a lower button count can reach. A hidden bar with keys keeps its buttons:
+    -- its bindings stay live by contract and click-routed keys need a button to
+    -- route to. The frame IS still built, so barFrames[key] stays non-nil for
+    -- its 52 indexing sites and barButtons[key] is empty, not nil.
+    -- ns._eabBuildSkippedBars builds them when the bar leaves the Never set or
+    -- a key lands on it.
+    if ns.IsNeverBar(info) and not ns.BarHasBoundKeys(info) then
         barButtons[key] = {}
         ns._eabBarNoButtons[key] = true
         -- Placeholder only, same fallback the button-derived value would take
@@ -3598,8 +3601,9 @@ ns._eabBarDormant = {}
 -- mid-combat, where a heavier reconcile would spike).
 ns._eabBarNever = {}
 ns._eabBarNeverWas = {}
--- Bars whose buttons were skipped at load because they were Never bars then.
--- Cleared by BuildBarButtons. Drives the lazy build in RefreshRuntimeVisibility.
+-- Bars whose buttons were skipped at load because they were Never AND unbound
+-- then. Cleared by BuildBarButtons. Drives ns._eabBuildSkippedBars (reveal
+-- via RefreshRuntimeVisibility, or a key landing via UpdateKeybinds).
 ns._eabBarNoButtons = {}
 -- Single source of truth for "this bar can never become visible through any
 -- runtime condition". RecomputeNeverBars and the load-time button skip both
@@ -3616,6 +3620,18 @@ ns.IsNeverBar = function(info)
     if override == "never" then never = true
     elseif override == "always" then never = false end
     return never and true or false
+end
+-- True when any of the bar's binding commands has a key. A hidden bar keeps
+-- live bindings by contract, and a click-routed key (Bar9/Bar10, custom
+-- paging, flyouts) has nothing to route to without a button, so the load-time
+-- button skip only applies to bars that are BOTH Never and unbound.
+ns.BarHasBoundKeys = function(info)
+    local prefix = BINDING_MAP[info.key]
+    if not prefix then return false end
+    for i = 1, info.count do
+        if GetBindingKey(prefix .. i) then return true end
+    end
+    return false
 end
 ns.RecomputeNeverBars = function()
     local bars = EAB.db and EAB.db.profile and EAB.db.profile.bars
@@ -7861,47 +7877,60 @@ function EAB:ApplyIconBackgroundForBar(barKey)
     for i = 1, #buttons do
         local btn = buttons[i]
         if not btn then break end
-        -- Only show icon background on empty slots
-        local okHA, hasAction = pcall(btn.HasAction, btn)
-        hasAction = okHA and hasAction
-        local showThis = show and not hasAction
         local bfd = EFD(btn)
-        if not bfd.iconBgClip then
-            local clip = CreateFrame("Frame", nil, btn)
-            clip:SetAllPoints(btn)
-            clip:SetClipsChildren(true)
-            clip:SetFrameLevel(math.max(1, btn:GetFrameLevel() - 1))
-            clip:EnableMouse(false)
-            local bg = clip:CreateTexture(nil, "BACKGROUND", nil, -1)
-            bg:SetAtlas("UI-HUD-ActionBar-IconFrame-Slot")
-            bfd.iconBgClip = clip
-            bfd.iconBg = bg
+        if not show then
+            -- Disabled (the default): build nothing. Only a clip left over
+            -- from an earlier ON has anything to hide; every other reader of
+            -- iconBg / iconBgClip (slot sync, shape masks) nil-checks.
+            if bfd.iconBgClip then bfd.iconBgClip:Hide() end
+        else
+            -- Only show icon background on empty slots
+            local okHA, hasAction = pcall(btn.HasAction, btn)
+            hasAction = okHA and hasAction
+            if not bfd.iconBgClip then
+                local clip = CreateFrame("Frame", nil, btn)
+                clip:SetAllPoints(btn)
+                clip:SetClipsChildren(true)
+                clip:SetFrameLevel(math.max(1, btn:GetFrameLevel() - 1))
+                clip:EnableMouse(false)
+                local bg = clip:CreateTexture(nil, "BACKGROUND", nil, -1)
+                bg:SetAtlas("UI-HUD-ActionBar-IconFrame-Slot")
+                bfd.iconBgClip = clip
+                bfd.iconBg = bg
+            end
             -- Auto-update on button events. ACTIONBAR_SLOT_CHANGED is not
             -- delivered to buttons (central dispatcher owns it and syncs the
             -- clip there); this hook covers the remaining per-button events.
-            btn:HookScript("OnEvent", function(self)
-                -- Feature gate FIRST: off (default) must not cost an EFD
-                -- lookup, profile reads, and a double HasAction per event
-                -- just to re-hide an already-hidden clip. The apply pass
-                -- hides a freshly-disabled clip on the settings edge, never this hook.
-                if not ns._iconBgOn then return end
-                local sfd = EFD(self)
-                local c = sfd.iconBgClip
-                if c then
-                    local okHA, ha = pcall(self.HasAction, self)
-                    c:SetShown(not (okHA and ha))
-                end
-            end)
+            -- Installed on the first ON edge only: a script hook rides every
+            -- event every button receives and cannot be removed, so a
+            -- session that never enables the feature never pays even its
+            -- early-return. The EFD flag survives bar rebuilds that reuse
+            -- the button frame, so the hook never stacks.
+            if not bfd.iconBgHooked then
+                bfd.iconBgHooked = true
+                btn:HookScript("OnEvent", function(self)
+                    -- Feature gate FIRST: turned off later in the session, the
+                    -- hook must cost one boolean. The apply pass hides a
+                    -- freshly-disabled clip on the settings edge, never this hook.
+                    if not ns._iconBgOn then return end
+                    local sfd = EFD(self)
+                    local c = sfd.iconBgClip
+                    if c then
+                        local okHA, ha = pcall(self.HasAction, self)
+                        c:SetShown(not (okHA and ha))
+                    end
+                end)
+            end
+            bfd.iconBg:ClearAllPoints()
+            bfd.iconBg:SetPoint("TOPLEFT", btn, "TOPLEFT", -inset, inset)
+            bfd.iconBg:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", inset, -inset)
+            bfd.iconBg:SetAlpha(alpha)
+            -- Apply custom shape mask if active (shapes run before this)
+            if bfd.shapeMask and bfd.shapeApplied then
+                pcall(bfd.iconBg.AddMaskTexture, bfd.iconBg, bfd.shapeMask)
+            end
+            bfd.iconBgClip:SetShown(not hasAction)
         end
-        bfd.iconBg:ClearAllPoints()
-        bfd.iconBg:SetPoint("TOPLEFT", btn, "TOPLEFT", -inset, inset)
-        bfd.iconBg:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", inset, -inset)
-        bfd.iconBg:SetAlpha(alpha)
-        -- Apply custom shape mask if active (shapes run before this)
-        if bfd.shapeMask and bfd.shapeApplied then
-            pcall(bfd.iconBg.AddMaskTexture, bfd.iconBg, bfd.shapeMask)
-        end
-        bfd.iconBgClip:SetShown(showThis)
     end
 end
 
@@ -9508,6 +9537,54 @@ function EAB:RefreshHoverGatedAlpha()
     self:RefreshMouseover(true)
 end
 
+-- Build the buttons of bars skipped at load (see SetupBar) that need them now:
+-- the bar left the Never set (reveal), or a key landed on one of its commands
+-- (hidden bars keep live bindings, and a click-routed key needs a button to
+-- route to). Deliberately state-based rather than edge-based: an options write
+-- taken in combat flips the Never map but cannot create secure frames, and the
+-- PLAYER_REGEN_ENABLED healer re-enters the callers with the map ALREADY
+-- flipped, so a transition test would never fire again and the bar would stay
+-- buttonless until the next reload. Returns true when anything was built. The
+-- CALLER owns the binding rebuild: one caller is UpdateKeybinds itself. On ns:
+-- file at the 200-local cap.
+ns._eabBuildSkippedBars = function()
+    if not next(ns._eabBarNoButtons) or InCombatLockdown() then return false end
+    local built = false
+    for _, info in ipairs(BAR_CONFIG) do
+        local key = info.key
+        local frame = barFrames[key]
+        if frame and ns._eabBarNoButtons[key]
+           and (not ns._eabBarNever[key] or ns.BarHasBoundKeys(info)) then
+            ns.BuildBarButtons(info, frame, false)
+            LayoutBar(key)
+            -- Still hidden (keybind case, or a reveal whose driver has not
+            -- shown the frame yet): the hide edge already passed with no
+            -- buttons, so park the new mixin event lists the way it would
+            -- have. The show edge lifts this as usual.
+            if not frame:IsShown() then
+                ns._eabBarDormant[key] = nil
+                ns.ApplyBarDormancy(key, true)
+            end
+            built = true
+        end
+    end
+    if built then
+        -- The refs pass already ran without these buttons in it.
+        _secureRefsReady = false
+        SecureSetupHandler_PrepareRefs()
+        -- Everything cosmetic (borders, shapes, fonts, backgrounds, button
+        -- art, cooldown visuals, range colouring) converges through the
+        -- full apply. Next frame, not inline: ApplyAll calls back into
+        -- RefreshRuntimeVisibility, and the marker is already cleared by then
+        -- so it finds nothing to build. On ns, not on EAB, so the
+        -- EUI_UnlockMode hook on EAB.ApplyAll stays as it was.
+        C_Timer.After(0, function()
+            if ns._eabApplyAll then ns._eabApplyAll() end
+        end)
+    end
+    return built
+end
+
 function EAB:RefreshRuntimeVisibility()
     -- Secure driver/mouse writes below are per-site combat-gated; a run
     -- during combat leaves those writes unapplied, and the REGEN_ENABLED
@@ -9517,41 +9594,12 @@ function EAB:RefreshRuntimeVisibility()
     -- through here (this is where drivers re-derive), so this is the single
     -- recompute site for the hard-dormancy map the event walks gate on.
     ns.RecomputeNeverBars()
-    -- Build the buttons of any bar that has left the Never set but had them
-    -- skipped at load (see SetupBar). Deliberately state-based rather than
-    -- edge-based: an options write taken in combat flips the map here but
-    -- cannot create secure frames, and the PLAYER_REGEN_ENABLED healer
-    -- re-enters this function with the map ALREADY flipped, so a transition
-    -- test would never fire again and the bar would stay buttonless until the
-    -- next reload. Testing the state instead means the deferred run heals it.
-    if next(ns._eabBarNoButtons) and not InCombatLockdown() then
-        local built = false
-        for _, info in ipairs(BAR_CONFIG) do
-            local frame = barFrames[info.key]
-            if frame and ns._eabBarNoButtons[info.key]
-               and not ns._eabBarNever[info.key] then
-                ns.BuildBarButtons(info, frame, false)
-                LayoutBar(info.key)
-                built = true
-            end
-        end
-        if built then
-            -- The refs pass already ran without these buttons in it.
-            _secureRefsReady = false
-            SecureSetupHandler_PrepareRefs()
-            -- ~200 override bindings are built from BAR_CONFIG x barButtons, so
-            -- a revealed bar has none until this runs. Defers itself in combat.
-            if _G._EAB_UpdateKeybinds then _G._EAB_UpdateKeybinds() end
-            -- Everything cosmetic (borders, shapes, fonts, backgrounds, button
-            -- art, cooldown visuals, range colouring) converges through the
-            -- full apply. Next frame, not inline: ApplyAll calls back into this
-            -- function, and the marker is already cleared by then so it finds
-            -- nothing to build. On ns, not on EAB, so the EUI_UnlockMode hook
-            -- on EAB.ApplyAll stays as it was.
-            C_Timer.After(0, function()
-                if ns._eabApplyAll then ns._eabApplyAll() end
-            end)
-        end
+    -- Bars that left the Never set with their buttons skipped at load get them
+    -- now (state-based; see ns._eabBuildSkippedBars). ~200 override bindings
+    -- are built from BAR_CONFIG x barButtons, so a revealed bar has none until
+    -- UpdateKeybinds runs; it defers itself in combat.
+    if ns._eabBuildSkippedBars() and _G._EAB_UpdateKeybinds then
+        _G._EAB_UpdateKeybinds()
     end
     self:_RefreshSoftTargetGate()
     for _, info in ipairs(ALL_BARS) do
@@ -11586,6 +11634,12 @@ local function UpdateKeybinds()
     -- resumes on editor close (housingCleared reset -> UpdateKeybinds;
     -- sigValid stays false while cleared, so that rebuild is never skipped).
     if _bindState.housingCleared then return false end
+    -- A hidden bar skipped at load must exist the moment a key lands on one of
+    -- its commands (UPDATE_BINDINGS lands here): hidden bars keep live
+    -- bindings, and a click-routed key has no button to route to otherwise.
+    -- Combat already bailed above, so the build is legal here; the passes
+    -- below then bind the new buttons like any other.
+    ns._eabBuildSkippedBars()
     -- Empower detection for one action slot, shared by the current-page
     -- and base-slot checks in pass 1.
     local function SlotIsPH(slot)
@@ -14661,7 +14715,18 @@ function EAB:FinishSetup()
     -- Blizzard's cooldown update directly on our reused StanceButtons: visual-only
     -- (CooldownFrame_Set touches no protected state), safe during combat, same as the
     -- pet PET_BAR_UPDATE_COOLDOWN path above.
-    local function UpdateStanceCooldowns()
+    -- Per-form memo of the last (start, duration, enable) triple pushed. The
+    -- cooldown event refires on every GCD for form classes and the swipe is a
+    -- pure function of those three values, so an identical triple is skipped.
+    -- Invalidation inputs, each named: the triple itself (compared per
+    -- form); the form list and the world enter (their events wipe the memo);
+    -- the show-edge reconcile (the hidden bar may have been repainted by
+    -- anything meanwhile -- its no-event call wipes too). Secret values
+    -- (instanced combat) cannot be compared: that form pushes unconditionally
+    -- and drops its memo.
+    local stanceLast = {}
+    local function UpdateStanceCooldowns(_, event)
+        if event ~= "UPDATE_SHAPESHIFT_COOLDOWN" then wipe(stanceLast) end
         -- Hidden stance bar: skip. The show edge reruns this painter
         -- (ns._eabStanceReconcile), and the event refires every GCD for
         -- form classes, so nothing can stay stale while visible.
@@ -14672,7 +14737,18 @@ function EAB:FinishSetup()
             local btn = _G["StanceButton" .. i]
             if btn and btn.cooldown then
                 local start, duration, enable = GetShapeshiftFormCooldown(i)
-                CooldownFrame_Set(btn.cooldown, start, duration, enable)
+                if issecretvalue and (issecretvalue(start) or issecretvalue(duration)
+                                      or issecretvalue(enable)) then
+                    stanceLast[i] = nil
+                    CooldownFrame_Set(btn.cooldown, start, duration, enable)
+                else
+                    local m = stanceLast[i]
+                    if not m or m[1] ~= start or m[2] ~= duration or m[3] ~= enable then
+                        if not m then m = {}; stanceLast[i] = m end
+                        m[1], m[2], m[3] = start, duration, enable
+                        CooldownFrame_Set(btn.cooldown, start, duration, enable)
+                    end
+                end
             end
         end
     end

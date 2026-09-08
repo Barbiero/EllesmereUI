@@ -1974,7 +1974,6 @@ local defaults = {
             showTooltips = true,
             textColor = {r=1, g=1, b=1},
             textSize = 12,
-            textFont = "Expressway",
             textXOffset = 0,
             textYOffset = -5,
             textAnchor = "BOTTOM",
@@ -2023,7 +2022,10 @@ local defaults = {
             enabled = {
                 symbiotic=true, battle_stance=true, def_stance=true, berserk_stance=true, shadowform=true,
                 devo_aura=true, bol=true, bof=true, som=true, blistering_scales=true,
-                bestow_weyrnstone=true, timelessness=true, soulstone=true,
+                bestow_weyrnstone=true, timelessness=true,
+                -- Opt-in: enabling it also turns on group aura tracking for
+                -- the class.
+                soulstone=false,
             },
             -- All buckets (including open world) on by default.
             whereToShow = {},
@@ -3407,15 +3409,28 @@ do
                         local hasOwnBuff = EABR.PlayerOwnBuffOnGroupOrSelf(aura.buffIDs)
                         isMissing = hasOwnBuff == false
                         if isMissing and aura.key == "soulstone" then
+                            -- On cooldown = nothing to cast, so no reminder. isActive is
+                            -- NeverSecret; duration can be secret in restricted content,
+                            -- where the reminder stays hidden until the next refresh edge.
+                            -- No event watches the cooldown: a one-shot timer covers the
+                            -- idle expiry, and the fight-end refresh (ENCOUNTER_END /
+                            -- REGEN_ENABLED) already covers a boss-reset clear.
                             local cooldown = C_Spell.GetSpellCooldown(aura.castSpell)
+                            local remaining
                             if cooldown and cooldown.isActive then
-                                -- Ignore the ordinary GCD. If duration is restricted,
-                                -- conservatively hide until the active cooldown ends.
+                                -- Ignore the ordinary GCD.
                                 local duration = cooldown.duration
-                                if isSecret(duration) or (duration and duration > 1.5) then
+                                if isSecret(duration) then
                                     isMissing = false
+                                elseif duration and duration > 1.5 then
+                                    isMissing = false
+                                    local start = cooldown.startTime
+                                    if not isSecret(start) and type(start) == "number" then
+                                        remaining = start + duration - GetTime()
+                                    end
                                 end
                             end
+                            EABR.ArmSoulstoneCooldownRefresh(remaining)
                         end
                     elseif aura.check == "playerSelfCast" then
                         isMissing = not PlayerHasSelfCastAuraByID(aura.buffIDs)
@@ -4261,6 +4276,22 @@ UpdateDurationTicker = function()
     end)
 end
 
+-- Soulstone cooldown expiry: one refresh when the cooldown runs out while
+-- nothing else fires. Re-armed (or cleared with nil) on every Soulstone
+-- check, so a cooldown reset by a boss wipe leaves at most one stale, harmless
+-- extra refresh behind. Exists only while a Warlock has the reminder on.
+function EABR.ArmSoulstoneCooldownRefresh(remaining)
+    if EABR._soulstoneCdTimer then
+        EABR._soulstoneCdTimer:Cancel()
+        EABR._soulstoneCdTimer = nil
+    end
+    if type(remaining) ~= "number" or remaining <= 0 then return end
+    EABR._soulstoneCdTimer = C_Timer.NewTimer(remaining + 0.1, function()
+        EABR._soulstoneCdTimer = nil
+        RequestRefresh()
+    end)
+end
+
 
 -------------------------------------------------------------------------------
 --  Unlock Mode
@@ -4917,6 +4948,9 @@ function EABR:OnEnable()
         _needGroupAura = false
         _isEvokerOwnOnRaid = false
         EABR._needsProviderCoverage = false
+        -- Only the own-cast group checks re-evaluate on roster changes: a
+        -- provider's coverage already follows the joiner's UNIT_AURA.
+        EABR._rosterRefresh = false
         for _, buff in ipairs(RAID_BUFFS) do
             if buff.class == playerClass then
                 _needGroupAura = true
@@ -4929,6 +4963,7 @@ function EABR:OnEnable()
                 and (aura.check == "ownOnRaid" or aura.check == "ownGroupOrSelf")
                 and db.profile.auras.enabled[aura.key] ~= false then
                 _needGroupAura = true
+                EABR._rosterRefresh = true
                 if playerClass == "EVOKER" and aura.check == "ownOnRaid" then
                     _isEvokerOwnOnRaid = true
                 end
@@ -5182,11 +5217,11 @@ mainFrame:SetScript("OnEvent", function(_, e, arg1, arg2, arg3)
         return
     end
 
-    -- Group-targeted reminders also re-evaluate when their holder joins or
-    -- leaves; other classes retain the cheap receiver-view-only behavior.
+    -- Roster changes do not touch player buffs/consumables; only the receiver
+    -- view (class presence) and the own-cast group checks re-evaluate here.
     if e == "GROUP_ROSTER_UPDATE" then
         local rbSW = db and db.profile.raidBuffs and db.profile.raidBuffs.showWhen
-        if _needGroupAura or (rbSW and rbSW.iAmMissing == true) then RequestRefresh() end
+        if EABR._rosterRefresh or (rbSW and rbSW.iAmMissing == true) then RequestRefresh() end
         return
     end
 
@@ -5209,11 +5244,6 @@ mainFrame:SetScript("OnEvent", function(_, e, arg1, arg2, arg3)
     if e == "PLAYER_MOUNT_DISPLAY_CHANGED" and not IsMounted() then
         EABR._petRemountGrace = GetTime() + 2
         C_Timer.After(2.1, RequestRefresh)
-    end
-
-    if e == "SPELL_UPDATE_COOLDOWN" then
-        if _cachedPlayerClass == "WARLOCK" then RequestRefresh() end
-        return
     end
 
     -- All other events: just refresh
@@ -5260,7 +5290,6 @@ mainFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 mainFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 mainFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 mainFrame:RegisterEvent("SPELLS_CHANGED")
-mainFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 mainFrame:RegisterEvent("PLAYER_TALENT_UPDATE")
 mainFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 mainFrame:RegisterEvent("PLAYER_LEVEL_CHANGED")

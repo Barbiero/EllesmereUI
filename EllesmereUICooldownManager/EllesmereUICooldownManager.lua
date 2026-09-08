@@ -1398,6 +1398,22 @@ function ns.RescanCdReadySoundFlag()
     end)
 end
 
+-- "Replace with Buff" gate: set ns._cdmAnyBuffReplace once if any saved cd/utility
+-- icon (any spec) names a replacement buff, so the route map's Pass 3c and the
+-- collect pass's identity swap and compaction stay skipped for non-users. Same
+-- scanned-once contract as RescanCdReadySoundFlag.
+function ns.RescanBuffReplaceFlag()
+    if ns._cdmAnyBuffReplace or ns._buffReplaceFlagScanned then return end
+    if not EllesmereUIDB then return end
+    ns._buffReplaceFlagScanned = true
+    ns.ForEachSavedSettingsBlock(function(ss)
+        if type(ss.replaceBuffID) == "number" and ss.replaceBuffID > 0 then
+            ns._cdmAnyBuffReplace = true
+            return true
+        end
+    end)
+end
+
 -- "Hide CD Text (Charges)" gate: set ns._cdmAnyChargeHideCdText once if any saved spell
 -- (any spec) has the toggle on; RefreshCDMIconAppearance then skips its per-icon watch
 -- check for non-users. Same contract as RescanMaxStacksGlowFlag.
@@ -2393,10 +2409,11 @@ end
 -- a ticker re-evaluates them. This one gates the renderer: the proc glow and
 -- the CD ready flush are pure edges with no re-assert, so a suppressed request
 -- can only come back by being replayed from here.
--- overlay -> its last StartNativeGlow request. Plain table: the record holds
--- the owning frame anyway and WoW frames are permanent, so weak keys would
--- collect nothing. The rec.active filter keeps the sweep below short.
-ns._cdmGlowRec = {}
+-- overlay -> its last StartNativeGlow request. Weak keys: the options preview
+-- overlays are rebuilt per page build and would otherwise pile up here for the
+-- combat sweep to walk; a live overlay is held by its owner's frame data.
+-- The rec.active filter keeps the sweep below short.
+ns._cdmGlowRec = setmetatable({}, { __mode = "k" })
 
 -- Cached toggle: StartNativeGlow tests it on every glow start, so it must not
 -- walk the DB there. Re-read on apply/profile change, at world entry, and from
@@ -2422,34 +2439,40 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
     -- style sizes exactly like the normal buff-glow path.
     local parent = (opts and opts.owner) or overlay:GetParent()
 
-    -- Record the request verbatim, pre-defaulting, so a nil colour stays nil.
-    -- Recorded even with the gate off: the option has to be flippable
-    -- mid-session, and the proc glow and CD ready glow are edge-driven, so a
-    -- suppressed request can only ever come back by being replayed from here.
-    -- The owner and its resolved spellID ride along so the replay can tell a
-    -- record that is still current from one whose pooled icon has since been
-    -- handed a different spell. fc.spellID is the identity the rest of this
-    -- file already branches on, so it is a plain value, never secret.
-    local rec = ns._cdmGlowRec[overlay]
-    if not rec then rec = {}; ns._cdmGlowRec[overlay] = rec end
-    local ownerFC = parent and _ecmeFC[parent]
-    rec.style, rec.r, rec.g, rec.b, rec.opts = styleIdx, cr, cg, cb, opts
-    rec.owner, rec.sid = parent, ownerFC and ownerFC.spellID or nil
-    rec.active = true
-    -- Suppressed overlays keep _glowActive = true: the buff ticker's active-glow
-    -- integrity pass and the preset cd-state re-assert restart any glow whose
-    -- overlay reads dark, so the truth would churn every tick for exactly the
-    -- users who asked for less work out of combat.
-    -- Options previews opt out on their own overlay rather than through opts:
-    -- three overlays serve the four preview call sites, and a non-nil opts
-    -- flips the pixel-glow branch off the bar's Lines/Thickness/Speed.
-    if ns._cdmGlowOOCGate and not _inCombat and not overlay._euiGlowPreview then
-        rec.suppressed = true
-        overlay._glowActive = true
-        overlay:SetAlpha(0)
-        return
+    -- Show Glows Only in Combat. Recorded only once the gate has ever been on
+    -- this session, so a session that never switches it on pays one boolean
+    -- here and nothing else. The record is what the combat sweep takes down
+    -- and replays: the proc glow and CD ready glow are edge-driven, so a
+    -- suppressed request can only ever come back by being replayed from it.
+    -- Glows already lit at the very first enable of a session have no record
+    -- until their own next edge; the option setter re-issues the bar and buff
+    -- glows right away and everything is exact from the next login.
+    -- Stored verbatim, pre-defaulting, so a nil colour stays nil. The owner and
+    -- its resolved spellID ride along so the replay can tell a record that is
+    -- still current from one whose pooled icon has since been handed a
+    -- different spell (fc.spellID is our cached plain identity, never secret).
+    if ns._cdmGlowGateEverOn then
+        local rec = ns._cdmGlowRec[overlay]
+        if not rec then rec = {}; ns._cdmGlowRec[overlay] = rec end
+        local ownerFC = parent and _ecmeFC[parent]
+        rec.style, rec.r, rec.g, rec.b, rec.opts = styleIdx, cr, cg, cb, opts
+        rec.owner, rec.sid = parent, ownerFC and ownerFC.spellID or nil
+        rec.active = true
+        -- Suppressed overlays keep _glowActive = true: the buff ticker's
+        -- active-glow integrity pass and the preset cd-state re-assert restart
+        -- any glow whose overlay reads dark, so the truth would churn every
+        -- tick for exactly the users who asked for less work out of combat.
+        -- Options previews opt out on their own overlay rather than through
+        -- opts: three overlays serve the four preview call sites, and a
+        -- non-nil opts flips the pixel-glow branch off the bar's settings.
+        if ns._cdmGlowOOCGate and not _inCombat and not overlay._euiGlowPreview then
+            rec.suppressed = true
+            overlay._glowActive = true
+            overlay:SetAlpha(0)
+            return
+        end
+        rec.suppressed = false
     end
-    rec.suppressed = false
 
     if not parent then return end
     local pW = (opts and opts.width) or parent:GetWidth()
@@ -7031,6 +7054,11 @@ local function UpdateAllCDMBars(dt) end
 -- case where nothing is hosted. On ns, not a file local: this file sits at
 -- Lua's 200-local cap.
 function ns.BarUsesBuffViewer(barKey)
+    -- "Replace with Buff" frames come out of the BuffIcon pool too (route map
+    -- Pass 3c records the bars); gated so non-users pay one boolean.
+    if ns._cdmAnyBuffReplace and ns._buffReplaceBars and ns._buffReplaceBars[barKey] then
+        return true
+    end
     local sd = ns.GetBarSpellData and ns.GetBarSpellData(barKey)
     if not sd then return false end
     if sd.hostedBuffSpellIDs and next(sd.hostedBuffSpellIDs) then return true end
@@ -7694,6 +7722,7 @@ BuildAllCDMBars = function()
     ns.RescanChargeStyleFlag()    -- set the Hide Swipe (Charges) gate (once) before refresh
     ns.RescanBuffSoundFlag()      -- set the Audio on Buff Gain/Loss gate (once) before refresh
     ns.RescanCdReadySoundFlag()   -- set the Audio Effect on CD Ready gate (once) before refresh
+    ns.RescanBuffReplaceFlag()    -- set the Replace with Buff gate (once) before the route map
     ns.RescanCustomItemFlag()     -- set the custom-item buff-injection gate (once)
     ns.RescanCustomForceCountFlag() -- set the "Show Charges" custom-spell gate (once)
     ns.RescanReverseSwipeFlag()   -- set the Reverse Swipe gate (once) before refresh

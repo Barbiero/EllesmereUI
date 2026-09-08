@@ -195,7 +195,7 @@ local defaults = {
     dpsNoAggroEnabled = false,
     dpsNoAggroOverrideMiniBoss = false,  -- on: overrides Mini-Boss (above priority step 7); off = stays low
     dpsNoAggroOverrideCaster = false,  -- on: overrides Caster (above priority step 8); off = Casters keep own color
-    dpsNoAggroOverrideBoss = false,  -- on: overrides Boss (step 10b); off (default) = Bosses keep own color
+    dpsNoAggroOverrideBoss = true,  -- on (default, the pre-toggle behaviour): overrides Boss (step 10b); off = Bosses keep own color
     interruptReady = { r = 0.92, g = 0.35, b = 0.20 },  
     castBar = { r = 0.70, g = 0.40, b = 0.90 },
     interruptMidCastEnabled = false,
@@ -603,7 +603,8 @@ function ns.ApplyAbsorbStyle(plate)
     local r, g, b = 1, 1, 1
     if style ~= "blizzard" then
         local c = (p and p.absorbColor) or defaults.absorbColor
-        if c then r, g, b = c.r, c.g, c.b end
+        -- Per-component default: a partial colour table would throw downstream.
+        if c then r, g, b = c.r or 1, c.g or 1, c.b or 1 end
     end
     local mask = plate._absorbMask
     for _, bar in ipairs({ plate.absorb, plate.absorbForward, plate.absorbOverflow }) do
@@ -5267,7 +5268,8 @@ local function GetReactionColor(unit)
         end
     end
     -- 10. Non-tank no aggro (if enabled) below focus/caster/miniboss. Boss units gated behind
-    -- their own "Override Boss colors" toggle (default off), mirroring tank has-aggro's
+    -- their own "Override Boss colors" toggle (default ON = the behaviour before the toggle
+    -- existed, so nothing changes for users who did not touch it), mirroring tank has-aggro's
     -- ovrBoss check at step 9 above -- previously unconditional, so a DPS/healer without aggro
     -- always lost the Bosses color on engage with no way to turn that off (unlike Mini-Boss/
     -- Caster, which already had their own override toggles here, both off by default).

@@ -926,21 +926,24 @@ local function BuildStyle(isBuff, cfg)
     -- size 0 = no border; no separate "Hide Border" toggle.
     local border
     if borderSize > 0 then
-        local textureSize = cfg.borderTextureSizeOverride or borderSize
-        border = {
-            borderR, borderG, borderB, borderA,
-            size = borderSize,
-            texture = cfg.borderTexture or "solid",
-            textureSize = textureSize,
-            offsetX = cfg.borderTextureOffset,
-            offsetY = cfg.borderTextureOffsetY,
-            shiftX = cfg.borderTextureShiftX,
-            shiftY = cfg.borderTextureShiftY,
-            behind = cfg.borderBehind == true,
-            addonKey = "unitframes",
-            sizeKey = textureSize,
-            edgeScale = cfg.borderTextureScaleOverride,
-        }
+        border = { borderR, borderG, borderB, borderA, size = borderSize }
+        -- Texture fields ride only on a textured pick: a border table with a
+        -- texture key sends AuraKit down its explicit-size eight-slice lane,
+        -- and Solid must keep the plain PP path it always had.
+        local texture = cfg.borderTexture
+        if texture and texture ~= "" and texture ~= "solid" then
+            local textureSize = cfg.borderTextureSizeOverride or borderSize
+            border.texture = texture
+            border.textureSize = textureSize
+            border.offsetX = cfg.borderTextureOffset
+            border.offsetY = cfg.borderTextureOffsetY
+            border.shiftX = cfg.borderTextureShiftX
+            border.shiftY = cfg.borderTextureShiftY
+            border.behind = cfg.borderBehind == true
+            border.addonKey = "unitframes"
+            border.sizeKey = textureSize
+            border.edgeScale = cfg.borderTextureScaleOverride
+        end
     end
 
     -- Positions may arrive mixed-case ("Bottom") rather than the uppercase anchor

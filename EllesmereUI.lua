@@ -2744,11 +2744,15 @@ do
         SnapBorderTextures(container, frame, borderSize)
 
         -- Re-snap for 2 frames to catch final effective scale after layout.
+        -- The stop is pcall'd: a container under a tooltip that a nameplate owns
+        -- inherits its forbidden layout aspect inside these two frames (Snap probes
+        -- and returns; a bare SetScript raises). Refused = keep ticking; the stop
+        -- lands once the restriction lifts, and a hidden container never ticks.
         local ticks = 0
         container:SetScript("OnUpdate", function(self)
             ticks = ticks + 1
             SnapBorderTextures(self, frame, bd.borderSize or 1)
-            if ticks >= 2 then self:SetScript("OnUpdate", nil) end
+            if ticks >= 2 then pcall(self.SetScript, self, "OnUpdate", nil) end
         end)
 
         RegisterBorder(container, frame)
@@ -10793,7 +10797,7 @@ end
 -------------------------------------------------------------------------------
 --  Slash commands
 -------------------------------------------------------------------------------
-EllesmereUI.VERSION = "9.1.6"
+EllesmereUI.VERSION = "9.1.7"
 
 -- Register this addon's version into a shared global table (taint-free at load time)
 if not _G._EUI_AddonVersions then _G._EUI_AddonVersions = {} end
