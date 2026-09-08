@@ -2439,7 +2439,8 @@ local function RenderStandalone()
         y = y - (barGap - defaultSandwichGap)
     end
 
-    if underBarMode then
+    -- Gaps style renders threshold labels above the bar too; reserve space early like under-bar mode.
+    if underBarMode or p.timerBarStyle == "SEGMENTS" then
         RenderThresholdText()
     end
 
@@ -2672,7 +2673,7 @@ local function RenderStandalone()
         RenderEnemyForces()
     end
 
-    if not underBarMode then
+    if not (underBarMode or p.timerBarStyle == "SEGMENTS") then
         RenderThresholdText()
     end
 
