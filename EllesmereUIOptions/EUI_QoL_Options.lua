@@ -2607,6 +2607,7 @@ initFrame:SetScript("OnEvent", function(self)
                   if EllesmereUI._applyPersistSignupNote then
                       EllesmereUI._applyPersistSignupNote()
                   end
+                  EllesmereUI:RefreshPage()
               end }
         );  y = y - h
 
