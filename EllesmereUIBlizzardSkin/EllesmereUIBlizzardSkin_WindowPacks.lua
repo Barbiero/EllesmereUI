@@ -9485,6 +9485,12 @@ local function Skin_AuctionHouse()
     -- engine's checks all miss and no tab reads as active. Sync the FFD
     -- selection override from the display mode instead (tab.displayMode
     -- compared by reference), refreshed on every SetDisplayMode.
+    -- Reassert Buy's own anchor before chaining Sell/Auctions off it below --
+    -- another addon can leave it repositioned after closing its own AH skin.
+    if _G.AuctionHouseFrameBuyTab then
+        _G.AuctionHouseFrameBuyTab:ClearAllPoints()
+        _G.AuctionHouseFrameBuyTab:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 20, -28)
+    end
     local ahTabs = {}
     for _, n in ipairs({ "AuctionHouseFrameBuyTab", "AuctionHouseFrameSellTab",
                          "AuctionHouseFrameAuctionsTab" }) do

@@ -1250,7 +1250,9 @@ function WSkin.NormalizeTabRow(tabs)
             if prev then
                 local gap = (PP and PP.mult) or 1
                 local es = t.GetEffectiveScale and t:GetEffectiveScale()
-                if PP and PP.perfect and es and es > 0 then
+                -- Bound-check es: a corrupted near-zero scale (left behind by
+                -- another addon) would blow this up into a huge, wrong gap.
+                if PP and PP.perfect and es and es > 0.1 and es < 10 then
                     gap = PP.perfect / es
                 end
                 t:ClearAllPoints()
