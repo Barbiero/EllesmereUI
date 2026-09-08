@@ -4972,7 +4972,6 @@ L["GROUP FINDER"] = "BUSCADOR DE GRUPO"
 L["Quick Signup"] = "Inscrição Rápida"
 L["Double-click a group listing to instantly sign up without pressing the Sign Up button. Hold Shift to keep the dialog open, e.g. to type a signup note."] = "Clique duas vezes em um grupo listado para se inscrever instantaneamente sem pressionar o botão Inscrever-se. Segure Shift para manter a caixa de diálogo aberta, por exemplo, para digitar uma nota de inscrição."
 L["Persistent Signup Note"] = "Nota de Inscrição Persistente"
-L["Keeps your note text in the Sign Up dialog instead of clearing it each time you open it."] = "Mantém o texto da sua nota na caixa de diálogo de Inscrição em vez de limpá-lo toda vez que você a abre."
 
 -- Shifter unlock-mode mover labels / misc single labels
 L["Bonus Roll"] = "Rolagem Bônus"
@@ -6829,3 +6828,18 @@ L["Show the Sated/Exhaustion lockout countdown on the icon."] = "Mostra a contag
 -- == Quickdraw / Outfits Category ===================================================
 L["Outfit"] = "Roupa"
 L["Outfits"] = "Roupas"
+
+-- == Quality of Life / Group Finder Signup Note ======================================
+L["Edit the signup note saved between reloads and relogs."] = "Edita a nota de inscrição salva entre recarregar a interface e relogar."
+L["Enter signup note..."] = "Insira a nota de inscrição..."
+L["Saved between reloads and relogs. In Group Finder, choose Copy, press Ctrl+C, then Ctrl+V."] = "Salva entre recarregar a interface e relogar. No Buscador de Grupo, escolha Copiar, pressione Ctrl+C e depois Ctrl+V."
+L["Saves one signup note between reloads and relogs. In Group Finder, choose Copy, press Ctrl+C, then Ctrl+V."] = "Salva uma nota de inscrição entre recarregar a interface e relogar. No Buscador de Grupo, escolha Copiar, pressione Ctrl+C e depois Ctrl+V."
+L["Signup Note"] = "Nota de Inscrição"
+
+-- == Quality of Life / Cursor Options =================================================
+L["Adds a small filled dot at the center of the cursor circle. Uses the same color and opacity as the circle."] = "Adiciona um pequeno ponto preenchido no centro do círculo do cursor. Usa a mesma cor e opacidade do círculo."
+L["Center Reticle"] = "Retículo Central"
+
+-- == Resource Bars / Whirlwind & Sweeping Strikes Thresholds =========================
+L["Always on for Whirlwind and Sweeping Strikes charges: range coloring at/above the threshold is the only way these bars can display thresholds."] = "Sempre ativo para cargas de Redemoinho e Golpes a Esmo: colorir no limite ou acima dele é a única forma de essas barras exibirem limites."
+L["Whirlwind and Sweeping Strikes thresholds only support the 'From' direction."] = "Limites de Redemoinho e Golpes a Esmo só suportam a direção 'De'."
