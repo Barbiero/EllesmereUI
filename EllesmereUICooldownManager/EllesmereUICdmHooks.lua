@@ -2642,7 +2642,7 @@ local function EvalCdStateChargeFrame(frame, fd)
         return
     end
     local ssw = ResolveSpellSettings(frame, sidw, ns.GetBarSpellData(bkw))
-    local csew = ssw and ssw.cdStateEffect
+    local csew = ns.GetSpellCdStateEffect(frame, ssw)
     if csew ~= "hiddenReady" and csew ~= "hiddenReadyShift" then
         -- Effect changed or cleared: the desat hook owns every other mode.
         ns._cdStateChargeWatch[frame] = nil
@@ -4033,7 +4033,7 @@ local function DecorateFrame(frame, barData)
                     return
                 end
                 local ss2 = ResolveSpellSettings(frame, sid2, false)
-                local cse = ss2 and ss2.cdStateEffect
+                local cse = ns.GetSpellCdStateEffect(frame, ss2)
                 -- Shift-Icons variants = base hidden mode + a bar-relayout
                 -- flag; normalize here so every comparison below is unchanged.
                 local cseShift = (cse == "hiddenOnCDShift" or cse == "hiddenReadyShift")
@@ -4804,7 +4804,7 @@ do
             if fd and fd.glowOverlay and sid2 and bk2
                and not (ns.PresetHasCdState and ns.PresetHasCdState(frame)) then
                 local ss2 = RSP(frame, sid2, ns.GetBarSpellData(bk2))
-                local cse2 = ss2 and ss2.cdStateEffect
+                local cse2 = ns.GetSpellCdStateEffect(frame, ss2)
                 local plainGlow = cse2 == "pixelGlowReady" or cse2 == "buttonGlowReady"
                 local usableGlow = cse2 == "pixelGlowReadyUsable" or cse2 == "buttonGlowReadyUsable"
                 if plainGlow or usableGlow then
@@ -8217,7 +8217,7 @@ local function CollectAndReanchor()
                                 if fcS then
                                     if fcS._cdStateShiftHidden then blocked = true; break end
                                     local ssS = ResolveSpellSettings(srcList[i], fcS.spellID, sdS, bd.key)
-                                    local effS = ssS and ssS.cdStateEffect
+                                    local effS = ns.GetSpellCdStateEffect(srcList[i], ssS)
                                     if effS == "hiddenOnCDShift" or effS == "hiddenReadyShift" then
                                         blocked = true; break
                                     end
