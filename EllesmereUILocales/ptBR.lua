@@ -6830,10 +6830,8 @@ L["Outfit"] = "Roupa"
 L["Outfits"] = "Roupas"
 
 -- == Quality of Life / Group Finder Signup Note ======================================
-L["Edit the signup note saved between reloads and relogs."] = "Edita a nota de inscrição salva entre recarregar a interface e relogar."
 L["Enter signup note..."] = "Insira a nota de inscrição..."
 L["Saved between reloads and relogs. In Group Finder, choose Copy, press Ctrl+C, then Ctrl+V."] = "Salva entre recarregar a interface e relogar. No Buscador de Grupo, escolha Copiar, pressione Ctrl+C e depois Ctrl+V."
-L["Saves one signup note between reloads and relogs. In Group Finder, choose Copy, press Ctrl+C, then Ctrl+V."] = "Salva uma nota de inscrição entre recarregar a interface e relogar. No Buscador de Grupo, escolha Copiar, pressione Ctrl+C e depois Ctrl+V."
 L["Signup Note"] = "Nota de Inscrição"
 
 -- == Quality of Life / Cursor Options =================================================
@@ -6843,3 +6841,23 @@ L["Center Reticle"] = "Retículo Central"
 -- == Resource Bars / Whirlwind & Sweeping Strikes Thresholds =========================
 L["Always on for Whirlwind and Sweeping Strikes charges: range coloring at/above the threshold is the only way these bars can display thresholds."] = "Sempre ativo para cargas de Redemoinho e Golpes a Esmo: colorir no limite ou acima dele é a única forma de essas barras exibirem limites."
 L["Whirlwind and Sweeping Strikes thresholds only support the 'From' direction."] = "Limites de Redemoinho e Golpes a Esmo só suportam a direção 'De'."
+
+-- == Quality of Life / Group Finder Signup Note =======================================
+L["Edit the saved signup note."] = "Edita a nota de inscrição salva."
+L["Keeps a saved signup note you can copy into the Sign Up dialog with the Copy button."] = "Mantém uma nota de inscrição salva que você pode copiar para a caixa de diálogo Inscrever-se usando o botão Copiar."
+
+-- == Cooldown Manager / Replace with Buff =============================================
+L["None (use cooldown icon)"] = "Nenhum (usar ícone de recarga)"
+L["Replace with Buff"] = "Substituir por Buff"
+L["Show a tracked buff in this slot while it is active."] = "Mostra um buff rastreado neste espaço enquanto ele estiver ativo."
+L["Hide every Cooldown Manager glow out of combat and bring them all back the moment you enter combat."] = "Oculta todo brilho do Gerenciador de Recarga fora de combate e os traz de volta assim que você entra em combate."
+
+-- == Bags / Stack Splitter ============================================================
+L["Also use the split dialog with Auto Split in OneBag, MultiBag, the reagent bag, the bank and the guild bank, replacing Blizzard's split popup there. All Items and category views always use it."] = "Também usa a caixa de diálogo de divisão com Divisão Automática na Bolsa Única, na MultiBolsa, na bolsa de reagentes, no banco e no banco da guilda, substituindo o pop-up de divisão da Blizzard nesses locais. As visões \"Todos os Itens\" e de categoria sempre a utilizam."
+
+-- == Raid Frames / Party Frames in Small Raids ========================================
+L["Party Frames in Small Raids"] = "Quadros de Grupo em Raides Pequenas"
+L["In raid groups under 10 players, show group 1 as party frames and hide everyone else."] = "Em grupos de raide com menos de 10 jogadores, mostra o grupo 1 como quadros de grupo e oculta todos os outros."
+
+-- == Aura/Buff Reminders / Warlock Section ============================================
+L["Pick which content these Warlock reminders appear in.\nRested areas (cities and inns) always stay hidden."] = "Escolha em quais conteúdos estes lembretes de Bruxo aparecem.\nÁreas de descanso (cidades e estalagens) sempre ficam ocultas."
