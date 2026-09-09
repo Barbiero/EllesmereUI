@@ -14040,7 +14040,10 @@ function EAB:FinishSetup()
                     if s.mouseoverEnabled and not info.noManagedVisibility then
                         if not (state and state.isHovered) then
                             StopFade(frame)
-                            FadeTo(frame, 0, s.mouseoverSpeed or 0.15)
+                            -- Scripted action swaps clear the cursor for every slot.
+                            -- Use the hover fader so each clear does not restart an
+                            -- expensive AnimationGroup on every mouseover bar.
+                            FadeTo(frame, 0, s.mouseoverSpeed or 0.15, true)
                             if state then state.fadeDir = "out" end
                             if key == "MainBar" then SyncPagingAlpha(0) end
                         end
