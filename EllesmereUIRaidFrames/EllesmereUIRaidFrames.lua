@@ -10903,7 +10903,9 @@ do
                         local liveChild = liveT[k]
                         if type(liveChild) ~= "table" then ok = false; break end
                         local dstChild = dstParent[k]
-                        if type(dstChild) ~= "table" then
+                        -- A shallow parent copy still shares its live children.
+                        -- Detach each shared child before writing preview values.
+                        if type(dstChild) ~= "table" or dstChild == liveChild then
                             dstChild = {}
                             for ck, cv in pairs(liveChild) do dstChild[ck] = cv end
                             dstParent[k] = dstChild
