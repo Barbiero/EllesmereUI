@@ -1445,6 +1445,21 @@ function ns.RescanChargeCdTextFlag()
     end)
 end
 
+-- Per-spell Duration Text gate: set ns._cdmAnySpellDurationText once if any saved spell
+-- (any spec) overrides showCooldownText either way. ~= nil, not truthiness: a per-spell
+-- ON must beat a bar that is OFF, same as the options resolver reads it.
+function ns.RescanSpellDurationTextFlag()
+    if ns._cdmAnySpellDurationText or ns._spellDurationTextFlagScanned then return end
+    if not EllesmereUIDB then return end
+    ns._spellDurationTextFlagScanned = true
+    ns.ForEachSavedSettingsBlock(function(ss)
+        if ss.showCooldownText ~= nil then
+            ns._cdmAnySpellDurationText = true
+            return true
+        end
+    end)
+end
+
 -- "Hide Charge Text" gate: set ns._cdmAnyHideChargeText once if any saved spell
 -- (any spec) has the toggle on. The appearance pass consults it to reach
 -- WatchZeroChargeTextIfEnabled for users of neither the bar-level zero-charge
@@ -7733,6 +7748,7 @@ BuildAllCDMBars = function()
     EnsureFocusKickBar()
     ns.RescanMaxStacksGlowFlag()  -- set the Max Stacks Glow gate (once) before refresh
     ns.RescanChargeCdTextFlag()   -- set the Hide CD Text (Charges) gate (once) before refresh
+    ns.RescanSpellDurationTextFlag()  -- and the per-spell Duration Text gate
     ns.RescanHideChargeTextFlag() -- set the Hide Charge Text gate (once) before refresh
     ns.RescanSuppressGcdFlag()    -- set the per-spell Suppress GCD gate (once) before refresh
     ns.RescanChargeStyleFlag()    -- set the Hide Swipe (Charges) gate (once) before refresh

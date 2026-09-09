@@ -10824,7 +10824,7 @@ initFrame:SetScript("OnEvent", function(self)
                                 rows = {
                                     { type="toggle", label="Show Duration",
                                       get=function() if ss.showCooldownText ~= nil then return ss.showCooldownText end return (cdmBd and cdmBd.showCooldownText) ~= false end,
-                                      set=function(v) EnsureSS(); ss.showCooldownText = v; if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end if row._updateLabel then row._updateLabel() end end },
+                                      set=function(v) EnsureSS(); ss.showCooldownText = v; ns._cdmAnySpellDurationText = true; if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end if row._updateLabel then row._updateLabel() end end },
                                     { type="slider", label="Size", min=6, max=30, step=1,
                                       get=function() return ss.cooldownFontSize or (cdmBd and cdmBd.cooldownFontSize) or 12 end,
                                       set=function(v) EnsureSS(); ss.cooldownFontSize = v; if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end if row._updateLabel then row._updateLabel() end end },
