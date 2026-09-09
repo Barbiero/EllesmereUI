@@ -472,6 +472,7 @@ No talent
 No talent reminders configured
 None
 None (Disabled)
+None (use cooldown icon)
 Not Bound
 Not Included
 Not Loaded
@@ -563,6 +564,7 @@ Rename Profile
 Renders this slot's element above the rest of the nameplate.
 Renown
 Repaired all items for %s
+Replace with Buff
 Reposition freely with
 Reposition this element with Shift+Click and Drag.
 Reposition this element within Blizzard Edit Mode
@@ -617,6 +619,7 @@ Show Charges
 Show Hash Lines
 Show Tooltip
 Show a pulsing dot on the Patch Notes button whenever EllesmereUI updates to a new version.
+Show a tracked buff in this slot while it is active.
 Show in All Items
 Showing this aura from any caster; click for your casts only.
 Showing this aura from your casts only; click for any caster.
@@ -648,6 +651,7 @@ Spell Target Settings
 Spells
 Split
 Split Stack
+Split this stack into empty slots repeatedly until only the chosen amount or less remains. Alt+Enter does the same.
 Stack
 Stack Thresholds
 Standing
