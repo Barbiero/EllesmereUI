@@ -19278,6 +19278,7 @@ initFrame:SetScript("OnEvent", function(self)
                   return s ~= "solid" and s ~= "pixel"
               end,
               disabledTooltip="Thickness applies to Solid Border and Pixel Glow",
+              rawTooltip=true,
               getValue=function()
                   local c = RotationBars(); return (c and c.rotationAssistThickness) or 3
               end,
@@ -19292,6 +19293,7 @@ initFrame:SetScript("OnEvent", function(self)
                   local c = RotationBars(); return not c or c.rotationAssistStyle == "blizzard"
               end,
               disabledTooltip="Blizzard Default uses Blizzard's native size",
+              rawTooltip=true,
               getValue=function()
                   local c = RotationBars(); return (c and c.rotationAssistOutset) or 1
               end,
