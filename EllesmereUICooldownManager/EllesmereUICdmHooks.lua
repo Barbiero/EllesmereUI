@@ -2231,6 +2231,24 @@ end
 --  ns._cdmAnyChargeHideCdText (~0 cost when unused).
 -------------------------------------------------------------------------------
 
+-- Per-spell Duration Text layered onto a bar-derived hide flag, for the paths that hold only
+-- barData: the reanchor assign loop and the Only Show Numbers restore tail. The appearance
+-- pass does not call this -- it resolves ssb itself, and re-resolving there would replace a
+-- correct value with a worse one. Keyed on the DISPLAYED id, never fc.spellID: for a buff
+-- whose base is a shared spec spell the base misses the entry and lets one icon's setting
+-- shadow another's, the same rule the appearance pass documents at its own resolve.
+-- ~= nil, not truthiness: a per-spell ON must beat a bar that is OFF.
+function ns.CdmDurationHideFor(frame, barKey, baseHide)
+    if not ns._cdmAnySpellDurationText then return baseHide end
+    local fcd = _ecmeFC[frame]
+    local sidD = (ns.GetCanonicalSpellIDForFrame and ns.GetCanonicalSpellIDForFrame(frame))
+        or (fcd and fcd.spellID)
+    if not (sidD and barKey and ns.ResolveSpellSettings) then return baseHide end
+    local ssD = ns.ResolveSpellSettings(frame, sidD, ns.GetBarSpellData(barKey), barKey)
+    if ssD and ssD.showCooldownText ~= nil then return not ssD.showCooldownText end
+    return baseHide
+end
+
 -- Effective SetHideCountdownNumbers value: layers the per-spell "Hide CD Text
 -- (Charges)" toggle on the caller's baseHide (numbers already hidden by the bar
 -- / per-icon showCooldownText). Returns baseHide unchanged for anything that is
@@ -2857,7 +2875,10 @@ local function ApplyOnlyNumbers(frame, fd, barData)
         local cd = fd.cooldown or frame.Cooldown or frame._cooldown
         if cd then
             if cd.SetDrawSwipe then cd:SetDrawSwipe(true) end
-            if cd.SetHideCountdownNumbers then cd:SetHideCountdownNumbers(not ns.CdmDurationTextOn(barData)) end
+            if cd.SetHideCountdownNumbers then
+                cd:SetHideCountdownNumbers(
+                    ns.CdmDurationHideFor(frame, barData.key, not ns.CdmDurationTextOn(barData)))
+            end
         end
         -- Square border / shape ring re-apply on the next style pass
         -- (DecorateFrame / RefreshCDMIconAppearance via BuildAllCDMBars).
@@ -3253,6 +3274,7 @@ local function DecorateFrame(frame, barData)
                 if ss2 and ss2.maxStacksGlow and ss2.maxStacksGlow > 0 then ns._cdmAnyMaxStacksGlow = true end
                 if ss2 and ss2.activeGlow and ss2.activeGlow > 0 then ns._cdmAnyActiveGlow = true end
                 if ss2 and ss2.chargeHideCdText then ns._cdmAnyChargeHideCdText = true end
+                if ss2 and ss2.showCooldownText ~= nil then ns._cdmAnySpellDurationText = true end
                 if ss2 and ss2.hideChargeText then ns._cdmAnyHideChargeText = true end
                 if ss2 and ss2.suppressGCD then ns._cdmAnySuppressGcd = true end
                 if ss2 and ss2.reverseSwipe then ns._cdmAnyReverseSwipe = true end
@@ -8306,7 +8328,7 @@ local function CollectAndReanchor()
                             fdRv._revKind = wantRev
                             frame.Cooldown:SetReverse(wantRev)
                         end
-                        local hcd = hideCDText
+                        local hcd = ns.CdmDurationHideFor(frame, barKey, hideCDText)
                         if ns.CdmShouldHideCountdown then hcd = ns.CdmShouldHideCountdown(frame, hcd) end
                         frame.Cooldown:SetHideCountdownNumbers(hcd)
                     end
