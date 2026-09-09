@@ -1037,9 +1037,26 @@ do
     -- raid pull spams it (Jera, 9.0.1). Registered out of combat only, both
     -- edges driven by the REGEN events; PLAYER_ENTERING_WORLD, the other
     -- Update() path, cannot fire under lockdown.
+    -- Cooldowns read SECRET in restricted content, and every dispatch this
+    -- registration drives runs under OUR taint, so Blizzard's own
+    -- ActionButton_ApplyCooldown -> SetCooldown is rejected on every Blizzard
+    -- button the broadcaster still reaches. Live raid report: 511k errors.
+    -- InCombatLockdown() alone was the wrong gate -- it was chosen for the BLOCKED
+    -- SetAttribute, and secrecy is instance-gated, so the whole out-of-combat
+    -- window inside an instance stayed open. The frame goes fully bare, not a
+    -- per-event subset: SLOT_CHANGED, ACTIONBAR_UPDATE_COOLDOWN and PEW all reach it.
+    local function CooldownsSecret()
+        if not (C_Secrets and C_Secrets.ShouldCooldownsBeSecret) then return false end
+        local ok, secret = pcall(C_Secrets.ShouldCooldownsBeSecret)
+        return (ok and secret) and true or false
+    end
     local function ApplyBroadcaster()
         local want = (_vehNeed or _extraNeed) and "full"
             or ((_phNeed or ClassMayPressHold()) and "ph" or "off")
+        -- Folded into `want`, not into slotOK, so the mode comparison below sees the
+        -- change and re-applies; PLAYER_ENTERING_WORLD already re-runs this, which is
+        -- the edge secrecy actually turns on.
+        if want ~= "off" and CooldownsSecret() then want = "off" end
         local slotOK = not InCombatLockdown()
         if want == _broadcasterMode and slotOK == _broadcasterSlot then return end
         _broadcasterMode, _broadcasterSlot = want, slotOK
