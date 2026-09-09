@@ -1291,6 +1291,13 @@ function ns.GetEffectiveCustomActiveState(frameKey)
     return store[frameKey]
 end
 
+-- Preset menus store cooldown effects in customActiveStates, including None.
+-- Never revive an old spell-family/bar-tier effect behind that menu's back.
+function ns.GetSpellCdStateEffect(frame, settings)
+    if frame and ns.CdmIsInjectedFrame and ns.CdmIsInjectedFrame(frame) then return nil end
+    return settings and settings.cdStateEffect
+end
+
 -- Does this icon have a custom Cooldown State Effect (preset cd-state)? Appearance refresh
 -- uses this so it doesn't clear a preset's _cdStateHidden flag: presets store cdState in customActiveStates, not per-bar spellSettings.
 function ns.PresetHasCdState(frame)
@@ -5943,7 +5950,7 @@ local function RefreshCDMIconAppearance(barKey)
                 local sd = ns.GetBarSpellData(bk)
                 -- Shared resolver: direct hit + full identity/override matching against the family store, with bar-tier fallback.
                 local ss = ns.ResolveSpellSettings and ns.ResolveSpellSettings(icon, sid, sd, bk)
-                local cse = ss and ss.cdStateEffect
+                local cse = ns.GetSpellCdStateEffect(icon, ss)
                 if (cse == "pixelGlowReady" or cse == "buttonGlowReady"
                     or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable") and glowOv then
                     local glowUsable = (cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable")
@@ -5996,7 +6003,7 @@ local function RefreshCDMIconAppearance(barKey)
             -- Shared resolver: direct hit + full identity/override matching
             -- against the family store, with bar-tier fallback.
             local csSs = ns.ResolveSpellSettings and ns.ResolveSpellSettings(icon, csSid, csSd, csBk)
-            local cse = csSs and csSs.cdStateEffect
+            local cse = ns.GetSpellCdStateEffect(icon, csSs)
             -- Shift-Icons variants behave exactly like their base hidden mode plus the layout flag; normalize so the branches below stay as-is.
             local cseShift = (cse == "hiddenOnCDShift" or cse == "hiddenReadyShift")
             if cse == "hiddenOnCDShift" then cse = "hiddenOnCD"
