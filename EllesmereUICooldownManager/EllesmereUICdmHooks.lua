@@ -2078,6 +2078,12 @@ local function EvalCdReadySound(frame, fd, primeOnly)
     if not ns._cdmAnyCdReadySound then return end
     if not fd then return end
     if fd._isProcessingOverride then return end
+    -- Buff-family frames never play (see WatchCdReadySoundIfEnabled); held here too so
+    -- a frame watched before its decoration flagged it stays silent.
+    if fd._isBuffViewerFrame or frame._isCustomBuffFrame or frame._isPlaceholderFrame then
+        fd._cdReadyArmed = false
+        return
+    end
     local fc2 = _ecmeFC[frame]
     local sid2 = fc2 and fc2.spellID
     local bk2 = fc2 and fc2.barKey
@@ -2162,6 +2168,8 @@ local function HookCdReadyAvailableAlert(frame, fd)
     hooksecurefunc(frame, "TriggerAvailableAlert", function(f)
         if not ns._cdmAnyCdReadySound then return end
         if fd._isProcessingOverride then return end
+        -- A buff frame's alert fires on AURA gain, not readiness (see the watch below).
+        if fd._isBuffViewerFrame or f._isCustomBuffFrame or f._isPlaceholderFrame then return end
         local fca = _ecmeFC[f]
         local sida = fca and fca.spellID
         local bka = fca and fca.barKey
@@ -2190,6 +2198,14 @@ function ns.WatchCdReadySoundIfEnabled(frame)
     if not frame then return end
     local fd = hookFrameData[frame]
     if not fd then return end
+    -- Buff-family frames never watch: a hosted or custom buff frame resolves the
+    -- ABILITY's per-spell entry through the linked-id union, and its
+    -- TriggerAvailableAlert fires on aura gain (no readiness check in the hook), so
+    -- the cd-ready cue played at buff gain. Same exclusion as the charge hooks.
+    if fd._isBuffViewerFrame or frame._isCustomBuffFrame or frame._isPlaceholderFrame then
+        if ns._cdReadySoundWatch[frame] then ns._cdReadySoundWatch[frame] = nil end
+        return
+    end
     local fcw = _ecmeFC[frame]
     local sidw = fcw and fcw.spellID
     local bkw = fcw and fcw.barKey
@@ -4462,9 +4478,15 @@ local function UpdateTrinketFrame(slotID)
     _trinketItemCache[slotID] = itemID
     if not itemID then
         f._slotScanPending = nil
+        -- An empty read is also what the login window returns before the inventory
+        -- has synced: flag it so the PLAYER_ENTERING_WORLD retry sweep re-reads the
+        -- slot (SlotScanIncomplete) instead of leaving the frame hidden until the next
+        -- equipment change.
+        f._slotEmptyRead = true
         f:Hide()
         return
     end
+    f._slotEmptyRead = nil
     -- Item data not in the client cache yet (cold cache at login): GetItemSpell
     -- reads nil for an on-use item, which the passive test below would take as
     -- conclusive and nothing would ever re-scan. Keep the previous state,
@@ -4657,7 +4679,7 @@ _trinketEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 -- item has a spell the tooltip scan couldn't confirm yet, and user-added slots
 -- whose instance tooltip wasn't cached (enchant/tinker lines).
 local function SlotScanIncomplete(f)
-    return (f._trinketSpellID and not f._trinketIsOnUse) or f._slotScanPending
+    return (f._trinketSpellID and not f._trinketIsOnUse) or f._slotScanPending or f._slotEmptyRead
 end
 
 _trinketEventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
@@ -5005,6 +5027,13 @@ function _AC.Anchor(barKey, rec)
     local holder = rec and rec.holder
     if not (barFrame and holder) then return end
     holder:SetShown(barFrame:IsShown())
+    -- Visibility rules and bar opacity hide the bar through ALPHA on the bar
+    -- frame and its own icons; this holder is UIParent-parented and inherits
+    -- none of it, so mirror the bar's effective alpha here: 0 while the bar
+    -- is visibility-hidden, else its opacity / out-of-combat fade.
+    local bdA = (ns.barDataByKey and ns.barDataByKey[barKey]) or rec.bdRef
+    holder:SetAlpha(barFrame._visHidden and 0
+        or ((ns.EffectiveBarAlpha and ns.EffectiveBarAlpha(bdA)) or 1))
     holder:ClearAllPoints()
     local ok, bl, bb, bw, bh = pcall(barFrame.GetRect, barFrame)
     if not (ok and bl) then
@@ -9341,6 +9370,11 @@ local function UpdateCustomBuffBars()
                                     f._cooldown:Clear()
                                 end
                                 DecorateFrame(f, barData); f:Show()
+                                -- A frame (re)shown while its bar is visibility-hidden must not
+                                -- come back at its last alpha: only listed icons get the hide
+                                -- pass, and this one may have been unlisted (inactive) then.
+                                f:SetAlpha(container._visHidden and 0
+                                    or ((ns.EffectiveBarAlpha and ns.EffectiveBarAlpha(barData)) or 1))
                                 f:EnableMouse(false)
                                 if f.Cooldown and f.Cooldown.SetDrawSwipe then
                                     -- Only Show Numbers hides the swipe with the icon art.
