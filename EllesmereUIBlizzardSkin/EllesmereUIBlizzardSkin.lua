@@ -543,7 +543,7 @@ end
         return _elementColorMode() ~= "native"
     end
 
-    -- Unified inspect system: one always-on INSPECT_READY handler fills the ilvl cache (shared with the inspect sheet) from every inspect, whoever requested it; the tooltip's own requests are paced below.
+    -- Unified inspect system: while Show Item Level is active, one INSPECT_READY handler fills the tooltip ilvl cache from every inspect, whoever requested it; the tooltip's own requests are paced below.
     local _ilvlCache = {}       -- guid -> { ilvl = number, time = GetTime() }
     local _ilvlCacheTTL = 120
     -- Mount-name cache: short TTL, just enough to survive one hover's refresh ticks so an unmounted player is scanned once, not per tick. name=false means "scanned, none".
@@ -557,6 +557,8 @@ end
     -- stays shut. Hovering across raid frames used to fire one request per frame.
     -- Timings are tuned from one in-game log; the server's real limits are undocumented.
     local _insp = {
+        active = false,         -- Show Item Level live: event registered, hooks and watchdog doing work
+        pruneAt = 0,            -- next time expired _ilvlCache entries are swept
         lastAny = 0,            -- last NotifyInspect from ANY source (ours, Blizzard, other addons)
         lastForeign = 0,        -- last NotifyInspect that was not ours
         ourAt = -1,             -- GetTime() of our own last call; same frame in the hook = ours
@@ -644,15 +646,6 @@ end
         end
         return nil
     end
-    -- Every inspect request in the session passes here, whoever sent it. Feeds both
-    -- the pacing of our own requests and the passive mode in _dwellTick.
-    -- A call is ours when it happens in the same frame we stamped (GetTime() is fixed
-    -- per frame), so a call that raised can never leave a stuck "ours" flag behind.
-    hooksecurefunc("NotifyInspect", function()
-        local now = GetTime()
-        _insp.lastAny = now
-        if _insp.ourAt ~= now then _insp.lastForeign = now end
-    end)
     -- Watchdog for the user's own inspect: a dropped request leaves InspectFrame.unit
     -- set with no event ever arriving, and Blizzard neither retries nor reports it.
     -- Re-send the same request a few times until the window shows itself. A single
@@ -666,7 +659,7 @@ end
         local frame = InspectFrame
         local unit = frame and frame.unit
         local now = GetTime()
-        if not frame or frame:IsShown() or not unit
+        if not _insp.active or not frame or frame:IsShown() or not unit
             or (_isSecret and _isSecret(unit))
             or _insp.wdTries >= _insp.WD_TRIES or now >= _insp.wdDeadline then
             _insp.wdGUID = nil
@@ -690,6 +683,9 @@ end
         C_Timer.After(wait, _inspectWatchdogTick)
     end
     hooksecurefunc("InspectUnit", function()
+        -- Both the tooltip hold-off and the watchdog belong to Show Item Level; with it
+        -- inactive this hook does nothing, since EUI then sends no inspects of its own.
+        if not _insp.active then return end
         _userInspectUntil = GetTime() + 2
         -- Runs after InspectFrame_Show, so InspectFrame.unit is already set -- unless
         -- CanInspect failed there. In that case InspectFrame.unit still holds the
@@ -713,12 +709,18 @@ end
             C_Timer.After(_insp.WD_FIRST, _inspectWatchdogTick)
         end
     end)
-    -- Registered for good, not just around our own request: every INSPECT_READY is
-    -- cached, including the ones other addons asked for, which is what lets the
-    -- tooltip stay passive while such an addon polls the group.
-    local _inspectFrame = CreateFrame("Frame")
-    _inspectFrame:RegisterEvent("INSPECT_READY")
-    _inspectFrame:SetScript("OnEvent", function(_, _, guid)
+    -- Caches every INSPECT_READY, including the ones other addons asked for, which is
+    -- what lets the tooltip stay passive while such an addon polls the group.
+    local _inspectFrame
+    local function _onInspectReady(self, _, guid)
+        -- Option turned off this session: stop listening; the next unit tooltip with it
+        -- on re-activates. Same test as the tooltip pass, so the two never flip-flop
+        -- (the reskin master only takes effect on /reload, when nothing is activated).
+        if EllesmereUIDB and EllesmereUIDB.tooltipItemLevel == false then
+            self:UnregisterEvent("INSPECT_READY")
+            _insp.active = false
+            return
+        end
         if not guid or (_isSecret and _isSecret(guid)) then return end
         if guid == _inspectPendingGUID then _inspectPendingGUID = nil end
         -- Read item level through a token derived from THAT GUID, so it is captured even after the cursor left the unit and cached under the right GUID.
@@ -729,11 +731,20 @@ end
                 if val and not (_isSecret and _isSecret(val)) and val > 0 then
                     -- One request fires a burst of 10+ events; update in place instead of allocating per event.
                     local entry = _ilvlCache[guid]
+                    local now = GetTime()
                     if entry then
                         entry.ilvl = math.floor(val)
-                        entry.time = GetTime()
+                        entry.time = now
                     else
-                        _ilvlCache[guid] = { ilvl = math.floor(val), time = GetTime() }
+                        -- Every inspect source feeds the cache now, so sweep expired
+                        -- entries at most once per TTL, only when a new one is added.
+                        if now >= _insp.pruneAt then
+                            _insp.pruneAt = now + _ilvlCacheTTL
+                            for g, e in pairs(_ilvlCache) do
+                                if (now - e.time) >= _ilvlCacheTTL then _ilvlCache[g] = nil end
+                            end
+                        end
+                        _ilvlCache[guid] = { ilvl = math.floor(val), time = now }
                     end
                 end
             end
@@ -743,7 +754,6 @@ end
         local ttd = GetFFD(_GameTooltip)
         if cached and _GameTooltip:IsShown() and _tipShownGUID == guid
             and not ttd.ilvlShown
-            and EllesmereUIDB and EllesmereUIDB.tooltipItemLevel ~= false
             and not _tipHasLine(_GameTooltip, EllesmereUI.L("Item Level")) then
             local nBefore = _GameTooltip:NumLines() or 0
             _GameTooltip:AddDoubleLine(EllesmereUI.L("Item Level:"), cached.ilvl, 1, 1, 1, 1, 1, 1)
@@ -751,8 +761,34 @@ end
             _GameTooltip:Show()
             ttd.ilvlShown = true
         end
-    end)
-    -- Shared with the inspect sheet.
+    end
+    -- Built and registered only while Show Item Level is on (from _ttInitData at login,
+    -- or from the first unit tooltip after it is turned back on), so with it or the
+    -- tooltip reskin off after a /reload nothing is registered, hooked or created.
+    -- hooksecurefunc cannot be undone: after a mid-session toggle-off the hook returns
+    -- at once. Starts passive, since there is no request history yet and a first hover
+    -- could otherwise land right inside another addon's polling.
+    _insp.Activate = function()
+        if _insp.active then return end
+        _insp.active = true
+        local now = GetTime()
+        _insp.lastForeign, _insp.lastAny = now, now
+        if not _inspectFrame then
+            _inspectFrame = CreateFrame("Frame")
+            _inspectFrame:SetScript("OnEvent", _onInspectReady)
+            -- Every inspect request passes here, whoever sent it. A call is ours when it
+            -- happens in the frame we stamped (GetTime() is fixed per frame), so a call
+            -- that raised can never leave a stuck "ours" flag behind.
+            hooksecurefunc("NotifyInspect", function()
+                if not _insp.active then return end
+                local t = GetTime()
+                _insp.lastAny = t
+                if _insp.ourAt ~= t then _insp.lastForeign = t end
+            end)
+        end
+        _inspectFrame:RegisterEvent("INSPECT_READY")
+    end
+    -- Exposed on EllesmereUI; nothing outside this file reads it today.
     EllesmereUI._inspectCache = _ilvlCache
 
     -- Re-derive a CLEAN literal group unit token for a GUID by matching it against
@@ -778,12 +814,33 @@ end
         return nil
     end
 
+    -- Hard blocks for a tooltip request, checked before the dwell and again in it: the
+    -- user's own inspect owns the queue, the talent frame is inspecting someone
+    -- (ClearInspectPlayer would retarget it), or another addon is polling (passive mode).
+    local function _inspBlocked(guid, now)
+        if _insp.wdGUID and now < _insp.wdDeadline then return true end
+        local psf = PlayerSpellsFrame
+        if psf and psf.IsInspecting and psf:IsInspecting() then return true end
+        if (now - _insp.lastForeign) < _insp.FOREIGN_WINDOW then return true end
+        local f = InspectFrame
+        if f then
+            if f:IsShown() then return true end
+            -- Blizzard keeps .unit on a window that never opened and shows it on any
+            -- later matching INSPECT_READY, so never ask for that person ourselves.
+            local u = f.unit
+            if u and not (_isSecret and _isSecret(u)) then
+                local g = UnitGUID(u)
+                if g and not (_isSecret and _isSecret(g)) and g == guid then return true end
+            end
+        end
+        return false
+    end
     -- Tooltip-side inspect request, paced. It never fires straight out of the tooltip
     -- pass: a dwell timer runs first, so sweeping the cursor across raid frames costs
     -- one request instead of one per frame. It then yields to the shared request
     -- budget, and stays silent entirely while another addon is polling the group --
-    -- the always-on INSPECT_READY handler caches whatever that addon asked for, so in
-    -- a raid with such an addon running the tooltip contributes no requests at all.
+    -- the INSPECT_READY handler caches whatever that addon asked for, so in a raid
+    -- with such an addon running the tooltip contributes no requests at all.
     -- The price is that an uncached player's item level appears a moment later.
     -- One named timer function, rescheduled while needed, so no closure per hover.
     local function _dwellTick()
@@ -803,16 +860,7 @@ end
             _insp.dwellGUID = nil
             return
         end
-        -- The user's own inspect owns the queue: window open, watchdog retrying, or the
-        -- talent frame inspecting someone (our ClearInspectPlayer would retarget it).
-        local psf = PlayerSpellsFrame
-        if (InspectFrame and (InspectFrame:IsShown() or _insp.wdGUID))
-            or (psf and psf.IsInspecting and psf:IsInspecting()) then
-            _insp.dwellGUID = nil
-            return
-        end
-        -- Passive mode: someone else is polling, so add nothing to the queue.
-        if (now - _insp.lastForeign) < _insp.FOREIGN_WINDOW then
+        if _inspBlocked(guid, now) then
             _insp.dwellGUID = nil
             return
         end
@@ -846,13 +894,15 @@ end
         ClearInspectPlayer()
         NotifyInspect(unit)
     end
+    -- Caller has already found no cached item level for guid.
     local function _requestTooltipInspect(guid)
-        local c = _ilvlCache[guid]
-        if c and (GetTime() - c.time) < _ilvlCacheTTL then return end
+        local now = GetTime()
+        -- Blocked now: arm nothing; a later tooltip pass asks again.
+        if _inspBlocked(guid, now) then return end
         -- Always track the latest unit; a running timer picks up the retarget.
         if _insp.dwellGUID ~= guid then
             _insp.dwellGUID = guid
-            _insp.dwellAt = GetTime()
+            _insp.dwellAt = now
         end
         if not _insp.dwellArmed then
             _insp.dwellArmed = true
@@ -1079,6 +1129,8 @@ end
         _ttTargetLine(tt, unit)
         -- Item Level. Cache keyed strictly by the authoritative GUID so reads/writes can never land under a different person.
         if db and db.tooltipItemLevel ~= false then
+            -- Re-activates after a mid-session toggle back on (login activation is in _ttInitData).
+            if not _insp.active then _insp.Activate() end
             local ilvl
             if unit and UnitIsUnit(unit, "player") then
                 local _, equipped = GetAverageItemLevel()
@@ -1154,6 +1206,9 @@ end
         _ttDataInited = true
         -- Clear the recorded identity on hide so a late inspect result can never append to a closed/switched tooltip. HookScript (never SetScript) keeps the secure OnHide handler intact.
         _GameTooltip:HookScript("OnHide", function() _tipShownGUID = nil end)
+        -- Item level inspect pacing starts at login, so the request history from other
+        -- addons is already being tracked before the first hover.
+        if not EllesmereUIDB or EllesmereUIDB.tooltipItemLevel ~= false then _insp.Activate() end
         -- Accent-color the title line for spells/macros (not items or units)
         local function _ttAccentTitle(tt)
             if tt ~= _GameTooltip or tt:IsForbidden() or not _accentEnabled() then return end
