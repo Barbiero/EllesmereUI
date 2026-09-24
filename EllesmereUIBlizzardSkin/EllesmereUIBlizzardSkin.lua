@@ -682,10 +682,13 @@ end
         _insp.wdArmed = true
         C_Timer.After(wait, _inspectWatchdogTick)
     end
-    hooksecurefunc("InspectUnit", function()
-        -- Both the tooltip hold-off and the watchdog belong to Show Item Level; with it
-        -- inactive this hook does nothing, since EUI then sends no inspects of its own.
+    -- Installed by _insp.Activate. Both the tooltip hold-off and the watchdog belong to
+    -- Show Item Level; with it off this does nothing, since EUI then sends no inspects
+    -- of its own. The option test covers a mid-session toggle-off before the handler
+    -- has seen an event and cleared _insp.active.
+    local function _onInspectUnit()
         if not _insp.active then return end
+        if EllesmereUIDB and EllesmereUIDB.tooltipItemLevel == false then return end
         _userInspectUntil = GetTime() + 2
         -- Runs after InspectFrame_Show, so InspectFrame.unit is already set -- unless
         -- CanInspect failed there. In that case InspectFrame.unit still holds the
@@ -708,7 +711,7 @@ end
             _insp.wdArmed = true
             C_Timer.After(_insp.WD_FIRST, _inspectWatchdogTick)
         end
-    end)
+    end
     -- Caches every INSPECT_READY, including the ones other addons asked for, which is
     -- what lets the tooltip stay passive while such an addon polls the group.
     local _inspectFrame
@@ -758,7 +761,9 @@ end
             local nBefore = _GameTooltip:NumLines() or 0
             _GameTooltip:AddDoubleLine(EllesmereUI.L("Item Level:"), cached.ilvl, 1, 1, 1, 1, 1, 1)
             _ttFonts(_GameTooltip, nBefore + 1)
-            _GameTooltip:Show()
+            -- Runs for every source's result, also in combat; pcall'd like the re-Show in
+            -- _ttOnShow, since a tainted re-Show can be denied as forbidden access.
+            pcall(_GameTooltip.Show, _GameTooltip)
             ttd.ilvlShown = true
         end
     end
@@ -785,6 +790,7 @@ end
                 _insp.lastAny = t
                 if _insp.ourAt ~= t then _insp.lastForeign = t end
             end)
+            if InspectUnit then hooksecurefunc("InspectUnit", _onInspectUnit) end
         end
         _inspectFrame:RegisterEvent("INSPECT_READY")
     end
@@ -896,8 +902,10 @@ end
     end
     -- Caller has already found no cached item level for guid.
     local function _requestTooltipInspect(guid)
+        -- The pending dwell re-checks every gate itself; skip them on each refresh meanwhile.
+        if _insp.dwellArmed and _insp.dwellGUID == guid then return end
         local now = GetTime()
-        -- Blocked now: arm nothing; a later tooltip pass asks again.
+        -- Blocked now: arm nothing; a later tooltip refresh or re-hover asks again.
         if _inspBlocked(guid, now) then return end
         -- Always track the latest unit; a running timer picks up the retarget.
         if _insp.dwellGUID ~= guid then
