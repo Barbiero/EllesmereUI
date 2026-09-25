@@ -519,7 +519,7 @@ function EllesmereUI.BuildMacroFactory(parent, startY, PP)
             local cb = cbs[idx]
             if cb and db[cb.key] ~= false then
                 for _, itemID in ipairs(cb.items) do
-                    if (GetItemCount(itemID, false) or 0) > 0 then
+                    if (C_Item.GetItemCount(itemID, false) or 0) > 0 then
                         return itemID
                     end
                 end

@@ -158,7 +158,12 @@ local function ShowRaidFramesPopup()
             if C_AddOns and C_AddOns.DisableAddOn then
                 C_AddOns.DisableAddOn(RF_FOLDER)
             end
-            ReloadUI()
+            EllesmereUI.RequestReload()
+            -- On the Forever client the reload waits on its popup: close the
+            -- announcement and clear its pending flag so the popups queued
+            -- behind it stop waiting. Retail is already reloading.
+            dimmer:Hide()
+            EllesmereUI._raidFramesIntroPending = nil
             return
         end
         dimmer:Hide()

@@ -1478,7 +1478,7 @@ function ns.FakeActive_Rearm()
 
     -- 1. Built-in rules (class/spec gated).
     local _, classFile = UnitClass("player")
-    local specIdx = GetSpecialization and GetSpecialization() or nil
+    local specIdx = GetSpecialization()
     for i = 1, #FAKE_ACTIVE_RULES do
         local rule = FAKE_ACTIVE_RULES[i]
         if (not rule.class or rule.class == classFile)

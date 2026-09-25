@@ -1,7 +1,7 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
 if not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end
 -------------------------------------------------------------------------------
---  EllesmereUIQoL_ThreatMeter.lua  (WoW Forever only)
+--  EllesmereUIForeverEssentials_ThreatMeter.lua  (WoW Forever only)
 --  Threat on your target for everyone in the group, one bar each, sorted, with
 --  an optional pull aggro bar and a warning sound. Forever hands the threat API
 --  over readable (C_Secrets.ShouldUnitThreatValuesBeSecret is false there); a
@@ -31,10 +31,34 @@ local FALLBACK_COLOR = { r = 0.6, g = 0.6, b = 0.6 }
 
 local BAR_TEXTURES, BAR_TEXTURE_NAMES, BAR_TEXTURE_ORDER = EllesmereUI.BuildBarTextureTables()
 
+-- The warning sound list is the meter's own, so the sound works with no other
+-- module loaded. Built with its SharedMedia sounds on first use (after login).
+local soundPaths, soundNames, soundOrder
+
+local function Sounds()
+    if not soundPaths then
+        soundPaths, soundNames, soundOrder = EllesmereUI.BuildAlertSoundTables()
+        EllesmereUI.AppendSharedMediaSounds(soundPaths, soundNames, soundOrder)
+    end
+    return soundPaths, soundNames, soundOrder
+end
+
+-- A SharedMedia sound is a file path or a SoundKit id.
+local function PlaySoundKey(key)
+    local paths = Sounds()
+    local path = paths[key]
+    if type(path) == "number" then
+        if path ~= 1 then PlaySound(path, "Master") end
+    elseif path then
+        PlaySoundFile(path, "Master")
+    end
+end
+
 local frame, events, pendingUpdate, previewUntil, followTicker
 local rows = {}         -- bar widgets, created on demand
 local entries = {}      -- reused threat entries, one per unit seen
 local list = {}         -- the entries shown this update, sorted
+local mobUnit           -- the mob token the last update resolved, nil when none
 local warned
 
 -- Cfg() is the WRITE accessor (creates the table); Read() never creates it, so
@@ -92,10 +116,11 @@ end
 -------------------------------------------------------------------------------
 --  Appearance
 -------------------------------------------------------------------------------
+-- nil (the "__global" choice) leaves the module's font / outline to
+-- ApplyModuleFont; anything else is the page's own pick.
 local function TextFont()
     local key = Get("font")
-    local path = key ~= "__global" and EllesmereUI.ResolveFontName(key)
-    return path or EllesmereUI.GetFontPath("extras")
+    return key ~= "__global" and EllesmereUI.ResolveFontName(key) or nil
 end
 
 local function TextOutline()
@@ -103,13 +128,10 @@ local function TextOutline()
     if mode == "outline" then return EllesmereUI.SlugFlag("OUTLINE, SLUG") end
     if mode == "thick" then return EllesmereUI.SlugFlag("THICKOUTLINE, SLUG") end
     if mode == "none" then return "" end
-    return EllesmereUI.GetFontOutlineFlag("extras")
 end
 
 local function StyleFont(fs, font, flag)
-    -- An empty flag means Drop Shadow, which only renders through the font object.
-    EllesmereUI.PrimeFontShadow(fs, flag == "")
-    fs:SetFont(font, Get("textSize"), flag)
+    EllesmereUI.ApplyModuleFont(fs, font, Get("textSize"), "essentials", flag)
 end
 
 local function HeaderHeight()
@@ -141,15 +163,23 @@ local function CreateRow(i)
     return row
 end
 
+-- Inputs of the last layout: the row count plus every setting the layout reads.
+-- A redraw that matches all of them moves nothing; ApplyStyle clears it.
+local laid = {}
+
 local function LayoutRows(count)
     local bh, gap, w = Get("barHeight"), Get("spacing"), Get("width")
+    local up, header = Get("growUp"), Get("showHeader")
+    if laid.count == count and laid.bh == bh and laid.gap == gap and laid.w == w
+        and laid.up == up and laid.header == header then return end
+    laid.count, laid.bh, laid.gap, laid.w, laid.up, laid.header = count, bh, gap, w, up, header
     local top = HeaderHeight()
     frame:SetSize(w, math.max(top + count * (bh + gap) - (count > 0 and gap or 0), top, 1))
     for i = 1, count do
         local row = rows[i] or CreateRow(i)
         row:ClearAllPoints()
         local off = top + (i - 1) * (bh + gap)
-        if Get("growUp") then
+        if up then
             row:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, off)
         else
             row:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -off)
@@ -159,13 +189,14 @@ local function LayoutRows(count)
     end
     for i = count + 1, #rows do rows[i]:Hide() end
     frame.header:ClearAllPoints()
-    frame.header:SetPoint(Get("growUp") and "BOTTOMLEFT" or "TOPLEFT")
+    frame.header:SetPoint(up and "BOTTOMLEFT" or "TOPLEFT")
     frame.header:SetSize(w, math.max(top, 1))
     frame.header:SetShown(top > 0)
 end
 
 local function ApplyStyle()
     if not frame then return end
+    laid.count = nil
     local PP = EllesmereUI.PP
     local font, flag = TextFont(), TextOutline()
     local texture = EllesmereUI.ResolveTexturePath(BAR_TEXTURES, Get("texture"), "Interface\\Buttons\\WHITE8x8")
@@ -221,6 +252,19 @@ local function ClassColor(unit)
     return classFile and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[classFile] or FALLBACK_COLOR
 end
 
+-- Every group token the meter reads, built once: Collect walks the lists and
+-- the threat-situation filter looks tokens up in the sets.
+local RAID_UNITS, RAID_PETS, PARTY_UNITS, PARTY_PETS = {}, {}, {}, {}
+local MEMBER_UNITS, PET_UNITS = { player = true }, { pet = true }
+for i = 1, 40 do
+    local u, p = "raid" .. i, "raidpet" .. i
+    RAID_UNITS[i], RAID_PETS[i], MEMBER_UNITS[u], PET_UNITS[p] = u, p, true, true
+end
+for i = 1, 4 do
+    local u, p = "party" .. i, "partypet" .. i
+    PARTY_UNITS[i], PARTY_PETS[i], MEMBER_UNITS[u], PET_UNITS[p] = u, p, true, true
+end
+
 local count = 0
 
 local function Add(unit, mob)
@@ -230,7 +274,7 @@ local function Add(unit, mob)
     count = count + 1
     local e = entries[count]
     if not e then e = {}; entries[count] = e end
-    e.unit, e.name, e.raw, e.scaled, e.tanking = unit, UnitName(unit), raw, scaled, tanking
+    e.unit, e.name, e.raw, e.scaled, e.tanking = unit, EllesmereUI.WithSurname(UnitName(unit)), raw, scaled, tanking
     e.isPlayer, e.pull = UnitIsUnit(unit, "player"), nil
     list[#list + 1] = e
 end
@@ -241,15 +285,15 @@ local function Collect(mob)
     local pets = not Get("ignorePets")
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            Add("raid" .. i, mob)
-            if pets then Add("raidpet" .. i, mob) end
+            Add(RAID_UNITS[i], mob)
+            if pets then Add(RAID_PETS[i], mob) end
         end
     else
         Add("player", mob)
         if pets then Add("pet", mob) end
         for i = 1, GetNumSubgroupMembers() do
-            Add("party" .. i, mob)
-            if pets then Add("partypet" .. i, mob) end
+            Add(PARTY_UNITS[i], mob)
+            if pets then Add(PARTY_PETS[i], mob) end
         end
     end
 end
@@ -309,9 +353,7 @@ local function CheckWarning(me)
     local over = me and not me.tanking and me.scaled >= Get("warnAt")
         and not (Get("warnSkipTank") and PlayerIsTank())
     if over and not warned then
-        local paths = EllesmereUI._groupDeathSoundPaths
-        local key = Get("warnSoundKey")
-        if paths and paths[key] and EllesmereUI._PlayLSMSound then EllesmereUI._PlayLSMSound(paths[key]) end
+        PlaySoundKey(Get("warnSoundKey"))
     end
     warned = over
 end
@@ -325,7 +367,8 @@ local function SamplePreview()
         count = count + 1
         local e = entries[count] or {}
         entries[count] = e
-        e.unit, e.name, e.raw, e.scaled, e.tanking = s[1], i == 1 and EllesmereUI.L("Tank") or UnitName("player"),
+        e.unit, e.name, e.raw, e.scaled, e.tanking = s[1],
+            i == 1 and EllesmereUI.L("Tank") or EllesmereUI.WithSurname(UnitName("player")),
             s[2], s[3], s[4] == true
         e.isPlayer, e.pull = i == 2, false
         list[#list + 1] = e
@@ -352,6 +395,7 @@ end
 
 function Update()
     pendingUpdate = false
+    mobUnit = nil
     if not frame then return end
     if not Enabled() then
         SetFollow(false)
@@ -369,6 +413,7 @@ function Update()
     end
     local vis = EllesmereUI.EvalVisibility(Read())
     local mob = vis == true and ThreatMob()
+    mobUnit = mob or nil
     SetFollow(mob == "targettarget" and InCombatLockdown())
     if mob then Collect(mob) end
     if not mob or #list == 0 then
@@ -383,7 +428,7 @@ function Update()
     CheckWarning(me)
     if Get("pullBar") then AddPullEntry(me) end
     table.sort(list, ByThreat)
-    Render(math.min(#list, Get("maxBars")), list[1].raw, UnitName(mob))
+    Render(math.min(#list, Get("maxBars")), list[1].raw, EllesmereUI.WithSurname(UnitName(mob)))
     frame:Show()
 end
 
@@ -395,12 +440,33 @@ local function RequestUpdate()
     C_Timer.After(UPDATE_DELAY, Update)
 end
 
+-- Threat events fire for every unit in the fight (each nameplate during a pull),
+-- so each is probed first: a threat-list change counts only for the mob shown
+-- (a secret comparison counts as a match; with none shown, only your target's),
+-- a threat-situation change only for a unit the meter lists. Both arrive once
+-- per token a unit has, so a member's group token always comes through. Every
+-- other event is an edge and redraws.
+local function OnEvent(_, event, unit)
+    if pendingUpdate then return end
+    if event == "UNIT_THREAT_LIST_UPDATE" then
+        if not mobUnit then
+            if unit ~= "target" then return end
+        elseif unit ~= mobUnit then
+            local same = UnitIsUnit(unit, mobUnit)
+            if Readable(same) and not same then return end
+        end
+    elseif event == "UNIT_THREAT_SITUATION_UPDATE" then
+        if not (MEMBER_UNITS[unit] or (PET_UNITS[unit] and not Get("ignorePets"))) then return end
+    end
+    RequestUpdate()
+end
+
 local function Apply()
     if Enabled() then
         CreateMeter()
         if not events then
             events = CreateFrame("Frame")
-            events:SetScript("OnEvent", RequestUpdate)
+            events:SetScript("OnEvent", OnEvent)
         end
         events:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
         events:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
@@ -433,6 +499,7 @@ EllesmereUI._ThreatMeter = {
     end,
     ApplyPosition = function() if frame then ApplyPosition() end end,
     textures = { lookup = BAR_TEXTURES, names = BAR_TEXTURE_NAMES, order = BAR_TEXTURE_ORDER },
+    Sounds = Sounds,
     Preview = function()
         CreateMeter()
         previewUntil = GetTime() + PREVIEW_SECONDS
@@ -456,7 +523,7 @@ local function RegisterUnlock()
         MK({
             key      = "EUI_ThreatMeter",
             label    = "Threat Meter",
-            group    = "Quality of Life",
+            group    = "Forever Essentials",
             order    = 731,
             isHidden = function() return not Enabled() end,
             -- Nothing is built while the feature is off (the unlock core calls
@@ -494,7 +561,7 @@ local function RegisterUnlock()
                 ApplyPosition()
             end,
         }),
-    })
+    }, "EllesmereUIForeverEssentials")
 end
 
 local boot = CreateFrame("Frame")

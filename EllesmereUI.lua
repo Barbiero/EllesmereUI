@@ -603,6 +603,7 @@ local ADDON_ROSTER = {
     { folder = "EllesmereUIResourceBars",      display = "Resource & Cast Bars", search_name = "EllesmereUI Resource Bars Cast Bars" },
     { folder = "EllesmereUIAuraBuffReminders", display = "AuraBuff Reminders",   search_name = "EllesmereUI AuraBuff Reminders"      },
     { folder = "EllesmereUIQoL",               display = "Quality of Life",      search_name = "EllesmereUI Quality of Life"         },
+    { folder = "EllesmereUIForeverEssentials", display = "Forever Essentials",   search_name = "EllesmereUI Forever Essentials"      },
     { folder = "EllesmereUIBlizzardSkin",      display = "Blizz UI Enhanced",    search_name = "EllesmereUI Blizz UI Enhanced",      syncFolder = "EllesmereUIDragonRiding", syncDisplay = "Dragon Riding" },
     { folder = "EllesmereUIFriends",           display = "Friends List",         search_name = "EllesmereUI Friends List"            },
     { folder = "EllesmereUIMythicTimer",       display = "Mythic+ Tools",        search_name = "EllesmereUI Mythic+ Tools Timer"     },
@@ -639,6 +640,7 @@ EllesmereUI.ADDON_GROUPS = {
         label   = "QoL Addons",
         members = {
             "EllesmereUIQoL",
+            "EllesmereUIForeverEssentials",
             "EllesmereUIAuraBuffReminders",
             "EllesmereUIDataBars",
             "EllesmereUIQuickdraw",
@@ -700,25 +702,27 @@ EllesmereUI.FOREVER_HIDDEN_ADDONS = {
     -- load on Forever), listed so the profile import/export checklists drop it.
     EllesmereUIDragonRiding = true,
 }
--- WoW Forever: addons switched off for the whole client the same way (TOC
--- "## AllowLoadGameType: standard") but only until Blizzard's client can run
--- secure handlers again. These KEEP their sidebar row, rendered disabled with
--- the reason (the sidebar refresh reads this), and leave the install picker.
-EllesmereUI.FOREVER_STOOD_DOWN_ADDONS = {
-    EllesmereUIRaidFrames = true,
+-- The mirror: addons that load on WoW Forever alone (TOC
+-- "## AllowLoadGameType: camelot") leave the same lists on every other client.
+EllesmereUI.FOREVER_ONLY_ADDONS = {
+    EllesmereUIForeverEssentials = true,
 }
+-- The set the running client leaves out.
+EllesmereUI._CLIENT_HIDDEN_ADDONS = (EUI_CLIENT_FOREVER == true)
+    and EllesmereUI.FOREVER_HIDDEN_ADDONS or EllesmereUI.FOREVER_ONLY_ADDONS
 -- The profile import/export checklists read the profile data map, which stays
 -- complete (it drives the data itself); they list through this view instead.
 function EllesmereUI.VisibleProfileAddons(map)
-    if EUI_CLIENT_FOREVER ~= true or type(map) ~= "table" then return map end
+    if type(map) ~= "table" then return map end
+    local hidden = EllesmereUI._CLIENT_HIDDEN_ADDONS
     local out = {}
     for _, entry in ipairs(map) do
-        if not EllesmereUI.FOREVER_HIDDEN_ADDONS[entry.folder] then out[#out + 1] = entry end
+        if not hidden[entry.folder] then out[#out + 1] = entry end
     end
     return out
 end
-if EUI_CLIENT_FOREVER == true then
-    local hidden = EllesmereUI.FOREVER_HIDDEN_ADDONS
+do
+    local hidden = EllesmereUI._CLIENT_HIDDEN_ADDONS
     for i = #ADDON_ROSTER, 1, -1 do
         if hidden[ADDON_ROSTER[i].folder] then table.remove(ADDON_ROSTER, i) end
     end
@@ -768,7 +772,7 @@ do
 
     -- Modules with a sync icon but no per-profile data (always "synced"). BlizzardSkin hosts
     -- Dragon Riding's per-profile DB; its sync icon routes to EllesmereUIDragonRiding via syncFolder.
-    local SYNC_GLOBAL_ONLY = {}
+    local SYNC_GLOBAL_ONLY = { EllesmereUIForeverEssentials = true }
     EllesmereUI._syncGlobalOnly = SYNC_GLOBAL_ONLY
 
     -- Exclusion registry: keys NOT copied during sync (flat or dot-wildcard, see banner)
@@ -2481,7 +2485,7 @@ do
                 return upgradeColor
             end
             if (not EllesmereUIDB or EllesmereUIDB.charSheetColorItemLevel ~= false) and itemQuality then
-                local r, g, b = GetItemQualityColor(itemQuality)
+                local r, g, b = C_Item.GetItemQualityColor(itemQuality)
                 return { r = r, g = g, b = b }
             end
             return { r = 1, g = 1, b = 1 }
@@ -4863,6 +4867,7 @@ EllesmereUI._addonKeyToFolder = {
     resourceBars = "EllesmereUIResourceBars",
     auraBuff     = "EllesmereUIAuraBuffReminders",
     extras       = "EllesmereUIQoL",
+    essentials   = "EllesmereUIForeverEssentials",
     friends      = "EllesmereUIFriends",
     minimap      = "EllesmereUIMinimap",
     chat         = "EllesmereUIChat",
@@ -6973,6 +6978,22 @@ local function InvalidateConfirmPopup()
 end
 EllesmereUI._InvalidateConfirmPopup = InvalidateConfirmPopup
 
+-- Reload the UI from our own code (not from a confirm popup: those pass
+-- reload = true). Retail reloads at once, as every such call always has. The
+-- WoW Forever client blocks ReloadUI() from addon code even inside a click, so
+-- there the same request opens the standard reload popup, whose Reload Now
+-- button is the secure /reload macro overlay.
+function EllesmereUI.RequestReload(title, message)
+    if not EllesmereUI.IS_FOREVER then ReloadUI() return end
+    EllesmereUI:ShowConfirmPopup({
+        title       = title or EllesmereUI.L("Reload Required"),
+        message     = message or EllesmereUI.L("A reload is required to apply this."),
+        confirmText = EllesmereUI.L("Reload Now"),
+        cancelText  = EllesmereUI.L("Later"),
+        reload      = true,
+    })
+end
+
 function EllesmereUI:ShowConfirmPopup(opts)
     -- reload = true: confirming reloads the UI, after the caller's own
     -- onConfirm work if it has any. Retail calls ReloadUI() from the click,
@@ -8678,6 +8699,7 @@ local function CreateMainFrame()
                     message     = EllesmereUI.Lf("Are you sure you want to %1$s %2$s?", EllesmereUI.L(action), EllesmereUI.L(self._display)),
                     confirmText = enabled and "Disable & Reload" or "Enable & Reload",
                     cancelText  = "Cancel",
+                    reload      = true,
                     onConfirm   = function()
                         if folder == "EllesmereUIBags" and EllesmereUIDB then
                             EllesmereUIDB.bagsUserChosen = true
@@ -8687,7 +8709,6 @@ local function CreateMainFrame()
                         else
                             C_AddOns.EnableAddOn(folder)
                         end
-                        ReloadUI()
                     end,
                 })
             end)
@@ -8826,14 +8847,6 @@ local function CreateMainFrame()
                 end
                 return
             end
-            if self._standDown then
-                -- Stood down for the session (secure snippets unavailable, WoW
-                -- Forever beta): the row says why, in red, and does nothing else.
-                if EllesmereUI.ShowWidgetTooltip then
-                    EllesmereUI.ShowWidgetTooltip(self, self._standDown)
-                end
-                return
-            end
             if self._ovLocked then
                 if EllesmereUI.ShowWidgetTooltip then
                     EllesmereUI.ShowWidgetTooltip(self, "This module can't be overridden. Exit the override editing session to open it.")
@@ -8856,7 +8869,6 @@ local function CreateMainFrame()
             if EllesmereUI.HideWidgetTooltip then EllesmereUI.HideWidgetTooltip() end
             if self._comingSoon then return end
             if self._maintenance then return end
-            if self._standDown then return end
             if self._ovLocked then return end
             if self._notEnabled then return end
             hlTex:SetAlpha(0)
@@ -8873,7 +8885,6 @@ local function CreateMainFrame()
         btn:SetScript("OnClick", function(self)
             if self._comingSoon then return end
             if self._maintenance then return end
-            if self._standDown then return end
             if self._ovLocked then return end
             if self._notEnabled then return end
             if self._loaded and modules[self._folder] then
@@ -9760,7 +9771,7 @@ local function CreateMainFrame()
         "BOTTOMLEFT", resetBtn, "BOTTOMRIGHT", FOOTER_BTN_GAP, 0,
         RS_TEXT_R, RS_TEXT_G, RS_TEXT_B, RS_TEXT_A, RS_TEXT_HR, RS_TEXT_HG, RS_TEXT_HB, RS_TEXT_HA,
         RS_BRD_R, RS_BRD_G, RS_BRD_B, RS_BRD_A, RS_BRD_HR, RS_BRD_HG, RS_BRD_HB, RS_BRD_HA,
-        "Reload UI", function() ReloadUI() end)
+        "Reload UI", function() EllesmereUI.RequestReload(EllesmereUI.L("Reload UI"), EllesmereUI.L("Reload the UI now?")) end)
     footerFrame._reloadBtn = reloadBtn
 
     -- Per-module Reset visibility: modules with no onReset (Patch Notes, Profiles) hide
@@ -10854,6 +10865,7 @@ function EllesmereUI:RegisterModule(folderName, config)
         EllesmereUIBags = true,
         EllesmereUIDataBars = true,
         EllesmereUIQuickdraw = true,
+        EllesmereUIForeverEssentials = true,
     }
     if callerFolder and not ALLOWED[callerFolder] then return end
     -- Suite-core marker (module key is a suite folder), gating the toolbar whitelists:
@@ -11502,26 +11514,7 @@ local function RefreshSidebarStates()
                 y = y + CHILD_H
 
                 local loaded = info.alwaysLoaded or IsAddonLoaded(info.folder)
-                -- A module the enable drain stood down for the session (secure
-                -- snippets unavailable: WoW Forever beta) renders as a disabled
-                -- row with a red tooltip saying why, its power toggle hidden; it
-                -- comes back by itself with the client fix. Never set on retail.
-                local stood = loaded and EllesmereUI.Lite and EllesmereUI.Lite.GetAddon
-                    and EllesmereUI.Lite.GetAddon(info.folder, true)
-                stood = (stood and stood.standDown) or nil
-                -- Switched off for the whole client by its TOC (WoW Forever):
-                -- never loaded, but the row stays, with the same reason.
-                if not stood and EUI_CLIENT_FOREVER == true and EllesmereUI.FOREVER_STOOD_DOWN_ADDONS
-                   and EllesmereUI.FOREVER_STOOD_DOWN_ADDONS[info.folder] then
-                    stood = "client"
-                end
-                if stood then
-                    btn._standDown = EllesmereUI.COLOR_CODES.BAD .. EllesmereUI.Lf("%1$s is switched off on the WoW Forever beta until Blizzard's client can run secure handlers again.", EllesmereUI.L(info.display)) .. "|r"
-                else
-                    btn._standDown = false
-                end
-                if btn._pwrBtn then btn._pwrBtn:SetShown(not stood) end
-                local isSpecial = info.comingSoon or info.maintenance or stood
+                local isSpecial = info.comingSoon or info.maintenance
                 -- Coming-soon / maintenance rows render as disabled regardless
                 -- of whether their placeholder folder happens to be loaded.
                 local effectiveLoaded = loaded and not isSpecial
@@ -11782,7 +11775,7 @@ end
 -------------------------------------------------------------------------------
 --  Slash commands
 -------------------------------------------------------------------------------
-EllesmereUI.VERSION = "9.2.8"
+EllesmereUI.VERSION = "9.2.9"
 
 -- Register this addon's version into a shared global table (taint-free at load time)
 if not _G._EUI_AddonVersions then _G._EUI_AddonVersions = {} end
@@ -14007,7 +14000,7 @@ end
 --  and their options previews. Each style is a Horde/Alliance pair, an atlas or a
 --  file; "%s" takes the faction ("lower" = lowercased, "num" = 1 Horde / 2 Alliance).
 --  "coords" crops a file whose art does not fill it (the Classic banner sits in the
---  top-left 42 of 64 pixels; same crop as oUF's PvPIndicator).
+--  top-left 42 of 64 pixels).
 --  Unknown styles fall back to "pvp", the default.
 -------------------------------------------------------------------------------
 EllesmereUI.FACTION_ART = {
@@ -14026,19 +14019,26 @@ EllesmereUI.FACTION_ART_LABELS = {
 }
 function EllesmereUI.SetFactionArt(tex, style, faction)
     local art = EllesmereUI.FACTION_ART[style] or EllesmereUI.FACTION_ART.pvp
-    local key = faction
-    if art.lower then
-        key = faction:lower()
-    elseif art.num then
-        key = (faction == "Horde") and "1" or "2"
+    -- The resolved atlas or file name is built once per style and faction and kept
+    -- on the style's entry (art.Horde / art.Alliance).
+    local name = art[faction]
+    if not name then
+        local key = faction
+        if art.lower then
+            key = faction:lower()
+        elseif art.num then
+            key = (faction == "Horde") and "1" or "2"
+        end
+        name = (art.atlas or art.file):format(key)
+        art[faction] = name
     end
     if art.atlas then
         -- SetAtlas keeps an earlier SetTexCoord (e.g. the Classic banner's crop)
         -- unless told to reset it, so clear it first and ask for the reset too.
         tex:SetTexCoord(0, 1, 0, 1)
-        tex:SetAtlas(art.atlas:format(key), false, nil, true)
+        tex:SetAtlas(name, false, nil, true)
     else
-        tex:SetTexture(art.file:format(key))
+        tex:SetTexture(name)
         local c = art.coords
         if c then tex:SetTexCoord(c[1], c[2], c[3], c[4]) else tex:SetTexCoord(0, 1, 0, 1) end
     end

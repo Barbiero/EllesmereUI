@@ -935,6 +935,9 @@ initFrame:SetScript("OnEvent", function(self)
         _, h = WSCardSection(parent, "CORE OPTIONS", y);  y = y - h
         if BS then y = BS.Note(parent, y, "charsheet") end
 
+        -- WoW Forever shows neither (no Mythic+, and its slot text carries no
+        -- item level), so the whole row stays off there.
+        if not EllesmereUI.IS_FOREVER then
         local coreRow1
         coreRow1, h = W:DualRow(parent, y,
             { type="toggle", text="Show Mythic+ Rating",
@@ -955,9 +958,14 @@ initFrame:SetScript("OnEvent", function(self)
               end }
         );  y = y - h
         AttachDisabledOverlay(coreRow1)
+        end -- not IS_FOREVER
 
-        local upgradeTrackCfg = { type="toggle", text="Upgrade Track",
-              tooltip="Toggle visibility of upgrade track text on the character sheet.",
+        -- WoW Forever has no upgrade tracks: the same key shows each item's
+        -- main and secondary stat (or its armor when it has none) and each
+        -- weapon's damage per second there.
+        local upgradeTrackCfg = { type="toggle", text=EllesmereUI.IS_FOREVER and "Show Item Stats" or "Upgrade Track",
+              tooltip=EllesmereUI.IS_FOREVER and "Show each item's main and secondary stat (or its armor) and each weapon's damage per second beside its slot."
+                  or "Toggle visibility of upgrade track text on the character sheet.",
               getValue=function() return EllesmereUIDB and EllesmereUIDB.showUpgradeTrack ~= false end,
               setValue=function(v)
                   if not EllesmereUIDB then EllesmereUIDB = {} end

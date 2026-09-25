@@ -10027,6 +10027,42 @@ function EllesmereUI.MaxDurationDropdown(get, set, apply)
     }
 end
 
+-- Sound dropdown data for a DualRow slot or a cog row: a fresh values table
+-- (a click-to-preview speaker icon on every playable row) and the order list.
+-- paths / names / order are a catalogue from BuildAlertSoundTables(); left out,
+-- they are the Quality of Life alert-sound catalogue (just "None" while it is
+-- absent). A path is a sound file or a SoundKit id.
+function EllesmereUI.BuildSoundDropdownValues(paths, names, order)
+    paths = paths or EllesmereUI._groupDeathSoundPaths or {}
+    names = names or EllesmereUI._groupDeathSoundNames or { none = "None" }
+    order = order or EllesmereUI._groupDeathSoundOrder or { "none" }
+    local values = {}
+    for k, v in pairs(names) do values[k] = v end
+    values._menuOpts = {
+        itemHeight = 26,
+        maxTextWidthPct = 0.8,
+        searchable = true,
+        iconAtlas = function(key)
+            if key == "none" or not paths[key] then return nil end
+            return "common-icon-sound"
+        end,
+        iconPressedAtlas = function(key)
+            if key == "none" or not paths[key] then return nil end
+            return "common-icon-sound-pressed"
+        end,
+        iconOnClick = function(key)
+            local path = paths[key]
+            if type(path) == "number" then
+                if path ~= 1 then PlaySound(path, "Master") end
+            elseif path then
+                PlaySoundFile(path, "Master")
+            end
+        end,
+        iconTooltip = function() return "Preview Sound" end,
+    }
+    return values, order
+end
+
 -------------------------------------------------------------------------------
 --  Global Settings > Fonts / Textures: shared row helpers and module card
 -------------------------------------------------------------------------------

@@ -17,8 +17,6 @@ local PAGE_UPGCALC  = "Upgrader"
 local PAGE_SHIFTER  = "Shifter"
 local PAGE_MOVEMENT = "MoveAlert"
 local PAGE_RAIDTOOLS = "Raid Tools"
-local PAGE_TRAVEL   = "Travel"
-local PAGE_THREAT   = "Threat"
 
 -------------------------------------------------------------------------------
 --  Hide Item Transforms picker popup
@@ -433,6 +431,9 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
+        -- AH Current Expansion Only | Hide Talking Head. Not offered on WoW
+        -- Forever: the row is not built there and neither runtime block exists.
+        if not EllesmereUI.IS_FOREVER then
         _, h = W:DualRow(parent, y,
             { type="toggle", text="AH Current Expansion Only",
               tooltip="Automatically enables the 'Current Expansion Only' filter whenever you open the Auction House.",
@@ -453,6 +454,7 @@ initFrame:SetScript("OnEvent", function(self)
                   EllesmereUIDB.hideTalkingHead = v
               end }
         );  y = y - h
+        end -- not IS_FOREVER
 
         -- Row 5: Show Coordinates on Map (left, with cog) | Suppress Lua Errors
         -- (Suppress Lua Errors is a front-end duplicate of the toggle in
@@ -2266,15 +2268,11 @@ initFrame:SetScript("OnEvent", function(self)
     -- No item upgrade system on WoW Forever: the Upgrader tab is not offered there
     -- (its resident file returns at load, so the page builder never exists either).
     if not EllesmereUI.IS_FOREVER then pages[#pages + 1] = PAGE_UPGCALC end
-    if EllesmereUI.IS_FOREVER then
-        pages[#pages + 1] = PAGE_TRAVEL
-        pages[#pages + 1] = PAGE_THREAT
-    end
     EllesmereUI:RegisterModule("EllesmereUIQoL", {
         title       = "Quality of Life",
         description = "Quality of life features and custom cursor.",
         pages       = pages,
-        searchTerms = { "brez", "bres", "battle res", "combat res", "cursor", "macro", "fps", "logging", "combat log", "warcraft logs", "upgrade", "ilvl", "item level", "crest", "upgrade calculator", "shifter", "move", "drag", "position", "demodal", "drift", "combat alert", "enter combat", "leave combat", "in combat", "combat text", "combat notification", "transform", "transforms", "costume", "disguise", "chef's hat", "noggenfogger", "target distance", "distance to target", "range text", "yard", "yards", "movement", "mobility", "gap closer", "blink", "gateway", "warlock gateway", "control shard", "time spiral", "free movement", "raid tools", "raid", "pull timer", "pull", "ready check", "role check", "raid marker", "target marker", "world marker", "flare", "disband", "convert to raid", "countdown", "threat", "threat meter", "aggro" },
+        searchTerms = { "brez", "bres", "battle res", "combat res", "cursor", "macro", "fps", "logging", "combat log", "warcraft logs", "upgrade", "ilvl", "item level", "crest", "upgrade calculator", "shifter", "move", "drag", "position", "demodal", "drift", "combat alert", "enter combat", "leave combat", "in combat", "combat text", "combat notification", "transform", "transforms", "costume", "disguise", "chef's hat", "noggenfogger", "target distance", "distance to target", "range text", "yard", "yards", "movement", "mobility", "gap closer", "blink", "gateway", "warlock gateway", "control shard", "time spiral", "free movement", "raid tools", "raid", "pull timer", "pull", "ready check", "role check", "raid marker", "target marker", "world marker", "flare", "disband", "convert to raid", "countdown" },
         buildPage   = function(pageName, parent, yOffset)
             -- The Raid Tools settings preview ends when any OTHER QoL page
             -- builds (the CDM tracking-bars placeholder arrangement); window
@@ -2301,12 +2299,6 @@ initFrame:SetScript("OnEvent", function(self)
             end
             if pageName == PAGE_RAIDTOOLS and _G._EUI_BuildRaidToolsPage then
                 return _G._EUI_BuildRaidToolsPage(pageName, parent, yOffset)
-            end
-            if pageName == PAGE_TRAVEL and _G._EUI_BuildFlightTimerPage then
-                return _G._EUI_BuildFlightTimerPage(pageName, parent, yOffset)
-            end
-            if pageName == PAGE_THREAT and _G._EUI_BuildThreatMeterPage then
-                return _G._EUI_BuildThreatMeterPage(pageName, parent, yOffset)
             end
         end,
         -- Cached pages are restored WITHOUT a rebuild, so buildPage never runs
@@ -2375,12 +2367,6 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 EllesmereUIDB.hideTransforms = false
                 EllesmereUIDB.hideTransformItems = nil
-                EllesmereUIDB.flightTimer = nil
-                EllesmereUIDB.threatMeter = nil
-                if EllesmereUIDB.unlockAnchors then
-                    EllesmereUIDB.unlockAnchors.EUI_FlightTimer = nil
-                    EllesmereUIDB.unlockAnchors.EUI_ThreatMeter = nil
-                end
             end
             EllesmereUIDB.autoLogging = nil
             if _G._EUI_ResetUpgradeCalc then _G._EUI_ResetUpgradeCalc() end
@@ -2391,16 +2377,6 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUI._applyCombatAlert then EllesmereUI._applyCombatAlert() end
             if EllesmereUI._applyTargetDistance then EllesmereUI._applyTargetDistance() end
             if EllesmereUI._applyHideTransforms then EllesmereUI._applyHideTransforms() end
-            if EllesmereUI._FlightTimer then
-                EllesmereUI._FlightTimer.Apply()
-                EllesmereUI._FlightTimer.ApplyStyle()
-                EllesmereUI._FlightTimer.ApplyPosition()
-            end
-            if EllesmereUI._ThreatMeter then
-                EllesmereUI._ThreatMeter.Apply()
-                EllesmereUI._ThreatMeter.ApplyStyle()
-                EllesmereUI._ThreatMeter.ApplyPosition()
-            end
             if EllesmereUI._applyQuickSignup then EllesmereUI._applyQuickSignup() end
             if EllesmereUI._applyPersistSignupNote then EllesmereUI._applyPersistSignupNote() end
             if EllesmereUI._applyQuickLoot then EllesmereUI._applyQuickLoot() end

@@ -52,7 +52,10 @@ local function ChooseStockStyle(styleKey, label, dimmer)
     local BS = EllesmereUI.BlizzStyle
     if BS and BS.ApplyAll then
         BS.ApplyAll(styleKey)
-        ReloadUI()
+        EllesmereUI.RequestReload(nil, EllesmereUI.L("Style changed for this profile. A UI reload is needed to apply it."))
+        -- On the Forever client the reload waits on its popup: the choice is
+        -- made, so the picker closes under it. Retail is already reloading.
+        if dimmer then dimmer:Hide() end
         return
     end
     EllesmereUI.Print("|cff00ff98EllesmereUI:|r " .. label .. " can be switched on under Global Settings > Style.")

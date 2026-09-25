@@ -24,21 +24,6 @@ local EllesmereUI = _G.EllesmereUI
 local LibDeflate = LibStub and LibStub("LibDeflate", true) or _G.LibDeflate
 
 -------------------------------------------------------------------------------
---  Reload popup: uses Blizzard StaticPopup so the button click is a hardware
---  event and ReloadUI() is not blocked as a protected function call.
--------------------------------------------------------------------------------
-StaticPopupDialogs["EUI_PROFILE_RELOAD"] = {
-    text = "EllesmereUI Profile switched. Reload UI to apply?",
-    button1 = "Reload Now",
-    button2 = "Later",
-    OnAccept = function() ReloadUI() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
--------------------------------------------------------------------------------
 --  Addon registry: display-order list of all managed addons.
 --  Each entry: { folder, display, svName }
 --    folder  = addon folder name (matches _dbRegistry key)
@@ -230,8 +215,9 @@ EllesmereUI.ResolveKeyToFolder = ResolveKeyToFolder
 
 -- Set of folders that have NO import/export checkbox (not in ADDON_DB_MAP), so
 -- their anchor/match edges are never exported -- the element keeps its own saved
--- absolute position on import (decision: always export them unanchored). Today
--- this is only EllesmereUIBlizzardSkin (the Dragon Riding cluster).
+-- absolute position on import (decision: always export them unanchored): the
+-- Dragon Riding cluster (EllesmereUIBlizzardSkin) and the Forever Essentials
+-- elements (flight timer, threat meter; their settings are all account-wide).
 local NO_CHECKBOX_FOLDER = {}
 do
     local has = {}
@@ -240,6 +226,8 @@ do
     for _, folder in pairs(KEY_PREFIX_FOLDER) do
         if not has[folder] then NO_CHECKBOX_FOLDER[folder] = true end
     end
+    -- Stamped on its elements at registration (it has no key prefix of its own).
+    NO_CHECKBOX_FOLDER["EllesmereUIForeverEssentials"] = true
 end
 EllesmereUI._NoCheckboxFolder = NO_CHECKBOX_FOLDER
 
@@ -2364,7 +2352,7 @@ function EllesmereUI.ImportFullAccountData(payload)
         end
     end
 
-    ReloadUI()
+    EllesmereUI.RequestReload(EllesmereUI.L("Profile Imported"), EllesmereUI.L("Reload to finish importing."))
     return true
 end
 

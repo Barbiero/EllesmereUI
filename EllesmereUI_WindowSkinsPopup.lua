@@ -197,7 +197,12 @@ local function ShowWindowSkinsPopup()
             if EllesmereUI.DisableAllBlizzWindowSkins then
                 EllesmereUI.DisableAllBlizzWindowSkins()
             end
-            ReloadUI()
+            EllesmereUI.RequestReload()
+            -- On the Forever client the reload waits on its popup: close the
+            -- announcement and clear its pending flag so the popups queued
+            -- behind it stop waiting. Retail is already reloading.
+            dimmer:Hide()
+            EllesmereUI._windowSkinsIntroPending = nil
             return
         end
         dimmer:Hide()

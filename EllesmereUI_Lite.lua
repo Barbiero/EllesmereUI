@@ -17,34 +17,6 @@ EllesmereUI.Lite = EUILite
 -- classed as mainline on purpose).
 EllesmereUI.IS_FOREVER = (EUI_CLIENT_FOREVER == true)
 
--- Secure snippet support. The Forever beta client (1.60.1) ships without the
--- snippet compiler the restricted environment captures at load
--- (loadstring_untainted), so every WrapScript, _onstate-*, initialConfigFunction
--- and Execute body throws "attempt to call a nil value". Probed ONCE on that
--- client; retail is never probed (always true, zero cost). Modules that are
--- secure handlers end to end declare `requiresSecureSnippets`, their files
--- stand down at load and the enable drain skips them (Blizzard's own frames
--- stay); the per-site users guard their snippet frames with this. Comes back
--- on its own the day the client is fixed.
---
--- No snippet is ever run to find out: a snippet compiles inside Blizzard's
--- attribute handler, so its failure neither reaches a pcall around the call
--- nor stays quiet under a parked error handler (error grabbers record it
--- anyway). The answer is the loader itself: the restricted environment
--- captures the global loadstring_untainted at load, and that global is the
--- exact piece the beta client lacks. Its return is what brings the modules back.
-function EllesmereUI.SecureSnippetsOK()
-    local v = EllesmereUI._secureSnippetsOK
-    if v == nil then
-        v = true
-        if EllesmereUI.IS_FOREVER then
-            v = (type(_G.loadstring_untainted) == "function")
-        end
-        EllesmereUI._secureSnippetsOK = v
-    end
-    return v
-end
-
 -- The options-panel scale is exposed as a fixed-step dropdown ("EUI Options
 -- Panel Scale"), NOT a free slider, and its getValue matches exact percentages
 -- and falls through to "Normal (100%)" for anything else. So a seeded value
@@ -497,17 +469,8 @@ local function FlushEnableQueue()
     while #enableQueue > 0 do
         local addon = tremove(enableQueue, 1)
         if addon.enabledState then
-            if addon.requiresSecureSnippets and not EllesmereUI.SecureSnippetsOK() then
-                -- Secure handlers end to end: stands down on a client that
-                -- cannot compile snippets (WoW Forever beta); Blizzard's own
-                -- frames stay. OnInitialize ran, so its DB exists; its options
-                -- pages read standDown and keep out of the sidebar.
-                statuses[addon.name] = false
-                addon.standDown = "snippets"
-            else
-                statuses[addon.name] = true
-                safecall(addon.OnEnable, addon)
-            end
+            statuses[addon.name] = true
+            safecall(addon.OnEnable, addon)
         end
     end
 end

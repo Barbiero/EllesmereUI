@@ -58,6 +58,7 @@ local GROUPS = {
         header = "QoL Addons",
         entries = {
             { label = "Quality of Life",     addon = "EllesmereUIQoL" },
+            { label = "Forever Essentials",  addon = "EllesmereUIForeverEssentials" },
             { label = "AuraBuff Reminders",  addon = "EllesmereUIAuraBuffReminders" },
             { label = "DataBars",            addon = "EllesmereUIDataBars" },
             { label = "Quickdraw",           addon = "EllesmereUIQuickdraw" },
@@ -81,14 +82,15 @@ local GROUPS = {
     },
 }
 
--- WoW Forever: addons switched off for the whole client leave the picker
--- (the set lives with the roster in EllesmereUI.lua).
-if EUI_CLIENT_FOREVER == true and EllesmereUI.FOREVER_HIDDEN_ADDONS then
+-- Addons the running client leaves out (switched off on WoW Forever, or
+-- Forever-only everywhere else) leave the picker (the sets live with the
+-- roster in EllesmereUI.lua).
+do
+    local hidden = EllesmereUI._CLIENT_HIDDEN_ADDONS
     for _, group in ipairs(GROUPS) do
         for i = #group.entries, 1, -1 do
             local addon = group.entries[i].addon
-            local stood = EllesmereUI.FOREVER_STOOD_DOWN_ADDONS
-            if addon and (EllesmereUI.FOREVER_HIDDEN_ADDONS[addon] or (stood and stood[addon])) then
+            if addon and hidden[addon] then
                 table.remove(group.entries, i)
             end
         end
@@ -472,7 +474,11 @@ local function ShowFirstInstallPopup()
                     SetAddonEnabled(row._entry.addon, row._checked)
                 end
             end
-            ReloadUI()
+            EllesmereUI.RequestReload()
+            -- On the Forever client the reload waits on its popup: close the
+            -- picker so "Later" leaves the game usable (the choices are saved
+            -- and apply at the next reload). Retail is already reloading.
+            dimmer:Hide()
             return
         end
 

@@ -702,7 +702,7 @@ ns.BlockFactories.clock = function(blockCfg, slot, content, barCtx)
         if button == "MiddleButton" and IsShiftKeyDown() then
             -- Never reload mid-combat: it drops the player out of the fight.
             if InCombatLockdown() then return end
-            ReloadUI()
+            EllesmereUI.RequestReload(EllesmereUI.L("Reload UI"), EllesmereUI.L("Reload the UI now?"))
         elseif button == "LeftButton" then
             if ToggleCalendar then ToggleCalendar() end
         elseif button == "RightButton" then
@@ -1634,7 +1634,7 @@ local function MakeLocationBlock(blockCfg, slot, content, barCtx, opts)
     -- click; PLAYER_REGEN_ENABLED drives Refresh's retry so a block built mid-fight becomes clickable once combat ends.
     local clickBtn
     local function EnsureClickButton()
-        if clickBtn or InCombatLockdown() or not EllesmereUI.SecureSnippetsOK() then return clickBtn end
+        if clickBtn or InCombatLockdown() then return clickBtn end
         local micro = _G.QuestLogMicroButton
         if not micro then return nil end
         clickBtn = CreateFrame("Button", "EWB_LOC_" .. inst.key, frame,
@@ -4469,7 +4469,7 @@ mmClickFunctions.menu = function(_, button)
     if button == "LeftButton" then
         if not InCombatLockdown() then ToggleFrame(GameMenuFrame) end
     elseif button == "RightButton" then
-        if IsShiftKeyDown() then C_UI.Reload()
+        if IsShiftKeyDown() then EllesmereUI.RequestReload(EllesmereUI.L("Reload UI"), EllesmereUI.L("Reload the UI now?"))
         elseif not InCombatLockdown() then ToggleFrame(AddonList) end
     end
 end
@@ -4525,7 +4525,7 @@ local mmHiders = {}
 local function MMGetHider(frame)
     local hider = mmHiders[frame]
     if hider then return hider end
-    if InCombatLockdown() or not EllesmereUI.SecureSnippetsOK() then return nil end
+    if InCombatLockdown() then return nil end
     hider = CreateFrame("Frame", nil, nil, "SecureHandlerStateTemplate")
     hider:SetFrameRef("target", frame)
     hider:SetAttribute("_onstate-vis", [[
@@ -5007,7 +5007,7 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         end
         local frame
         local gname = "EWB_MM_" .. inst.key .. "_" .. key
-        if microRef and EllesmereUI.SecureSnippetsOK() then
+        if microRef then
             -- Taint-safe: pass clicks through to the Blizzard MicroButton.
             frame = CreateFrame("Button", gname, content,
                 "SecureActionButtonTemplate,SecureHandlerStateTemplate")

@@ -786,9 +786,10 @@ qolFrame:SetScript("OnEvent", function(self)
     end
 
     ---------------------------------------------------------------------------
-    --  AH Current Expansion Only
+    --  AH Current Expansion Only (not on WoW Forever: the block, its event and
+    --  its options row do not exist there)
     ---------------------------------------------------------------------------
-    do
+    if not EllesmereUI.IS_FOREVER then
         local ahFrame = CreateFrame("Frame")
         ahFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
         ahFrame:SetScript("OnEvent", function()
@@ -1622,9 +1623,10 @@ qolFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
 
     ---------------------------------------------------------------------------
-    --  Hide Talking Head Frame (the NPC dialogue rectangle during quests/dungeons)
+    --  Hide Talking Head Frame (the NPC dialogue rectangle during quests/dungeons;
+    --  not on WoW Forever: the block, its hook and its options row do not exist there)
     ---------------------------------------------------------------------------
-    do
+    if not EllesmereUI.IS_FOREVER then
         local function HookTalkingHead()
             local thf = _G.TalkingHeadFrame
             if not thf or EllesmereUI._GetFFD(thf).hooked then return end
@@ -3115,9 +3117,6 @@ do
     end)
 
     local function ApplyRightClickTarget()
-        -- The binding rides _onstate snippets: nothing to arm on a client that
-        -- cannot compile them (WoW Forever beta), nothing was armed to clear.
-        if not EllesmereUI.SecureSnippetsOK() then return end
         if InCombatLockdown() then
             local deferFrame = CreateFrame("Frame")
             deferFrame:RegisterEvent("PLAYER_REGEN_ENABLED")

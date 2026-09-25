@@ -1,38 +1,10 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
-if not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end -- the QoL module lists the Threat tab on WoW Forever only
+if not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end -- Forever Essentials loads on WoW Forever only
 -------------------------------------------------------------------------------
---  EUI_QoL_ThreatMeter_Options.lua
---  Builds the "Threat" page inside the Quality of Life module.
+--  EUI_ForeverEssentials_Threat_Options.lua
+--  Builds the "Threat" page inside the Forever Essentials module.
 -------------------------------------------------------------------------------
-if not EllesmereUI._ModuleNS["EllesmereUIQoL"] then return end  -- module disabled: no options page
-
--- Same sound list and preview icon as the Movement Alert page: the paths are the
--- shared group-death sound table EllesmereUIQoL.lua builds at login.
-local function SoundDropdownValues()
-    local paths = EllesmereUI._groupDeathSoundPaths or {}
-    local names = EllesmereUI._groupDeathSoundNames or { none = "None" }
-    local order = EllesmereUI._groupDeathSoundOrder or { "none" }
-    local values = {}
-    for k, v in pairs(names) do values[k] = v end
-    values._menuOpts = {
-        itemHeight = 26,
-        maxTextWidthPct = 0.8,
-        searchable = true,
-        iconAtlas = function(key)
-            if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound"
-        end,
-        iconPressedAtlas = function(key)
-            if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound-pressed"
-        end,
-        iconOnClick = function(key)
-            if EllesmereUI._PlayLSMSound then EllesmereUI._PlayLSMSound(paths[key]) end
-        end,
-        iconTooltip = function() return "Preview Sound" end,
-    }
-    return values, order
-end
+if not EllesmereUI._ModuleNS["EllesmereUIForeverEssentials"] then return end  -- module disabled: no options page
 
 _G._EUI_BuildThreatMeterPage = function(pageName, parent, yOffset)
     local W = EllesmereUI.Widgets
@@ -121,7 +93,7 @@ _G._EUI_BuildThreatMeterPage = function(pageName, parent, yOffset)
     local function warnOff()
         return off() or not TM.Get("warnSound")
     end
-    local sndValues, sndOrder = SoundDropdownValues()
+    local sndValues, sndOrder = EllesmereUI.BuildSoundDropdownValues(TM.Sounds())
     _, h = W:DualRow(parent, y,
         { type = "toggle", text = "Warning Sound",
           tooltip = "Plays once when your threat climbs past the threshold, and again only after it has dropped back below.",

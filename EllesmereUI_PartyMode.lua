@@ -583,64 +583,125 @@ end)
 
 -------------------------------------------------------------------------------
 --  Party Mode spin engine. EllesmereUI.PartySpin_Create(opts) -> refresh()
---  opts: enabledKey / speedKey (EllesmereUIDB keys, speed deg/s, default 120),
---  collect() -> { { pivot = frame, frames = {...} }, ... }, and optional
---  onClaim() (idempotent, runs about once a second) and onRestore().
+--  opts: target (one key of the Spinning setting, read through
+--  EllesmereUI.PartySpinOn; every target turns at partyModeSpinSpeed, deg/s,
+--  default 120), collect() -> { { pivot = frame, frames = {...} }, ... }
+--  (runs about once a second while spinning, so it reuses its tables), and
+--  optional onClaim() (idempotent, same cadence) and onRestore().
+--  EllesmereUI.PartySpin_RefreshAll() re-applies every engine.
 --  A SetPoint post-hook marks a member dirty when its module re-anchors it.
 --  Pauses in combat and while Unlock Mode is open (members go home to drag).
 -------------------------------------------------------------------------------
 do
-local hooked = setmetatable({}, { __mode = "k" })
+local SPIN_TARGETS = { "actionBars", "dataBars", "unitFrames", "resource", "power" }
+
+-- EllesmereUIDB.partyModeSpinBars: nil / false = nothing spins, true = Action
+-- Bars only, a table = one boolean per target. Every reader comes through
+-- here: a plain truthiness test would take a table for "on". settingOnly
+-- skips the Party Mode check (the options checkmarks).
+local function SpinOn(target, settingOnly)
+    local db = EllesmereUIDB
+    if not (db and (settingOnly or db.partyMode)) then return false end
+    local v = db.partyModeSpinBars
+    if type(v) == "table" then return v[target] == true end
+    return v == true and target == "actionBars"
+end
+EllesmereUI.PartySpinOn = SpinOn
+
+-- The options writer: a boolean store becomes the per-target table on its
+-- first write, keeping its Action Bars meaning.
+function EllesmereUI.PartySpinSet(target, on)
+    local db = EllesmereUIDB
+    if not db then return end
+    local v = db.partyModeSpinBars
+    if type(v) ~= "table" then
+        local ab = (v == true)
+        v = {}
+        for i = 1, #SPIN_TARGETS do v[SPIN_TARGETS[i]] = false end
+        v.actionBars = ab
+        db.partyModeSpinBars = v
+    end
+    v[target] = on and true or false
+end
+
+local function Speed()
+    local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinSpeed
+    if v == nil then v = 120 end
+    return v
+end
+
+-- Per-frame records live here, never on the frame: some members are
+-- Blizzard-owned (stance and pet buttons). A record outlives its membership,
+-- so a re-claim reuses its tables and the one SetPoint hook.
+local recOf = setmetatable({}, { __mode = "k" })
 local guardDepth = 0
+local refreshers = {}
+local EMPTY = {}
+
+local function OnMemberSetPoint(self)
+    if guardDepth > 0 then return end
+    local r = recOf[self]
+    if r then r.dirty = true end
+end
+
+local function Measure(f, rec)
+    local pts, n = rec.points, 0
+    for i = 1, f:GetNumPoints() do
+        local a, rel, b, x, y = f:GetPoint(i)
+        -- Skip our own orbit point if the module anchored without clearing it.
+        if not (rec.ox and a == "CENTER" and rel == UIParent and b == "BOTTOMLEFT"
+                and x == rec.ox and y == rec.oy) then
+            n = n + 1
+            local p = pts[n]
+            if not p then p = {}; pts[n] = p end
+            p[1], p[2], p[3], p[4], p[5] = a, rel, b, x, y
+        end
+    end
+    for i = n + 1, #pts do pts[i] = nil end
+    rec.n = n
+    -- A member sized by two or more anchors (SetAllPoints) loses its size
+    -- under a single orbit point, so its rest size is carried explicitly.
+    rec.multi = n > 1
+    rec.w, rec.h = f:GetWidth(), f:GetHeight()
+    local cx, cy = f:GetCenter()
+    local px, py = rec.pivot:GetCenter()
+    if not (cx and px) then rec.dx = nil; return end
+    local fs, ps = f:GetEffectiveScale(), rec.pivot:GetEffectiveScale()
+    rec.dx, rec.dy = cx * fs - px * ps, cy * fs - py * ps
+    rec.dirty = false
+end
+
+-- Back onto the captured rest anchors. A member its module re-anchored since
+-- the last tick is re-measured first, so that newer anchor is the one kept.
+local function Restore(f, rec)
+    if rec.dirty then Measure(f, rec) end
+    local n = rec.n or 0
+    if n == 0 then return end
+    guardDepth = guardDepth + 1
+    f:ClearAllPoints()
+    local pts = rec.points
+    for i = 1, n do
+        local p = pts[i]
+        f:SetPoint(p[1], p[2], p[3], p[4], p[5])
+    end
+    guardDepth = guardDepth - 1
+    rec.ox, rec.oy = nil, nil
+end
+
+local function RefreshAll()
+    for i = 1, #refreshers do refreshers[i]() end
+end
+EllesmereUI.PartySpin_RefreshAll = RefreshAll
 
 function EllesmereUI.PartySpin_Create(opts)
+    local target = opts.target
     local driver, deferF
-    local angle, held, since = 0, false, 0
-    local members = {}     -- frame -> rec { pivot, points, dx, dy, dirty }
+    local angle, held, since, claimed = 0, false, 0, false
+    local members = {}     -- frame -> its recOf record
     local order = {}       -- array of frames (stable iteration)
+    local seen = {}        -- Claim scratch, wiped after each pass
 
-    local function On()
-        local db = EllesmereUIDB
-        return db and db.partyMode and db[opts.enabledKey] and true or false
-    end
-    local function Speed()
-        local v = EllesmereUIDB and EllesmereUIDB[opts.speedKey]
-        if v == nil then v = 120 end
-        return v
-    end
-
-    local function Measure(f, rec)
-        -- Skip our own orbit point if the module anchored without clearing it.
-        rec.points = {}
-        for i = 1, f:GetNumPoints() do
-            local p = { f:GetPoint(i) }
-            if not (rec.ox and p[1] == "CENTER" and p[2] == UIParent
-                    and p[3] == "BOTTOMLEFT" and p[4] == rec.ox and p[5] == rec.oy) then
-                rec.points[#rec.points + 1] = p
-            end
-        end
-        -- A member sized by two or more anchors (SetAllPoints) loses its size
-        -- under a single orbit point, so its rest size is carried explicitly.
-        rec.multi = #rec.points > 1
-        rec.w, rec.h = f:GetWidth(), f:GetHeight()
-        local cx, cy = f:GetCenter()
-        local px, py = rec.pivot:GetCenter()
-        if not (cx and px) then rec.dx = nil; return end
-        local fs, ps = f:GetEffectiveScale(), rec.pivot:GetEffectiveScale()
-        rec.dx, rec.dy = cx * fs - px * ps, cy * fs - py * ps
-        rec.dirty = false
-    end
-
-    local function Restore(f, rec)
-        if not rec.points or #rec.points == 0 then return end
-        guardDepth = guardDepth + 1
-        f:ClearAllPoints()
-        for i = 1, #rec.points do
-            local p = rec.points[i]
-            f:SetPoint(p[1], p[2], p[3], p[4], p[5])
-        end
-        guardDepth = guardDepth - 1
-    end
+    local function On() return SpinOn(target) end
 
     local function RestoreAll()
         for i = 1, #order do
@@ -648,12 +709,13 @@ function EllesmereUI.PartySpin_Create(opts)
             Restore(f, members[f])
         end
         wipe(members); wipe(order)
+        claimed = false
         if opts.onRestore then opts.onRestore() end
     end
 
     local function Claim()
-        local groups = opts.collect() or {}
-        local seen = {}
+        claimed = true
+        local groups = opts.collect() or EMPTY
         for g = 1, #groups do
             local grp = groups[g]
             local pivot, list = grp.pivot, grp.frames
@@ -663,18 +725,15 @@ function EllesmereUI.PartySpin_Create(opts)
                     if f and f.GetCenter and not seen[f] then
                         seen[f] = true
                         if not members[f] then
-                            local rec = { pivot = pivot }
+                            local rec = recOf[f]
+                            if not rec then
+                                rec = { points = {} }
+                                recOf[f] = rec
+                                hooksecurefunc(f, "SetPoint", OnMemberSetPoint)
+                            end
+                            rec.pivot = pivot
                             members[f] = rec
                             order[#order + 1] = f
-                            if not hooked[f] then
-                                hooked[f] = true
-                                hooksecurefunc(f, "SetPoint", function(self)
-                                    if guardDepth > 0 then return end
-                                    local r = self._euiSpinRec
-                                    if r then r.dirty = true end
-                                end)
-                            end
-                            f._euiSpinRec = rec
                             Measure(f, rec)
                         end
                     end
@@ -686,27 +745,31 @@ function EllesmereUI.PartySpin_Create(opts)
             local f = order[i]
             if not seen[f] then
                 Restore(f, members[f])
-                f._euiSpinRec = nil
                 members[f] = nil
                 table.remove(order, i)
             end
         end
+        wipe(seen)
         if opts.onClaim then opts.onClaim() end
     end
 
     local function Tick(c, s)
         guardDepth = guardDepth + 1
+        -- Members come grouped by pivot, so each pivot is read once a tick.
+        local lastPivot, px, py, ps
         for i = 1, #order do
             local f = order[i]
             local rec = members[f]
-            if rec.dirty or not rec.dx then
-                guardDepth = guardDepth - 1
-                Measure(f, rec)   -- module just re-anchored it: that IS rest
-                guardDepth = guardDepth + 1
+            -- The module just re-anchored it: that IS rest.
+            if rec.dirty or not rec.dx then Measure(f, rec) end
+            local pivot = rec.pivot
+            if pivot ~= lastPivot then
+                lastPivot = pivot
+                px, py = pivot:GetCenter()
+                ps = pivot:GetEffectiveScale()
             end
-            local px, py = rec.pivot:GetCenter()
             if rec.dx and px then
-                local ps, fs = rec.pivot:GetEffectiveScale(), f:GetEffectiveScale()
+                local fs = f:GetEffectiveScale()
                 if fs and fs > 0 then
                     local x = px * ps + rec.dx * c - rec.dy * s
                     local y = py * ps + rec.dx * s + rec.dy * c
@@ -723,8 +786,14 @@ function EllesmereUI.PartySpin_Create(opts)
     local refresh
     refresh = function()
         local on = On()
-        -- Same combat contract as the action bar spin: only the safe half
-        -- (Show/Hide of our own driver) runs in combat; the rest re-runs on
+        -- Off with nothing claimed: nothing to put back, so nothing runs.
+        if not on and not claimed then
+            if driver then driver:Hide() end
+            angle, held = 0, false
+            return
+        end
+        -- Moving a protected member is blocked in combat, so only the safe
+        -- half (Show/Hide of our own driver) runs there; the rest re-runs on
         -- PLAYER_REGEN_ENABLED with the member table left intact.
         if InCombatLockdown() then
             if not deferF then
@@ -771,10 +840,12 @@ function EllesmereUI.PartySpin_Create(opts)
         driver:Show()
     end
 
-    -- Party Mode starts from the options page, a keybind, a random timer or
-    -- Bloodlust; its two public entry points catch all of them.
-    hooksecurefunc("EllesmereUI_StartPartyMode", function() refresh() end)
-    hooksecurefunc("EllesmereUI_StopPartyMode", function() refresh() end)
+    refreshers[#refreshers + 1] = refresh
     return refresh
 end
+
+-- Party Mode starts from the options page, a keybind, a random timer or
+-- Bloodlust; its two public entry points catch all of them.
+hooksecurefunc("EllesmereUI_StartPartyMode", RefreshAll)
+hooksecurefunc("EllesmereUI_StopPartyMode", RefreshAll)
 end

@@ -771,7 +771,30 @@ local defaults = {
             borderColor = { r = 0, g = 0, b = 0 },
             borderTexture = "solid",
             highlightColor = { r = 1, g = 1, b = 1 },
-            powerPosition = "none",
+            -- WoW Forever pets have power (hunter pet focus, warlock pet mana), so
+            -- the pet frame carries a power bar there (retail: none).
+            powerPosition = (EllesmereUI.IS_FOREVER == true) and "below" or "none",
+            powerHeight = 6,
+            powerWidth = 0,
+            powerX = 0,
+            powerY = -4,
+            powerPercentText = "none",
+            powerTextFormat = "perpp",
+            powerShowPercent = true,
+            powerPercentSize = 9,
+            powerPercentX = 0,
+            powerPercentY = 0,
+            powerPercentPowerColor = true,
+            powerBgPowerColored = false,
+            powerPercentTextPowerColor = false,
+            powerBarOpacity = 100,
+            powerReverseFill = false,
+            -- Pet happiness icon (WoW Forever hunter pets).
+            happinessEnabled = true,
+            happinessSize = 20,
+            happinessAlign = "right",
+            happinessX = 0,
+            happinessY = 0,
             healthReverseFill = false,
             healthVerticalFill = false,
             smoothBars = false,
@@ -2472,7 +2495,7 @@ ns.NICK_ADDON = addonName:find("Standalone") and addonName or "EllesmereUI"
 -- may be the raw (possibly secret) name -- display-safe since oUF feeds tag returns to
 -- SetFormattedText as a %s arg without inspecting them.
 function ns.ResolveUnitNickname(unit)
-    local name = UnitName(unit)
+    local name, surname = UnitName(unit)
     if not name then return "" end
     -- Nicknames are player-only; NPCs (bosses, etc.) keep their name.
     if not UnitIsPlayer(unit) then return name end
@@ -2490,12 +2513,13 @@ function ns.ResolveUnitNickname(unit)
                and not (issecretvalue and issecretvalue(dn)) and dn ~= "" then
                 return dn
             end
-            return name
+            return EllesmereUI.WithSurname(name, surname)
         end
     end
     -- Master toggle (Unit Frames > main frames > Display, default OFF): when off,
-    -- skip the remaining provider lookups and show the raw unit name (display-safe).
-    if not (db and db.profile and db.profile.showNicknames) then return name end
+    -- skip the remaining provider lookups and show the raw unit name (display-safe;
+    -- with the surname on WoW Forever).
+    if not (db and db.profile and db.profile.showNicknames) then return EllesmereUI.WithSurname(name, surname) end
     if not nameSecret and NSAPI and NSAPI.GetName then
         local ok, dn = pcall(NSAPI.GetName, NSAPI, name, "EUI")
         if ok and type(dn) == "string"
@@ -2527,7 +2551,7 @@ function ns.ResolveUnitNickname(unit)
         end
     end
     if display then return display end
-    return name
+    return EllesmereUI.WithSurname(name, surname)
 end
 
 -- Nickname-aware replacement for the stock [name] tag (see ContentToTag). Returns
@@ -3619,6 +3643,10 @@ function ns.UF_AttachEngineFrame(frame, unit, polled)
     else
         ns.Engine.Attach(frame, unit, channels)
     end
+    -- Opt-in heal prediction joins its channel here when the unit has it on.
+    if frame.HealthPrediction and ns.UF_HEAL_PRED_UNITS[unit] then
+        ns.UF_HealPredApply(frame, unit, GetSettingsForUnit(unit))
+    end
     ns.Engine.HideBlizzardUnitFrame(unit)
     ns.Engine.RepaintAll(frame, "Spawn")
 end
@@ -4138,8 +4166,10 @@ local function UpdateBordersForScale(frame, unit)
     local ppIsDet = (ppPos == "detached_top" or ppPos == "detached_bottom")
     local ph = settings.powerHeight or 6
     -- Mini frames (pet/tot/focustarget) have no power bar: no power height.
+    -- The exception is a WoW Forever pet off Blizzard Style, which has its own.
     local isMini = (unit == "pet" or unit == "targettarget" or unit == "focustarget")
-    local powerH = (ppIsAtt and not isMini) and ph or 0
+    local miniNoPower = isMini and not (unit == "pet" and ns.UF_PetHasPower and not ns.UF_Blizz())
+    local powerH = (ppIsAtt and not miniNoPower) and ph or 0
 
     local btbPos = settings.btbPosition or "bottom"
     local btbIsAtt = (btbPos == "top" or btbPos == "bottom")
@@ -4368,7 +4398,9 @@ local function GetFrameDimensions(unit, settingsOnly)
         local w = (showPortrait and isAttached) and (adjPH + settings.frameWidth) or settings.frameWidth
         return snap(w), snap(barH + btbExtra)
     elseif unit == "pet" or unit == "targettarget" or unit == "focustarget" then
-        return snap(settings.frameWidth), snap(settings.healthHeight)
+        -- A WoW Forever pet stacks its attached power bar with the health bar.
+        local miniPowerH = (unit == "pet" and ns.UF_PetHasPower) and powerExtra or 0
+        return snap(settings.frameWidth), snap(settings.healthHeight + miniPowerH)
     elseif unit:match("^boss") then
         local pH = powerIsAtt and (settings.powerHeight or 6) or 0
         local barH = settings.healthHeight + pH
@@ -4752,6 +4784,10 @@ local function UpdateAbsorbBarReverseFill(frame, isReversed, settingsOverride)
                 ha:SetPoint("TOPRIGHT", hpTex, "TOPRIGHT", 0, 0)
             end
         end
+        if ab._predOn then
+            ns.UF_AnchorHealPred(ab)
+            ns.UF_HealPredLayout(ab)
+        end
         return
     end
 
@@ -4868,29 +4904,36 @@ local function UpdateAbsorbBarReverseFill(frame, isReversed, settingsOverride)
             end
         end
     end
-    if ab._predMy then ns.UF_AnchorHealPred(ab) end
+    if ab._predOn then
+        ns.UF_AnchorHealPred(ab)
+        ns.UF_HealPredLayout(ab)
+    end
 end
 
 -------------------------------------------------------------------------------
---  Heal Prediction (opt-in per unit, s.healPrediction): incoming heals drawn
---  past the health fill as two segments, the player's own heals first, then
---  everyone else's, like Blizzard's frames. Both are StatusBars fed by a heal
---  prediction calculator (secret-safe: values only reach SetValue), parented
---  to the absorb cluster's missing-health clip, which also stops them at full
---  health. Overheal (s.healPredOverheal, percent of the bar) lets them run past
---  the bar's end: the calculator clamps to maximum health instead, and the bars
---  move (without the edge mask) to a holder outside the frame's bar clip that
---  clips at the bar's end plus the allowance. Texture (s.healPredTexture)
---  follows the health bar by default.
---  Nothing is built or registered until a frame turns the option on.
+--  Heal Prediction (opt-in per unit, s.healPrediction; player, target and
+--  focus): incoming heals drawn past the health fill as two segments, the
+--  player's own heals first, then everyone else's. Both are StatusBars fed by
+--  a heal prediction calculator (secret-safe: values only reach SetValue).
+--  Cost: off builds nothing and leaves the engine's opt-in "healpred" channel
+--  off the frame, so no event or repaint reaches it. On, that channel
+--  registers UNIT_HEAL_PREDICTION for the one unit (plus the vehicle for the
+--  player) and joins its max-health and heal-absorb routes; the engine's
+--  same-frame stamp collapses bursts (one trailing next-frame paint settles a
+--  deduped repeat), and a paint is one calculator fill, the range and two
+--  SetValue calls.
+--  No current-health input: the calculator clamps to MAXIMUM health, the
+--  segments ride the health fill's edge by anchor, and a clip cuts them at the
+--  bar's end -- Overheal 0: the missing-health clip; Overheal > 0: a holder
+--  outside the frame's bar clip that clips at the end plus the allowance.
+--  Style (texture, colors, opacity, Overheal) is applied by UF_HealPredApply
+--  from the spawn and settings reload paths, size by the health bar's
+--  OnSizeChanged; never per paint.
 --  On ns: this chunk sits at the Lua 5.1 local ceiling.
 -------------------------------------------------------------------------------
 ns.UF_HEAL_PRED_MY    = { r = 102/255, g = 243/255, b = 102/255 }
 ns.UF_HEAL_PRED_OTHER = { r = 40/255,  g = 170/255, b = 40/255 }
--- Units with heal prediction: UNIT_HEAL_PREDICTION fires for every group member
--- and nameplate, so the listener drops anything else before touching frames.
-ns.UF_HEAL_PRED_UNITS = { player = true, target = true, focus = true,
-    boss1 = true, boss2 = true, boss3 = true, boss4 = true, boss5 = true }
+ns.UF_HEAL_PRED_UNITS = { player = true, target = true, focus = true }
 
 -- Anchors both segments at the health fill's leading edge, in the fill
 -- direction (reverse and vertical fill included), the others' segment
@@ -4901,7 +4944,8 @@ function ns.UF_AnchorHealPred(ab)
     if not (my and hpTex) then return end
     local myTex = my:GetStatusBarTexture()
     local isVert, isRev = ab._isVert and true or false, ab._isReversed and true or false
-    for _, bar in ipairs({ my, other }) do
+    for i = 1, 2 do
+        local bar = (i == 1) and my or other
         bar:SetOrientation(isVert and "VERTICAL" or "HORIZONTAL")
         ns.ApplyFillRotation(bar)
         bar:SetReverseFill(isRev)
@@ -4931,46 +4975,123 @@ function ns.UF_NewHealPredBar(ab)
     return bar
 end
 
--- One listener for every frame with the option on, created with the first.
-function ns.UF_ArmHealPredEvents()
-    if ns._ufHealPredEvents then return end
-    local ev = CreateFrame("Frame")
-    ev:RegisterEvent("UNIT_HEAL_PREDICTION")
-    ev:SetScript("OnEvent", function(_, _, unit)
-        if not ns.UF_HEAL_PRED_UNITS[unit] then return end
-        for _, f in pairs(frames) do
-            if type(f) == "table" and f._euiUnit == unit and f.HealthPrediction and f:IsVisible() then
-                ns.UF_PaintHealPred(f, unit)
+-- Seats the segment fills' masks: the health-bar-bounds edge mask and, under
+-- Blizzard Style, the stock bar shape (ab._blizzMaskOn, stamped by the art
+-- pass). Both apply only while the segments sit inside the bar (Overheal 0).
+-- A texture swap makes new fills, so this runs after every swap, parent
+-- change and art pass.
+function ns.UF_HealPredMasks(ab)
+    local inside = (ab._predOver or 0) == 0
+    local edge = ab._absorbMask
+    local shape = ab._hpBar._blizzMask
+    for i = 1, 2 do
+        local bar = (i == 1) and ab._predMy or ab._predOther
+        local fill = bar:GetStatusBarTexture()
+        if fill then
+            if edge then
+                pcall(fill.RemoveMaskTexture, fill, edge)
+                if inside then fill:AddMaskTexture(edge) end
+            end
+            if shape then
+                pcall(fill.RemoveMaskTexture, fill, shape)
+                if inside and ab._blizzMaskOn then fill:AddMaskTexture(shape) end
             end
         end
-    end)
-    ns._ufHealPredEvents = ev
+    end
 end
 
+-- Size and the Overheal holder: both follow the health bar's size and fill
+-- axis. Runs from the style pass, the absorb re-anchor pass and the health
+-- bar's OnSizeChanged.
+function ns.UF_HealPredLayout(ab)
+    local hp = ab._hpBar
+    local w, h = hp:GetWidth(), hp:GetHeight()
+    ab._predMy:SetSize(w, h)
+    ab._predOther:SetSize(w, h)
+    local over = ab._predOver or 0
+    local holder = ab._predHolder
+    if over > 0 and holder then
+        local ext = (ab._isVert and h or w) * over / 100
+        local l, r, t, b = 0, 0, 0, 0
+        if ab._isVert then
+            if ab._isReversed then b = -ext else t = ext end
+        elseif ab._isReversed then
+            l = -ext
+        else
+            r = ext
+        end
+        holder:ClearAllPoints()
+        holder:SetPoint("TOPLEFT", hp, "TOPLEFT", l, t)
+        holder:SetPoint("BOTTOMRIGHT", hp, "BOTTOMRIGHT", r, b)
+    end
+end
+
+-- The healpred channel's painter: values only, no style work.
 function ns.UF_PaintHealPred(frame, unit)
-    local ab = frame.HealthPrediction and frame.HealthPrediction.damageAbsorb
+    local ab = frame.HealthPrediction.damageAbsorb
+    if not ab._predOn then return end
+    local calc = ab._predCalc
+    UnitGetDetailedHealPrediction(unit, "player", calc)
+    local _, mine, others = calc:GetIncomingHeals()
+    local maxHealth = UnitHealthMax(unit) or 0
+    local my, other = ab._predMy, ab._predOther
+    my:SetMinMaxValues(0, maxHealth)
+    other:SetMinMaxValues(0, maxHealth)
+    my:SetValue(mine)
+    other:SetValue(others)
+end
+ns.Engine.SetPainter("healpred", ns.UF_PaintHealPred)
+
+-- Style pass + channel sync for one frame (unitKey = its settings key).
+-- Idempotent; runs at spawn and on every settings reload, after the health
+-- texture is applied. Off tears down to hidden bars and no channel.
+function ns.UF_HealPredApply(frame, unitKey, s)
+    local hpe = frame.HealthPrediction
+    local ab = hpe and hpe.damageAbsorb
     if not (ab and ab._missClip) then return end
-    local s = GetSettingsForUnit(unit)
-    -- Boss frames follow the Target frame's settings, like their absorbs.
-    if unit and unit:match("^boss") then s = db.profile.target or s end
-    if not (s and s.healPrediction and CreateUnitHealPredictionCalculator and UnitGetDetailedHealPrediction) then
-        if ab._predMy then ab._predMy:Hide(); ab._predOther:Hide() end
+    local on = ns.UF_HEAL_PRED_UNITS[unitKey] and s and s.healPrediction == true
+        and CreateUnitHealPredictionCalculator and UnitGetDetailedHealPrediction and true or false
+    if not on then
+        if ab._predOn then
+            ab._predOn = false
+            ab._predMy:Hide()
+            ab._predOther:Hide()
+            ns.Engine.SetChannelOn(frame, "healpred", false)
+        end
         return
     end
+    local hp = ab._hpBar
     if not ab._predMy then
         ab._predMy = ns.UF_NewHealPredBar(ab)
         ab._predOther = ns.UF_NewHealPredBar(ab)
-        ab._predCalc = CreateUnitHealPredictionCalculator()
-        ns.UF_AnchorHealPred(ab)
+        local calc = CreateUnitHealPredictionCalculator()
+        -- Every clamp reads maximum health, never current health, so the clip
+        -- does the missing-health cut and no health event is needed; heal
+        -- absorbs reduce the drawn heal (their own event is routed).
+        local modes = Enum and Enum.UnitIncomingHealClampMode
+        if calc.SetIncomingHealClampMode and modes then
+            calc:SetIncomingHealClampMode(modes.MaximumHealth)
+        end
+        local haClamp = Enum and Enum.UnitHealAbsorbClampMode
+        if calc.SetHealAbsorbClampMode and haClamp then
+            calc:SetHealAbsorbClampMode(haClamp.MaximumHealth)
+        end
+        local haMode = Enum and Enum.UnitHealAbsorbMode
+        if calc.SetHealAbsorbMode and haMode then
+            calc:SetHealAbsorbMode(haMode.ReducedByIncomingHeals)
+        end
+        ab._predCalc = calc
+        -- Our own health bar; returns at once while the option is off.
+        hp:HookScript("OnSizeChanged", function()
+            if ab._predOn then ns.UF_HealPredLayout(ab) end
+        end)
     end
-    ns.UF_ArmHealPredEvents()
     local my, other = ab._predMy, ab._predOther
-    local hp = ab._hpBar
     -- Texture (s.healPredTexture): "health" (default) follows the frame's own
     -- health bar, read off its fill so every texture path (per frame, profile,
     -- donor, Blizzard Style) matches; "flat" is a plain fill; anything else is a
-    -- health-bar texture key. A swap replaces the fill objects, so the others'
-    -- anchor, fill rotation and the edge mask are re-seated after it.
+    -- health-bar texture key. A swap makes new fill objects, so the others'
+    -- anchor, fill rotation and the masks are re-seated after it.
     local texKey = s.healPredTexture or "health"
     local path
     if texKey == "health" then
@@ -4980,40 +5101,27 @@ function ns.UF_PaintHealPred(frame, unit)
         path = EllesmereUI.ResolveTexturePath(healthBarTextures, texKey, nil)
     end
     path = path or "Interface\\Buttons\\WHITE8X8"
-    if ab._predTexPath ~= path then
+    local retex = ab._predTexPath ~= path
+    if retex then
         ab._predTexPath = path
-        for _, bar in ipairs({ my, other }) do
+        for i = 1, 2 do
+            local bar = (i == 1) and my or other
             bar:SetStatusBarTexture(path)
             local fill = bar:GetStatusBarTexture()
             if fill then UnsnapTex(fill) end
         end
-        ns.UF_AnchorHealPred(ab)
-        ab._predOverKey = nil
     end
-    local alpha = (s.healPredOpacity or 60) / 100
-    local mc = s.healPredColor or ns.UF_HEAL_PRED_MY
-    local oc = s.healPredOtherColor or ns.UF_HEAL_PRED_OTHER
-    my:SetStatusBarColor(mc.r, mc.g, mc.b, alpha)
-    other:SetStatusBarColor(oc.r, oc.g, oc.b, alpha)
-    local w, h = hp:GetWidth(), hp:GetHeight()
-    if ab._predW ~= w or ab._predH ~= h then
-        ab._predW, ab._predH = w, h
-        my:SetSize(w, h)
-        other:SetSize(w, h)
-    end
-    -- Overheal: how far past full health the bars may run (0 = stop at the end).
-    -- The health bar sits inside the frame's bar clip, so running past its end
-    -- takes a holder outside it: parented to the unit frame and clipping at the
-    -- bar's end plus the allowance. The calculator then clamps to maximum
-    -- health instead of missing health.
+    -- While off, the re-anchor pass skips the bars, so turning on re-seats
+    -- them for the current fill axis.
+    if retex or not ab._predOn then ns.UF_AnchorHealPred(ab) end
+    -- Overheal: how far past full health the bars may run (0 = stop at the
+    -- end). The health bar sits inside the frame's bar clip, so running past
+    -- its end takes a holder outside it, parented to the unit frame; the masks
+    -- come off there. Layout places the holder.
     local over = tonumber(s.healPredOverheal) or 0
-    local overKey = over .. "|" .. w .. "|" .. h .. "|" .. tostring(ab._isVert) .. "|" .. tostring(ab._isReversed)
-    if ab._predOverKey ~= overKey then
-        ab._predOverKey = overKey
-        local modes = Enum and Enum.UnitIncomingHealClampMode
-        if ab._predCalc.SetIncomingHealClampMode and modes then
-            ab._predCalc:SetIncomingHealClampMode(over > 0 and modes.MaximumHealth or modes.MissingHealth)
-        end
+    local relayout = (not ab._predOn) or ab._predOver ~= over
+    if retex or ab._predOver ~= over then
+        ab._predOver = over
         local parent = ab._missClip
         if over > 0 then
             local holder = ab._predHolder
@@ -5023,40 +5131,27 @@ function ns.UF_PaintHealPred(frame, unit)
                 ab._predHolder = holder
             end
             holder:SetFrameLevel(hp:GetFrameLevel() + 1)
-            local ext = (ab._isVert and h or w) * over / 100
-            local l, r, t, b = 0, 0, 0, 0
-            if ab._isVert then
-                if ab._isReversed then b = -ext else t = ext end
-            elseif ab._isReversed then
-                l = -ext
-            else
-                r = ext
-            end
-            holder:ClearAllPoints()
-            holder:SetPoint("TOPLEFT", hp, "TOPLEFT", l, t)
-            holder:SetPoint("BOTTOMRIGHT", hp, "BOTTOMRIGHT", r, b)
             parent = holder
         end
-        for i, bar in ipairs({ other, my }) do
+        for i = 1, 2 do
+            local bar = (i == 1) and other or my
             bar:SetParent(parent)
             bar:SetFrameLevel(hp:GetFrameLevel() + i)
-            local fill = bar:GetStatusBarTexture()
-            if fill and ab._absorbMask then
-                pcall(fill.RemoveMaskTexture, fill, ab._absorbMask)
-                if over == 0 then fill:AddMaskTexture(ab._absorbMask) end
-            end
         end
+        ns.UF_HealPredMasks(ab)
     end
-    local calc = ab._predCalc
-    UnitGetDetailedHealPrediction(unit, "player", calc)
-    local _, mine, others = calc:GetIncomingHeals()
-    local maxHealth = UnitHealthMax(unit) or 0
-    my:SetMinMaxValues(0, maxHealth)
-    other:SetMinMaxValues(0, maxHealth)
-    my:SetValue(mine or 0)
-    other:SetValue(others or 0)
+    local alpha = (s.healPredOpacity or 60) / 100
+    local mc = s.healPredColor or ns.UF_HEAL_PRED_MY
+    local oc = s.healPredOtherColor or ns.UF_HEAL_PRED_OTHER
+    my:SetStatusBarColor(mc.r, mc.g, mc.b, alpha)
+    other:SetStatusBarColor(oc.r, oc.g, oc.b, alpha)
+    -- While on, the re-anchor pass and the size hook keep the layout current.
+    if relayout then ns.UF_HealPredLayout(ab) end
     my:Show()
     other:Show()
+    ab._predOn = true
+    ns.Engine.SetChannelOn(frame, "healpred", true)
+    if frame:IsShown() then ns.UF_PaintHealPred(frame, frame._euiUnit) end
 end
 
 -- Absorb / Heal Absorb strip-bar position resolvers + layout (mirrors Raid
@@ -5333,12 +5428,6 @@ local function CreateAbsorbBar(frame, unit, settings)
     local UF_AbsorbOverride
     UF_AbsorbOverride = function(self, event, updUnit)
             if self._euiUnit ~= updUnit then return end
-
-            -- Incoming heals (opt-in) paint their own two bars on every pass here
-            -- (identity repaints included) and on UNIT_HEAL_PREDICTION, which only
-            -- their listener delivers; nothing below reads them.
-            ns.UF_PaintHealPred(self, updUnit)
-            if event == "UNIT_HEAL_PREDICTION" then return end
 
             -- Arm on the dedicated absorb events (plainly observable even
             -- while values are secret). Value-only health chatter is not
@@ -5693,16 +5782,20 @@ function ns.UpdatePowerBorder(power, settings)
 end
 
 -------------------------------------------------------------------------------
---  Spell Cost Prediction (player only, opt-in s.powerCostPrediction): while a
---  spell with a cast time is cast, the mana it will spend is drawn on the power
---  bar in a lighter color, like Blizzard's player frame. Mana only: nothing is
---  drawn while the bar shows another power type. The segment is a
---  StatusBar at the fill's leading edge, filling back over it (secret-safe: max
---  power and the cost only reach SetMinMaxValues/SetValue), in a holder that
---  clips to the bar. It is laid out on each cast start, so texture swaps, fill
---  direction and Blizzard Style masks need no hooks. The cast is matched by
---  castGUID: instants cast during it, and their failures, leave it alone.
---  Nothing is built or registered until the option is on.
+--  Spell Cost Prediction (WoW Forever only; player, opt-in
+--  s.powerCostPrediction): while a spell with a cast time is cast, the mana it
+--  will spend is drawn on the power bar in a lighter color, like Blizzard's
+--  player frame. Mana only: nothing is drawn while the bar shows another power
+--  type. The segment is a StatusBar at the fill's leading edge, filling back
+--  over it (secret-safe: max power and the cost only reach
+--  SetMinMaxValues/SetValue), in a holder that clips to the bar. It is laid out
+--  on each cast start, so texture swaps, fill direction and Blizzard Style
+--  masks need no hooks. The cast is matched by castGUID: instants cast during
+--  it, and their failures, leave it alone; a cast-time cast always ends with
+--  STOP, FAILED or INTERRUPTED, so SUCCEEDED (every instant) is not heard.
+--  Cost: nothing is built or registered unless the option is on and the bar
+--  can show (position not None, height above 0); the cast events are
+--  registered only while the bar is visible (OnShow/OnHide of our own bar).
 --  On ns: this chunk sits at the Lua 5.1 local ceiling.
 -------------------------------------------------------------------------------
 -- Fallback when the client has no POWERBAR_PREDICTION_COLOR_MANA.
@@ -5719,28 +5812,74 @@ function ns.UF_PowerCostColor(s)
 end
 
 ns.UF_POWER_COST_EVENTS = { "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP",
-    "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_SUCCEEDED" }
+    "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED" }
+
+-- Cast events are heard only while the tracked bar is visible; hiding it
+-- drops them along with any segment of a cast in flight.
+function ns.UF_PowerCostListen()
+    local ev = ns._ufPowerCostEvents
+    if not ev then return end
+    local power = ns._ufPowerCostBar
+    if power and power:IsVisible() then
+        if not ev._on then
+            ev._on = true
+            local list = ns.UF_POWER_COST_EVENTS
+            for i = 1, #list do ev:RegisterUnitEvent(list[i], "player") end
+        end
+    else
+        if ev._on then
+            ev._on = nil
+            ev:UnregisterAllEvents()
+        end
+        ns._ufPowerCostGUID = nil
+        if power and power._costBar then power._costBar:Hide() end
+    end
+end
 
 function ns.UF_SetupPowerCost(power, settings)
-    local on = power and settings and settings.powerCostPrediction == true
+    -- Height 0 hides the bar in the EUI look only: a stock style draws the
+    -- attached bar at its own height.
+    local pos = settings and settings.powerPosition or "below"
+    local on = EllesmereUI.IS_FOREVER == true and power and settings
+        and settings.powerCostPrediction == true and pos ~= "none"
+        and ((settings.powerHeight or 6) > 0
+             or (ns.UF_Blizz() and (pos == "below" or pos == "above")))
+        and true or false
     local old = ns._ufPowerCostBar
-    if old and old._costBar and (old ~= power or not on) then old._costBar:Hide() end
+    if old ~= power or not on then
+        if old and old._costBar then old._costBar:Hide() end
+        ns._ufPowerCostGUID = nil
+    end
     ns._ufPowerCostBar = on and power or nil
-    ns._ufPowerCostGUID = nil
-    local ev = ns._ufPowerCostEvents
-    if on and not ev then
-        ev = CreateFrame("Frame")
-        ev:SetScript("OnEvent", function(_, event, _, castGUID, spellID)
-            ns.UF_OnPowerCostEvent(event, castGUID, spellID)
-        end)
-        ns._ufPowerCostEvents = ev
-    end
-    if not ev then return end
     if on then
-        for _, e in ipairs(ns.UF_POWER_COST_EVENTS) do ev:RegisterUnitEvent(e, "player") end
-    else
-        ev:UnregisterAllEvents()
+        if not ns._ufPowerCostEvents then
+            local ev = CreateFrame("Frame")
+            ev:SetScript("OnEvent", function(_, event, _, castGUID, spellID)
+                ns.UF_OnPowerCostEvent(event, castGUID, spellID)
+            end)
+            ns._ufPowerCostEvents = ev
+        end
+        if not power._costHooked then
+            power._costHooked = true
+            -- Our own bar; both return at once unless it is the tracked one.
+            power:HookScript("OnShow", function(self)
+                if ns._ufPowerCostBar == self then ns.UF_PowerCostListen() end
+            end)
+            power:HookScript("OnHide", function(self)
+                if ns._ufPowerCostBar == self then ns.UF_PowerCostListen() end
+            end)
+            -- A resize during a cast (a style pass, scale change) keeps the
+            -- segment's length in step with the bar.
+            power:HookScript("OnSizeChanged", function(self, w)
+                local cb = self._costBar
+                if cb and ns._ufPowerCostBar == self and cb:IsShown() then cb:SetWidth(w) end
+            end)
+        end
+        -- A reload during a cast keeps the cast and lays it out again: the
+        -- reload swaps the fill texture and may change color or direction.
+        if ns._ufPowerCostGUID then ns.UF_ShowPowerCost(power, ns._ufPowerCostSpell) end
     end
+    ns.UF_PowerCostListen()
 end
 
 function ns.UF_OnPowerCostEvent(event, castGUID, spellID)
@@ -5748,17 +5887,15 @@ function ns.UF_OnPowerCostEvent(event, castGUID, spellID)
     if not power then return end
     if event == "UNIT_SPELLCAST_START" then
         ns._ufPowerCostGUID = castGUID
+        ns._ufPowerCostSpell = spellID
         ns.UF_ShowPowerCost(power, spellID)
         return
     end
     local cur = ns._ufPowerCostGUID
     if cur == nil then return end
-    -- Player cast GUIDs are never secret; if one is, end on any stop but an
-    -- instant's success.
-    local secret = issecretvalue and (issecretvalue(castGUID) or issecretvalue(cur))
-    if secret then
-        if event == "UNIT_SPELLCAST_SUCCEEDED" then return end
-    elseif castGUID ~= cur then
+    -- Player cast GUIDs are never secret; if one is, end on any stop.
+    if not (issecretvalue and (issecretvalue(castGUID) or issecretvalue(cur)))
+       and castGUID ~= cur then
         return
     end
     ns._ufPowerCostGUID = nil
@@ -5824,8 +5961,13 @@ function ns.UF_ShowPowerCost(power, spellID)
     end
     bar:SetWidth(power:GetWidth())
     bar:SetReverseFill(not rev)
-    local r, g, b = ns.UF_PowerCostColor(GetSettingsForUnit("player"))
-    bar:SetStatusBarColor(r, g, b, pfill:GetAlpha())
+    -- Power Bar Opacity, normalized as ApplyPowerBarAlpha does: the fill's own
+    -- alpha stays at 1 while a gradient carries the opacity.
+    local s = GetSettingsForUnit("player")
+    local r, g, b = ns.UF_PowerCostColor(s)
+    local op = (s and s.powerBarOpacity) or 100
+    if op <= 1.0 then op = op * 100 end
+    bar:SetStatusBarColor(r, g, b, op / 100)
     bar:SetMinMaxValues(0, UnitPowerMax("player", ptype))
     bar:SetValue(cost)
     bar:Show()
@@ -8142,30 +8284,44 @@ local function StyleFocusFrame(frame, unit)
     end
 end
 
+-- WoW Forever pets have power (hunter pet focus, warlock pet mana), so there the
+-- pet frame carries a power bar driven by the pet's own power settings, laid out
+-- like the boss frames'. A plain boolean, fixed per session.
+ns.UF_PetHasPower = (EllesmereUI.IS_FOREVER == true)
+
 local function StyleSimpleFrame(frame, unit)
     local settings = GetSettingsForUnit(unit)
     local pStyle = settings.portraitStyle or db.profile.portraitStyle or "attached"
     if pStyle == "detached" then pStyle = "attached" end
     local showPortrait = pStyle ~= "none" and settings.showPortrait ~= false
     local pSide = settings.portraitSide or "left"
+    -- WoW Forever pet power bar (Blizzard Style keeps its stock one instead): an
+    -- attached bar adds its height to the stack and the portrait squares off the
+    -- whole stack, as on the boss frames. Zero for every other mini frame.
+    local petPower = unit == "pet" and ns.UF_PetHasPower and not ns.UF_Blizz()
+    local ppPos = petPower and (settings.powerPosition or "below") or "none"
+    local powerH = (ppPos == "below" or ppPos == "above") and (settings.powerHeight or 6) or 0
+    local aboveOff = (ppPos == "above") and powerH or 0
+    local barH = settings.healthHeight + powerH
     local totalWidth = settings.frameWidth
     local portraitOffset = 0  -- applied to Health TOPLEFT when portrait on left
     local healthRightInset = 0  -- applied to Health RIGHT when portrait on right
     if showPortrait then
-        totalWidth = settings.healthHeight + settings.frameWidth
+        totalWidth = barH + settings.frameWidth
         if pSide == "right" then
-            healthRightInset = settings.healthHeight
+            healthRightInset = barH
         else
-            portraitOffset = settings.healthHeight
+            portraitOffset = barH
         end
     end
 
-    PP.Size(frame, totalWidth, settings.healthHeight)
+    PP.Size(frame, totalWidth, barH)
 
     local health = CreateFrame("StatusBar", nil, frame)
-    PP.Point(health, "TOPLEFT", frame, "TOPLEFT", portraitOffset, 0)
+    PP.Point(health, "TOPLEFT", frame, "TOPLEFT", portraitOffset, -aboveOff)
     PP.Point(health, "RIGHT", frame, "RIGHT", -healthRightInset, 0)
     PP.Height(health, settings.healthHeight)
+    health._topOffset = aboveOff  -- SnapLayout re-anchoring
     health:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     health:GetStatusBarTexture():SetHorizTile(false)
 
@@ -8192,31 +8348,42 @@ local function StyleSimpleFrame(frame, unit)
     ApplyDarkTheme(health, unit)
 
     frame.Health = health
-    -- Blizzard Style only: the stock small-frame power bar (nil otherwise).
-    frame.Power = ns.UF_BlizzMiniPower(frame, unit, settings)
+    -- Blizzard Style: the stock small-frame power bar. Otherwise only a WoW Forever
+    -- pet has one, built even at "none" so its position changes live (the painter
+    -- is parked while it is hidden); ToT and FoT carry none.
+    if petPower then
+        frame.Power = CreatePowerBar(frame, unit, settings)
+        if ppPos == "none" then frame:DisableElement("Power") end
+    else
+        frame.Power = ns.UF_BlizzMiniPower(frame, unit, settings)
+    end
+    -- A pet is never an attackable NPC, so the melee-mob gray-out pass (a closure
+    -- per paint) can never act on a WoW Forever pet's bar, stock or not (the pet
+    -- defaults to an attached bar there, so it would run): drop it.
+    if unit == "pet" and ns.UF_PetHasPower and frame.Power then frame.Power.PostUpdate = nil end
 
     -- Always create portrait; hide backdrop when disabled.
-    frame.Portrait = CreatePortrait(frame, pSide, settings.healthHeight, unit)
+    frame.Portrait = CreatePortrait(frame, pSide, barH, unit)
     EllesmereUI._ufPortraitSide[frame] = pSide
     if frame.Portrait and not showPortrait then
         frame.Portrait.backdrop:Hide()
     end
     if frame.Portrait and frame.Portrait.backdrop and showPortrait then
-        local portW = math.max(settings.healthHeight, 1)
+        local portW = math.max(barH, 1)
         health:ClearAllPoints()
         if pSide == "right" then
-            PP.Point(health, "TOPLEFT", frame, "TOPLEFT", 0, 0)
+            PP.Point(health, "TOPLEFT", frame, "TOPLEFT", 0, -aboveOff)
             PP.Point(health, "RIGHT", frame, "RIGHT", -portW, 0)
             health._xOffset = 0
             health._rightInset = portW
         else
-            PP.Point(health, "TOPLEFT", frame, "TOPLEFT", portW, 0)
+            PP.Point(health, "TOPLEFT", frame, "TOPLEFT", portW, -aboveOff)
             PP.Point(health, "RIGHT", frame, "RIGHT", 0, 0)
             health._xOffset = portW
             health._rightInset = 0
         end
         PP.Height(health, settings.healthHeight)
-        health._topOffset = 0
+        health._topOffset = aboveOff
     end
 
     CreateUnifiedBorder(frame, unit)
@@ -9914,6 +10081,7 @@ function ns.UF_ApplyBlizzBarArt(frame)
                 local sb = bars[i]
                 if sb and sb.GetStatusBarTexture then ns.UF_SetMask(sb:GetStatusBarTexture(), mask) end
             end
+            if hp then hp._blizzMaskOn = true end
         else
             -- Mirrored small frame (or no mask art): plain fills.
             if mask then
@@ -9925,8 +10093,11 @@ function ns.UF_ApplyBlizzBarArt(frame)
                     if t then pcall(t.RemoveMaskTexture, t, mask) end
                 end
             end
+            if hp then hp._blizzMaskOn = nil end
             ns.UF_BlizzBarShadow(health, nil, G.health.h)
         end
+        -- Heal prediction segments take the shape too (Overheal 0 only).
+        if hp and hp._predMy then ns.UF_HealPredMasks(hp) end
     end
     local power = frame.Power
     if power then
@@ -10322,7 +10493,8 @@ end
 -- tell. One FontString per full frame on its own host above the bars,
 -- refreshed by a shared event frame created with the first frame (nothing
 -- exists while the style is off). Per-unit "Show Level" (blizzShowLevel,
--- default on) hides it.
+-- default on) hides it; per-unit "Difficulty Color" (blizzLevelDifficultyColor,
+-- default on) off keeps an attackable unit's level gold too.
 ns.UF_BLIZZ_SKULL = "UI-HUD-UnitFrame-Target-HighLevelTarget_Icon"
 function ns.UF_BlizzLevelPass(frame)
     local G = ns.UF_BlizzGeom(frame)
@@ -10433,7 +10605,7 @@ function ns.UF_BlizzLevelRefresh(frame)
             level = UnitBattlePetLevel(unit)
         else
             level = UnitEffectiveLevel(unit)
-            local can = UnitCanAttack("player", unit)
+            local can = s.blizzLevelDifficultyColor ~= false and UnitCanAttack("player", unit)
             if not issecretvalue(can) and can then
                 local diff = C_PlayerInfo.GetContentDifficultyCreatureForPlayer(unit)
                 local color = not issecretvalue(diff) and GetDifficultyColor and GetDifficultyColor(diff)
@@ -10664,8 +10836,9 @@ end
 -- ONLY under Blizzard Style, from the unit's own settings with the stock bar
 -- geometry stamped over them, so it is not a user-positioned bar: the layout
 -- pass owns its spot, size and art. Zero cost otherwise: the frame keeps no
--- Power widget, so the engine registers no power channel and the painter
--- returns on the first field test, exactly as today.
+-- Power widget (a WoW Forever pet builds its own user-positioned bar in
+-- StyleSimpleFrame instead), so the engine registers no power channel and the
+-- painter returns on the first field test, exactly as today.
 function ns.UF_BlizzMiniPower(frame, unit, settings)
     if not ns.UF_Blizz() or not frame.Health then return nil end
     local view = setmetatable({ powerPosition = "below", powerHeight = 7, powerWidth = 0 },
@@ -12027,6 +12200,13 @@ ReloadFramesBody = function()
             elseif unit == "pet" or unit == "targettarget" or unit == "focustarget" then
                 -- Pet, ToT and FoT all share the same simple-frame layout:
                 -- optional portrait on either side, health bar filling the rest.
+                -- A WoW Forever pet adds its own power bar (built at spawn): an
+                -- attached bar grows the stack and the portrait squares off it.
+                local miniPower = (unit == "pet" and ns.UF_PetHasPower and not ns.UF_Blizz()) and frame.Power or nil
+                local miniPpPos = miniPower and (settings.powerPosition or "below") or "none"
+                local miniPowerH = (miniPpPos == "below" or miniPpPos == "above") and (settings.powerHeight or 6) or 0
+                local miniAboveOff = (miniPpPos == "above") and miniPowerH or 0
+                local miniBarH = settings.healthHeight + miniPowerH
                 local miniPStyle = settings.portraitStyle or db.profile.portraitStyle or "attached"
                 local showMiniPortrait = miniPStyle ~= "none" and settings.showPortrait ~= false
                 local miniSide = settings.portraitSide or "left"
@@ -12034,25 +12214,57 @@ ReloadFramesBody = function()
                 local miniLeftOff = 0
                 local miniRightInset = 0
                 if showMiniPortrait then
-                    miniW = settings.healthHeight + settings.frameWidth
+                    miniW = miniBarH + settings.frameWidth
                     if miniSide == "right" then
-                        miniRightInset = settings.healthHeight
+                        miniRightInset = miniBarH
                     else
-                        miniLeftOff = settings.healthHeight
+                        miniLeftOff = miniBarH
                     end
                 end
-                PP.Size(frame, miniW, settings.healthHeight)
+                PP.Size(frame, miniW, miniBarH)
                 if frame.Portrait and frame.Portrait.backdrop then
-                    PP.Size(frame.Portrait.backdrop, settings.healthHeight, settings.healthHeight)
+                    PP.Size(frame.Portrait.backdrop, miniBarH, miniBarH)
                 end
                 if frame.Health then
                     frame.Health:ClearAllPoints()
-                    PP.Point(frame.Health, "TOPLEFT", frame, "TOPLEFT", miniLeftOff, 0)
+                    PP.Point(frame.Health, "TOPLEFT", frame, "TOPLEFT", miniLeftOff, -miniAboveOff)
                     PP.Point(frame.Health, "RIGHT", frame, "RIGHT", -miniRightInset, 0)
                     PP.Height(frame.Health, settings.healthHeight)
                     frame.Health._xOffset = miniLeftOff
                     frame.Health._rightInset = miniRightInset
-                    frame.Health._topOffset = 0
+                    frame.Health._topOffset = miniAboveOff
+                end
+                if miniPower then
+                    local mpw = settings.frameWidth
+                    if (miniPpPos == "detached_top" or miniPpPos == "detached_bottom") and (settings.powerWidth or 0) > 0 then
+                        mpw = settings.powerWidth
+                    end
+                    PP.Size(miniPower, mpw, settings.powerHeight or 6)
+                    miniPower:ClearAllPoints()
+                    if miniPpPos == "none" then
+                        miniPower:Hide()
+                    elseif miniPpPos == "above" then
+                        PP.Point(miniPower, "BOTTOMLEFT", frame.Health, "TOPLEFT", 0, 0)
+                        PP.Point(miniPower, "BOTTOMRIGHT", frame.Health, "TOPRIGHT", 0, 0)
+                        miniPower:Show()
+                    elseif miniPpPos == "detached_top" then
+                        miniPower:SetPoint("BOTTOM", frame.Health, "TOP", settings.powerX or 0, 15 + (settings.powerY or 0))
+                        miniPower:Show()
+                    elseif miniPpPos == "detached_bottom" then
+                        miniPower:SetPoint("TOP", frame.Health, "BOTTOM", settings.powerX or 0, -15 + (settings.powerY or 0))
+                        miniPower:Show()
+                    else
+                        PP.Point(miniPower, "TOPLEFT", frame.Health, "BOTTOMLEFT", 0, 0)
+                        PP.Point(miniPower, "TOPRIGHT", frame.Health, "BOTTOMRIGHT", 0, 0)
+                        miniPower:Show()
+                    end
+                    if miniPower._applyPowerPercentText then miniPower._applyPowerPercentText(settings) end
+                    -- "none" parks the power painter (zero cost while hidden);
+                    -- turning the bar back on repaints it at once.
+                    local wantPower = miniPpPos ~= "none"
+                    if frame:IsElementEnabled("Power") ~= wantPower then
+                        if wantPower then frame:EnableElement("Power") else frame:DisableElement("Power") end
+                    end
                 end
 
                 UpdateBordersForScale(frame, unit)
@@ -12300,6 +12512,7 @@ ReloadFramesBody = function()
             ns.ApplyHealthOrientation(frame.Health, settings)
             ApplyDarkTheme(frame.Health, unit)  -- re-anchors health.bg for the new axis
             UpdateAbsorbBarReverseFill(frame, settings.healthReverseFill and true or false, settings)
+            ns.UF_HealPredApply(frame, unit, settings)
             -- Smooth bar interpolation (live toggle without /reload)
             if settings.smoothBars then
                 frame.Health.smoothing = Enum and Enum.StatusBarInterpolation
@@ -12517,6 +12730,8 @@ ReloadFramesBody = function()
     if frames.target and frames.target._applyFactionIndicator then
         frames.target._applyFactionIndicator()
     end
+    -- Pet happiness icon (WoW Forever): enable, size, side and offsets.
+    ns.UF_ApplyPetHappiness()
 
     ---------------------------------------------------------------------------
     --  Live-update raid target marker icon (size / alignment / X / Y / enabled)
@@ -12627,6 +12842,109 @@ function ns.UF_FrameBorderPad(k)
     end
     return EllesmereUI.BorderMatchPad(bs, btex, d.borderTextureOffset, d.borderTextureOffsetY,
         d.borderTextureShiftX, d.borderTextureShiftY, "unitframes", bs, bpx, nil, d.borderAlpha or 1)
+end
+
+-- Pet happiness (WoW Forever): the stock pet frame's mood icon, carried
+-- beside our pet frame under Blizzard's own rule -- shown only for a hunter
+-- pet whose happiness reads 1..3, with that state's atlas. The icon frame is
+-- also the event receiver; it is built the first time the feature is on for
+-- a hunter and drops every event while off, so it costs nothing otherwise.
+function ns.UF_RefreshPetHappiness(h)
+    local happiness = C_PetInfo.GetPetHappiness()
+    local _, isHunterPet = HasPetUI()
+    local atlas = isHunterPet and ((happiness == 1 and "UI-PetMad")
+        or (happiness == 2 and "UI-PetNeutral")
+        or (happiness == 3 and "UI-PetHappiness")) or nil
+    if atlas then
+        -- Paint only a real mood change (the texture is set nowhere else).
+        if h._atlas ~= atlas then
+            h._atlas = atlas
+            h._tex:SetAtlas(atlas)
+        end
+        h:Show()
+    else
+        h:Hide()
+    end
+end
+
+-- Hover text, read fresh: state, damage share, loyalty trend and diet.
+function ns.UF_PetHappinessOnEnter(self)
+    -- Faded out with its frame (the pet mirrors the player frame's alpha and
+    -- mouseover mode rests at 0): an unseen icon shows no tooltip.
+    local a = self:GetEffectiveAlpha()
+    if not issecretvalue(a) and a < 0.05 then return end
+    local happiness, dmg, loyalty = C_PetInfo.GetPetHappiness()
+    local text = (happiness == 1 and PET_HAPPINESS1) or (happiness == 2 and PET_HAPPINESS2)
+        or (happiness == 3 and PET_HAPPINESS3)
+    if not text then return end
+    if dmg then text = text .. "\n" .. PET_DAMAGE_PERCENTAGE:format(dmg) end
+    if loyalty and loyalty < 0 then
+        text = text .. "\n" .. LOSING_LOYALTY
+    elseif loyalty and loyalty > 0 then
+        text = text .. "\n" .. GAINING_LOYALTY
+    end
+    local diet = C_PetInfo.GetPetFoodTypes()
+    if diet and #diet > 0 then
+        text = text .. "\n" .. PET_DIET_TEMPLATE:format(table.concat(diet, PET_FOOD_DELIMIT))
+    end
+    EllesmereUI.ShowWidgetTooltip(self, text)
+end
+
+function ns.UF_PetHappinessOnLeave()
+    EllesmereUI.HideWidgetTooltip()
+end
+
+-- Settings apply: builds the icon on first use, re-seats size, side and
+-- offsets, and arms or drops its events. Every reload pass runs it (the
+-- options setters reach it through ReloadAndUpdate) and it is safe to call
+-- directly; it returns at once off WoW Forever.
+function ns.UF_ApplyPetHappiness()
+    if EllesmereUI.IS_FOREVER ~= true then return end
+    local pf = frames.pet
+    local s = db.profile.pet
+    local h = pf and pf._petHappy
+    -- Only hunter pets carry happiness: every other class never builds it.
+    local on = pf and s and s.happinessEnabled ~= false
+        and not ns.VisUnitDisabled(db.profile, "pet")
+        and select(2, UnitClass("player")) == "HUNTER"
+    if not on then
+        if h then
+            h:UnregisterAllEvents()
+            h:Hide()
+        end
+        return
+    end
+    if not h then
+        h = CreateFrame("Frame", nil, pf)
+        -- Hover only: clicks fall through to the unit button underneath.
+        h:EnableMouseMotion(true)
+        h._tex = h:CreateTexture(nil, "OVERLAY")
+        h._tex:SetAllPoints()
+        h:SetScript("OnEvent", ns.UF_RefreshPetHappiness)
+        h:SetScript("OnEnter", ns.UF_PetHappinessOnEnter)
+        h:SetScript("OnLeave", ns.UF_PetHappinessOnLeave)
+        h:Hide()
+        pf._petHappy = h
+    end
+    local sz = s.happinessSize or 20
+    local align = s.happinessAlign or "right"
+    local x, y = s.happinessX or 0, s.happinessY or 0
+    h:SetSize(sz, sz)
+    h:ClearAllPoints()
+    if align == "left" then
+        h:SetPoint("RIGHT", pf, "LEFT", x, y)
+    elseif align == "top" then
+        h:SetPoint("BOTTOM", pf, "TOP", x, y)
+    else
+        h:SetPoint("LEFT", pf, "RIGHT", x, y)
+    end
+    -- Above the border and the name/health text (the strata pass re-stacks).
+    if pf._textOverlay then h:SetFrameLevel(pf._textOverlay:GetFrameLevel() + 5) end
+    h:RegisterUnitEvent("UNIT_HAPPINESS", "pet")
+    h:RegisterUnitEvent("UNIT_PET", "player")
+    -- The pet's state may not read yet at login: the zone-in edge repaints.
+    h:RegisterEvent("PLAYER_ENTERING_WORLD")
+    ns.UF_RefreshPetHappiness(h)
 end
 
 -- Toggle a frame's oUF Castbar element without rewriting Blizzard's cast bar event
@@ -14019,7 +14337,10 @@ function InitializeFrames()
             if not (uf and uf._factionIndicator and s) then return end
             local tex = uf._factionIndicator
             local mode = s.factionIndicatorMode or "off"
-            local unit = uf._euiUnit
+            -- The frame's base unit, not its live token: the player frame swaps to
+            -- "vehicle" on a ride, but this badge (like Blizzard's PvP icon) and
+            -- the UNIT_FACTION registration below are about the player.
+            local unit = uf._euiBaseUnit
             if mode == "off" or not unit or issecretvalue(unit) or not UnitExists(unit) then
                 tex:Hide(); return
             end
@@ -14031,9 +14352,22 @@ function InitializeFrames()
             -- as the leader checks above.
             local fac = UnitFactionGroup(unit)
             local atlas = (not issecretvalue(fac)) and (fac == "Horde" or fac == "Alliance")
+            -- Mercenary mode: the player fights for the other faction, so the
+            -- player's own badge shows that side (as Blizzard's player frame
+            -- does) and "opposite" compares against it.
+            if atlas and unit == "player" and UnitIsMercenary("player") then
+                fac = (fac == "Horde") and "Alliance" or "Horde"
+            end
             if atlas and mode == "opposite" and unit ~= "player" then
                 local mine = UnitFactionGroup("player")
-                if issecretvalue(mine) or mine == fac then atlas = nil end
+                if issecretvalue(mine) then
+                    atlas = nil
+                else
+                    if UnitIsMercenary("player") then
+                        if mine == "Horde" then mine = "Alliance" elseif mine == "Alliance" then mine = "Horde" end
+                    end
+                    if mine == fac then atlas = nil end
+                end
             end
             local dim = false
             if atlas then
@@ -14047,9 +14381,15 @@ function InitializeFrames()
                 end
             end
             if atlas then
-                EllesmereUI.SetFactionArt(tex, s.factionIndicatorStyle or "pvp", fac)
-                tex:SetDesaturated(dim)
-                tex:SetAlpha(dim and 0.6 or 1)
+                -- Paint only on a real change: faction, style and dim are the
+                -- paint's only inputs (the texture is ours, so the memo lives on it).
+                local style = s.factionIndicatorStyle or "pvp"
+                if tex._facFac ~= fac or tex._facStyle ~= style or tex._facDim ~= dim then
+                    tex._facFac, tex._facStyle, tex._facDim = fac, style, dim
+                    EllesmereUI.SetFactionArt(tex, style, fac)
+                    tex:SetDesaturated(dim)
+                    tex:SetAlpha(dim and 0.6 or 1)
+                end
                 tex:Show()
             else
                 tex:Hide()
@@ -14059,20 +14399,40 @@ function InitializeFrames()
         -- Events are registered only while the feature is on somewhere (zero cost
         -- while off) and re-armed from every settings apply.
         local function _factionArmEvents()
-            local on = false
+            local on, targetOn = false, false
             for i = 1, #_factionFrames do
-                local s = _factionFrames[i]._factionSettings
-                if s and (s.factionIndicatorMode or "off") ~= "off" then on = true; break end
+                local uf = _factionFrames[i]
+                local s = uf._factionSettings
+                if s and (s.factionIndicatorMode or "off") ~= "off" then
+                    on = true
+                    if uf._euiBaseUnit == "target" then targetOn = true end
+                end
             end
             if on then
                 if not factionEvents then
                     factionEvents = CreateFrame("Frame")
-                    factionEvents:SetScript("OnEvent", function()
-                        for i = 1, #_factionFrames do _factionRefresh(_factionFrames[i]) end
+                    -- Routed by event: a target change or a target flip touches only
+                    -- the target badge; the player's own flip and a world load touch
+                    -- both (Opposite compares against the player's faction).
+                    factionEvents:SetScript("OnEvent", function(_, event, unit)
+                        local all = event == "PLAYER_ENTERING_WORLD" or unit == "player"
+                        for i = 1, #_factionFrames do
+                            local uf = _factionFrames[i]
+                            if all or uf._euiBaseUnit == "target" then _factionRefresh(uf) end
+                        end
                     end)
                 end
-                factionEvents:RegisterEvent("PLAYER_TARGET_CHANGED")
-                factionEvents:RegisterUnitEvent("UNIT_FACTION", "target", "player")
+                if targetOn then
+                    factionEvents:RegisterEvent("PLAYER_TARGET_CHANGED")
+                else
+                    factionEvents:UnregisterEvent("PLAYER_TARGET_CHANGED")
+                end
+                -- The target's flips only matter while its badge is on.
+                if targetOn then
+                    factionEvents:RegisterUnitEvent("UNIT_FACTION", "target", "player")
+                else
+                    factionEvents:RegisterUnitEvent("UNIT_FACTION", "player")
+                end
                 factionEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
             elseif factionEvents then
                 factionEvents:UnregisterAllEvents()
@@ -14092,6 +14452,10 @@ function InitializeFrames()
             uf._factionSettings = settings
 
             local function ApplyFactionIndicator()
+                -- Re-read by unit key: a profile switch (RepointAllDBs) swaps
+                -- db.profile, so the table captured at setup would go stale.
+                settings = db.profile[uf._euiBaseUnit] or settings
+                uf._factionSettings = settings
                 local sz  = settings.factionIndicatorSize or 18
                 local pos = settings.factionIndicatorPosition or "topright"
                 local ox  = settings.factionIndicatorX or 0
@@ -14099,7 +14463,11 @@ function InitializeFrames()
                 local tex = uf._factionIndicator
                 tex:SetSize(sz, sz)
                 tex:ClearAllPoints()
-                if pos == "portrait" and uf.Portrait and uf.Portrait.backdrop then
+                -- Same visibility rule as the frame layout (Blizzard/Classic Style
+                -- always carries its portrait): never centre on a hidden backdrop.
+                local pStyle = settings.portraitStyle or db.profile.portraitStyle or "attached"
+                local portraitOn = ns.UF_Blizz() or (pStyle ~= "none" and settings.showPortrait ~= false)
+                if pos == "portrait" and portraitOn and uf.Portrait and uf.Portrait.backdrop then
                     tex:SetPoint("CENTER", uf.Portrait.backdrop, "CENTER", ox, oy)
                 else
                     local anchor =
@@ -14876,7 +15244,7 @@ function InitializeFrames()
     -- (a health-width re-anchor here would undo the stock bar placement).
     C_Timer.After(0, function()
         if ns.UF_Blizz() then return end
-        for _, unitKey in ipairs({"player", "target", "focus"}) do
+        for _, unitKey in ipairs({"player", "target", "focus", "pet"}) do
             local frame = frames[unitKey]
             if frame and frame.Power and frame.Health then
                 local s = GetSettingsForUnit(unitKey)
@@ -16070,39 +16438,6 @@ local function RegisterUFUnlockElements()
     end
 end
 
-StaticPopupDialogs["ELLESMERE_RELOAD_UI"] = {
-    text = "Ellesmere Unit Frames setting changed. Reload UI to apply?",
-    button1 = "Reload",
-    button2 = "Later",
-    OnAccept = function()
-        ReloadUI()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
-StaticPopupDialogs["ELLESMERE_RESET_DEFAULTS"] = {
-    text = "Reset all Ellesmere Unit Frames settings to defaults? This cannot be undone.",
-    button1 = "Reset & Reload",
-    button2 = "Cancel",
-    OnAccept = function()
-        if db then db:ResetProfile() end
-        ReloadUI()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnShow = function(self)
-        self:SetFrameStrata("TOOLTIP")
-    end,
-}
-
--- 3D portrait warning popup is now handled by EllesmereUI:ShowConfirmPopup
--- in EUI_UnitFrames_Options.lua (portrait mode dropdown handler).
-
 local EllesmereUF = EllesmereUI.Lite.NewAddon("EllesmereUIUnitFrames")
 
 function EllesmereUF:OnInitialize()
@@ -16413,17 +16748,16 @@ end
 --  bar spin. Driver and rest tracking live in the shared engine
 --  (EllesmereUI.PartySpin_Create, EllesmereUI_PartyMode.lua).
 -------------------------------------------------------------------------------
-if EllesmereUI.PartySpin_Create then
-    local list, groups = {}, {}
-    EllesmereUI.PartySpinUF_Refresh = EllesmereUI.PartySpin_Create({
-        enabledKey = "partyModeSpinUF",
-        speedKey   = "partyModeSpinUFSpeed",
+do
+    local list = {}
+    local groups = { { pivot = UIParent, frames = list } }
+    EllesmereUI.PartySpin_Create({
+        target = "unitFrames",
         collect = function()
-            wipe(list); wipe(groups)
+            wipe(list)
             for _, f in pairs(frames) do
                 if type(f) == "table" and f.GetCenter then list[#list + 1] = f end
             end
-            groups[1] = { pivot = UIParent, frames = list }
             return groups
         end,
     })
