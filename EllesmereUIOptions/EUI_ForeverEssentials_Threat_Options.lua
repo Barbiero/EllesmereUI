@@ -5,6 +5,7 @@ local ns = module and module.ThreatMeter
 if not ns then return end
 
 _G._EUI_BuildThreatMeterPage = function(_, parent, y)
+    ns.BarTextures()
     EUI:SetContentHeader(function(header, width)
         local building = true
         local view = ns.CreateSettingsPreview(header, width, function(height)
@@ -21,7 +22,7 @@ _G._EUI_BuildThreatMeterPage = function(_, parent, y)
         local _, h = W:SectionHeader(parent, text, y); y = y - h
     end
     local function Row(left, right)
-        local row, h = W:DualRow(parent, y, left, right or { type = "spacer", text = "" }); y = y - h
+        local row, h = W:DualRow(parent, y, left, right or { type = "label", text = "" }); y = y - h
         if EUI._prebuilding then return end
         for i, cfg in ipairs({ left, right }) do
             local region = i == 1 and row._leftRegion or row._rightRegion

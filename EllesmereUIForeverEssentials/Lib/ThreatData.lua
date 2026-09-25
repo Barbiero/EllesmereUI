@@ -24,14 +24,16 @@ ns.PublicCall, ns.PublicNumber = PublicCall, Number
 
 -- Scaled threat is relative to this player's pull threshold, including the
 -- API's melee/ranged rules. Never guess a fixed 110/130% distance multiplier.
-function ns.PullEntry(me)
+function ns.PullEntry(me, entry)
     if not me or me.holdsAggro then return nil end
     local raw, scaled = Number(me.rawKey), Number(me.scaledKey)
     if not raw or not scaled or raw <= 0 or scaled <= 0 then return nil end
     local threshold = Number(raw * 100 / scaled)
     if not threshold then return nil end
-    return { pull = true, name = "Pull Aggro", threat = threshold, rawKey = threshold,
-        displayPercent = 100, percent = 100, scaledKey = 100, pullPercent = true }
+    entry = entry or {}
+    entry.pull, entry.name, entry.threat, entry.rawKey = true, "Pull Aggro", threshold, threshold
+    entry.displayPercent, entry.percent, entry.scaledKey, entry.pullPercent = 100, 100, 100, true
+    return entry
 end
 
 local function PetOwnerToken(unit)
@@ -50,12 +52,12 @@ end
 
 -- A pet's UnitClass often describes the creature, not its owner. Only use a
 -- verified roster owner for class art/colors; unowned outsiders get pet art only.
-function ns.UnitAppearance(unit)
+function ns.UnitAppearance(unit, roster)
     local owner = PetOwnerToken(unit)
     if owner then return PlayerClass(owner), true end
     if unit == "player" or unit:match("^party%d+$") or unit:match("^raid%d+$")
         or PublicCall(UnitIsPlayer, unit) == true then return PlayerClass(unit), false end
-    for _, token in ipairs(ns.GroupTokens(true)) do
+    for _, token in ipairs(roster or ns.GroupTokens(true)) do
         owner = PetOwnerToken(token)
         if owner and PublicCall(UnitIsUnit, unit, token) == true then
             return PlayerClass(owner), true
@@ -166,53 +168,54 @@ end
 
 -- The group is not the entire threat roster. Discover outsiders through public
 -- unit tokens; never retain a nameplate token after it has been reassigned.
-function ns.ThreatTokens(pets, target)
-    local result = ns.GroupTokens(pets)
-    local function Add(token)
-        if not token or PublicCall(UnitExists, token) ~= true then return end
-        local player = PublicCall(UnitIsPlayer, token)
-        if player == nil then return end
-        if not player then
-            if not pets or PublicCall(UnitPlayerControlled, token) ~= true then return end
-        end
-        for _, existing in ipairs(result) do
-            if existing == token then return end
-            local same = PublicCall(UnitIsUnit, existing, token)
-            -- Unknown identity cannot safely establish a distinct participant.
-            if same == nil or same then return end
-        end
-        result[#result + 1] = token
+local function AddCandidate(result, pets, token)
+    if not token or PublicCall(UnitExists, token) ~= true then return end
+    local player = PublicCall(UnitIsPlayer, token)
+    if player == nil then return end
+    if not player then
+        if not pets or PublicCall(UnitPlayerControlled, token) ~= true then return end
     end
-    Add(target .. "target")
-    Add("mouseover")
+    for _, existing in ipairs(result) do
+        if existing == token then return end
+        local same = PublicCall(UnitIsUnit, existing, token)
+        -- Unknown identity cannot safely establish a distinct participant.
+        if same == nil or same then return end
+    end
+    result[#result + 1] = token
+end
+
+function ns.ThreatTokens(pets, target, buffer)
+    local result = ns.GroupTokens(pets, buffer and buffer.tokens)
+    AddCandidate(result, pets, target .. "target")
+    AddCandidate(result, pets, "mouseover")
     if C_NamePlate and C_NamePlate.GetNamePlates then
-        local candidates = {}
+        local candidates = buffer and buffer.candidates or {}
+        for i = #candidates, 1, -1 do candidates[i] = nil end
         for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
             local token = plate.namePlateUnitToken
-            if type(token) == "string" and not Secret(token) then
-                candidates[#candidates + 1] = token
-            end
+            if type(token) == "string" and not Secret(token) then candidates[#candidates + 1] = token end
         end
-        table.sort(candidates) -- stable ordering when numerical threat is restricted
+        table.sort(candidates)
         for _, token in ipairs(candidates) do
-            Add(token)
-            Add(token .. "target")
+            AddCandidate(result, pets, token)
+            AddCandidate(result, pets, token .. "target")
         end
     end
     return result
 end
 
-function ns.GroupTokens(pets)
-    local result = {}
-    local function Add(token, pet)
-        if UnitExists(token) then result[#result + 1] = token end
-        if pets and UnitExists(pet) then result[#result + 1] = pet end
-    end
+local function AddGroupUnit(result, pets, token, pet)
+    if UnitExists(token) then result[#result + 1] = token end
+    if pets and UnitExists(pet) then result[#result + 1] = pet end
+end
+function ns.GroupTokens(pets, result)
+    result = result or {}
+    for i = #result, 1, -1 do result[i] = nil end
     if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do Add("raid" .. i, "raidpet" .. i) end
+        for i = 1, GetNumGroupMembers() do AddGroupUnit(result, pets, "raid" .. i, "raidpet" .. i) end
     else
-        Add("player", "pet")
-        for i = 1, GetNumSubgroupMembers() do Add("party" .. i, "partypet" .. i) end
+        AddGroupUnit(result, pets, "player", "pet")
+        for i = 1, GetNumSubgroupMembers() do AddGroupUnit(result, pets, "party" .. i, "partypet" .. i) end
     end
     return result
 end

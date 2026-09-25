@@ -6,23 +6,34 @@ local UI_REV = "essentials-merged-20260925"
 if not (EUI and EUI.IS_FOREVER and ns) then return end
 
 local defaults = {
-    enabled = false, source = "target", focusEnabled = false, pets = true,
+    enabled = false, source = "target", focusEnabled = false, pets = false,
     width = 320, height = 210, barHeight = 18, fontSize = 11,
     locked = false, barSpacing = 2, appearance = {},
-    pullBar = true, pullColor = { r = 0, g = 0.55, b = 0 },
+    pullBar = false, pullColor = { r = 0, g = 0.55, b = 0 },
     showValue = true, showPercent = true, percentMode = "relative", showHeader = true,
-    warnSound = false, warnSoundKey = "none", warnAt = 80, warnSkipTank = true,
+    warnSound = false, warnSoundKey = "none", warnAt = 80, warnSkipTank = false,
     playerColorOn = false, playerColor = { r = 0.8, g = 0.1, b = 0.1 },
     tankColorOn = false, tankColor = { r = 0.1, g = 0.6, b = 0.1 },
     font = "__global", outlineMode = "__global", growUp = false,
 }
-local frame, title, rows, ticker
+local frame, title, rows
+local CreateWindow, SetActive
+local active = false
 local threatBuffer, visibilityState = {}, {}
+local tokenBuffer = { tokens = {}, candidates = {} }
+local emptyEntries, pullEntry = {}, {}
 local preview, offset = false, 0
 local settingsPreview
-local textures, textureNames, textureOrder = EUI.BuildBarTextureTables(true)
-if EUI.AppendSharedMediaTextures then EUI.AppendSharedMediaTextures(textureNames, textureOrder, nil, textures) end
-ns.BarTextureNames, ns.BarTextureOrder = textureNames, textureOrder
+local textures
+function ns.BarTextures()
+    if not textures then
+        local names, order
+        textures, names, order = EUI.BuildBarTextureTables(true)
+        if EUI.AppendSharedMediaTextures then EUI.AppendSharedMediaTextures(names, order, nil, textures) end
+        ns.BarTextureNames, ns.BarTextureOrder = names, order
+    end
+    return textures
+end
 local initializedConfig
 local cachedStyle, styleConfig
 local function Config()
@@ -132,7 +143,7 @@ local function PrepareEntries(entries)
         if entry.own or (entry.unit and ns.PublicCall(UnitIsUnit, entry.unit, "player") == true) then me = entry; break end
     end
     if Config().pullBar then
-        local pull = ns.PullEntry(me)
+        local pull = ns.PullEntry(me, pullEntry)
         if pull then entries[#entries + 1] = pull end -- reference follows the sorted participants
     end
     return me
@@ -234,6 +245,7 @@ end
 
 -- Live meter and settings preview have the same visual structure.
 local function CreateSurface(parent, name)
+    ns.BarTextures()
     local surface = CreateFrame("Frame", name, parent)
     surface.rows = {}
     surface.bg = surface:CreateTexture(nil, "BACKGROUND")
@@ -424,7 +436,7 @@ local function RenderRows(frame, entries, offset, count, dm, barHeight, spacing,
             class, own, name, isPet = data.class, data.own, data.name, data.isPet
             if own then class = ns.UnitAppearance("player") end
         else
-            class, isPet = ns.UnitAppearance(data.unit)
+            class, isPet = ns.UnitAppearance(data.unit, tokenBuffer.tokens)
             own = UnitIsUnit(data.unit, "player")
             if ns.IsSecret(own) then own = false end
             name = EUI.WithSurname(UnitName(data.unit))
@@ -569,8 +581,8 @@ end
 function ns.Refresh()
     if not frame then return end
     local c = Config()
-    local testing = preview or EUI._unlockActive
-    if not testing and not c.enabled then
+    local testing = preview or (c.enabled and EUI._unlockActive)
+    if not c.enabled and not preview then
         frame:Hide()
         ns.CheckWarning(nil, nil)
         return
@@ -589,7 +601,7 @@ function ns.Refresh()
     if not visible then ns.CheckWarning(nil, nil); return end
     local dm, barHeight, spacing = Style()
     local headerHeight = ApplyStyle(dm, frame, title)
-    local entries = {}
+    local entries = emptyEntries
     title:SetText("Threat")
     if testing then
         entries = PreviewEntries()
@@ -597,7 +609,7 @@ function ns.Refresh()
     elseif source then
         title:SetFormattedText("Threat - %s", EUI.WithSurname(UnitName(source))) -- UI sink accepts secret names
         if UnitDetailedThreatSituation then
-            entries = ns.ReadThreat(ns.ThreatTokens(c.pets, source), source, UnitDetailedThreatSituation, threatBuffer)
+            entries = ns.ReadThreat(ns.ThreatTokens(c.pets, source, tokenBuffer), source, UnitDetailedThreatSituation, threatBuffer)
         end
     end
     if not testing then
@@ -611,11 +623,13 @@ function ns.Refresh()
 end
 
 function ns.ApplyStyle()
+    SetActive()
     cachedStyle = nil
     ns.Refresh()
     if settingsPreview and settingsPreview:IsVisible() then settingsPreview:Refresh() end
 end
 function ns.Apply()
+    SetActive()
     if not frame then return end
     frame:SetSize(Config().width, Config().height)
     Position()
@@ -625,6 +639,7 @@ end
 function ns.SetPreview(value)
     preview = value
     offset = 0
+    SetActive()
     ns.Refresh()
 end
 function ns.IsPreview() return preview end
@@ -733,7 +748,7 @@ function ns.ShowQuickMenu(anchor, page)
     EUI.ShowContextMenu(anchor, items, { below = true })
 end
 
-local function CreateWindow()
+CreateWindow = function()
     frame = CreateSurface(UIParent, "EllesmereUIThreatMeterFrame")
     ns.frame = frame
     rows, title = frame.rows, frame.title
@@ -768,13 +783,14 @@ local function CreateWindow()
         offset = math.max(0, offset - delta)
         ns.Refresh()
     end)
-    ns.Apply()
+    frame:SetSize(Config().width, Config().height)
+    Position()
     EUI:RegisterUnlockElements({ EUI.MakeUnlockElement({
         key = "EUI_ThreatMeter", label = "Threat Meter", group = "Forever Essentials", order = 731,
-        getFrame = function() return frame end,
+        getFrame = function() if Config().enabled or preview then return frame end end,
         getSize = function() return frame:GetSize() end,
-        setWidth = function(_, width) Config().width = math.max(200, width); frame:SetWidth(Config().width) end,
-        setHeight = function(_, height) Config().height = math.max(100, height); frame:SetHeight(Config().height) end,
+        setWidth = function(_, width) Config().width = math.max(200, width); frame:SetWidth(Config().width); ns.Refresh() end,
+        setHeight = function(_, height) Config().height = math.max(100, height); frame:SetHeight(Config().height); ns.Refresh() end,
         savePos = function(_, point, relPoint, x, y)
             Config().position = { point = point, relPoint = relPoint or point, x = x, y = y }
         end,
@@ -787,42 +803,59 @@ local function CreateWindow()
     }) }, addon)
 end
 
-local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_LOGIN" then
-        self:UnregisterEvent("PLAYER_LOGIN")
-        CreateWindow()
-        EUI._ThreatMeter = { Apply = ns.Apply, ApplyStyle = ns.ApplyStyle, ApplyPosition = Position,
-            Cfg = Config, Get = function(key) return Config()[key] end, Sounds = ns.Sounds }
-        -- UI-only polling: no combat log parsing, addon messages, or protected actions.
-        ticker = C_Timer.NewTicker(0.2, ns.Refresh)
-        for _, name in ipairs({ "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
-            events:RegisterEvent(name)
-        end
-    else
-        local source = ns.GetTrackedUnit()
-        if (event == "PLAYER_TARGET_CHANGED" and source == "target")
-            or (event == "PLAYER_FOCUS_CHANGED" and source == "focus") then
-            warned, warningMob = false, nil
-        end
-        offset = 0
-        ns.Refresh()
+local threatEvents = {
+    "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE", "UNIT_TARGET", "UNIT_PET",
+    "PLAYER_TARGET_CHANGED", "PLAYER_FOCUS_CHANGED", "GROUP_ROSTER_UPDATE",
+    "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UPDATE_MOUSEOVER_UNIT",
+    "UNIT_FLAGS", "UNIT_NAME_UPDATE", "PLAYER_ENTERING_WORLD",
+    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_ROLES_ASSIGNED", "UPDATE_SHAPESHIFT_FORM",
+}
+local function OnEvent(_, event, unit)
+    local source = ns.GetTrackedUnit()
+    if event == "UNIT_THREAT_LIST_UPDATE" and unit then
+        local hostile = ns.ResolveSource(source)
+        if not hostile or ns.PublicCall(UnitIsUnit, hostile, unit) == false then return end
     end
-end)
+    if (event == "PLAYER_TARGET_CHANGED" and source == "target")
+        or (event == "PLAYER_FOCUS_CHANGED" and source == "focus")
+        or event == "PLAYER_ENTERING_WORLD" then
+        warned, warningMob = false, nil
+        offset = 0
+    end
+    ns.Refresh()
+end
+SetActive = function()
+    local enabled = Config().enabled or preview
+    if enabled == active then return end
+    active = enabled
+    if enabled then
+        if not frame then CreateWindow() end
+        for _, event in ipairs(threatEvents) do module.addon:RegisterEvent(event, OnEvent) end
+        EUI.RegisterVisibilityUpdater(ns.Refresh)
+    else
+        for _, event in ipairs(threatEvents) do module.addon:UnregisterEvent(event) end
+        EUI.UnregisterVisibilityUpdater(ns.Refresh)
+        frame:Hide()
+        ns.CheckWarning(nil, nil)
+    end
+end
+EUI._ThreatMeter = { Apply = ns.Apply, ApplyStyle = ns.ApplyStyle,
+    ApplyPosition = function() if frame then Position() end end,
+    Cfg = Config, Get = function(key) return Config()[key] end, Sounds = ns.Sounds }
+-- Reuse the parent module's lifecycle; disabled Threat adds no bootstrap frame.
+module.addon.OnEnable = function() ns.Apply() end
 
 SLASH_ELLESMEREUITHREAT1 = "/euitm"
 SlashCmdList.ELLESMEREUITHREAT = function(input)
-    if not frame then return end
     local cmd = (input or ""):lower():match("^%s*(.-)%s*$")
     local c = Config()
     if cmd == "test" then ns.SetPreview(not preview)
     elseif cmd == "debug" then ns.Diagnose()
     elseif cmd == "target" or cmd == "focus" then c.source = c.focusEnabled and cmd or "target"; offset = 0; ns.Apply()
-    elseif cmd == "show" then c.enabled = true; ns.Refresh()
-    elseif cmd == "hide" then c.enabled = false; preview = false; ns.Refresh()
+    elseif cmd == "show" then c.enabled = true; ns.Apply()
+    elseif cmd == "hide" then c.enabled = false; preview = false; ns.Apply()
     elseif cmd == "lock" then c.locked = not c.locked; Say(c.locked and "Locked" or "Unlocked")
-    elseif cmd == "pets" then c.pets = not c.pets; ns.Refresh(); Say(c.pets and "Pets shown" or "Pets hidden")
+    elseif cmd == "pets" then c.pets = not c.pets; ns.ApplyStyle(); Say(c.pets and "Pets shown" or "Pets hidden")
     elseif cmd == "reset" then c.position = nil; c.width = 320; c.height = 210; ns.Apply()
     else Say("/euitm test | debug | target | focus | show | hide | lock | pets | reset") end
 end
