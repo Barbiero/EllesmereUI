@@ -550,37 +550,27 @@ end
     local _mountCache = {}      -- guid -> { name = string|false, collected = bool|nil, time = GetTime() }
     local _mountCacheTTL = 3
     local _inspectPendingGUID = nil
-    local _userInspectUntil = 0
     -- Inspect request pacing, one table so this chunk gains a single local. The server
     -- silently drops requests that arrive in a burst, and a dropped one yields no
     -- INSPECT_READY, so Blizzard's inspect window (which only opens on a matching one)
     -- stays shut. Hovering across raid frames used to fire one request per frame.
     -- Timings are tuned from one in-game log; the server's real limits are undocumented.
     local _insp = {
-        active = false,         -- Show Item Level live: event registered, hooks and watchdog doing work
+        active = false,         -- Show Item Level live: event registered, hooks doing work
         pruneAt = 0,            -- next time expired _ilvlCache entries are swept
         lastAny = 0,            -- last NotifyInspect from ANY source (ours, Blizzard, other addons)
         lastForeign = 0,        -- last NotifyInspect that was not ours
+        prevForeign = 0,        -- lastForeign before the latest foreign call
         ourAt = -1,             -- GetTime() of our own last call; same frame in the hook = ours
         pendingAt = 0,          -- when our outstanding tooltip request went out
         dwellGUID = nil,        -- latest guid the tooltip wants inspected
         dwellAt = 0,            -- when that guid was first requested
         dwellArmed = false,     -- one dwell timer at a time
-        wdGUID = nil,           -- guid the inspect-window watchdog is retrying for
-        wdTries = 0,
-        wdNotBefore = 0,        -- earliest time for the next watchdog send
-        wdDeadline = 0,         -- watchdog gives up after this
-        wdArmed = false,        -- one watchdog timer at a time
         MIN_GAP = 2,            -- seconds a tooltip request keeps clear of the previous one, whoever sent it
         DWELL = 0.9,            -- cursor must rest on the same unit this long before we ask; long enough that a
                                 -- quick hover-then-Inspect never puts our request right before Blizzard's
         FOREIGN_WINDOW = 10,    -- another addon polling this recently: stay passive, use its data
         PENDING_TTL = 5,        -- our own request counts as lost after this, so a retry is allowed
-        WD_FIRST = 1.2,         -- first retry: early, since a single collision may only cost a short lockout
-        WD_GAP = 4,             -- second retry at ~5.2s: past the ~5s lockout a burst was seen to cause
-        WD_TRIES = 2,
-        WD_CLEAR = 1,           -- a retry keeps at least this far from anyone's last request
-        WD_DEADLINE = 10,
     }
     -- GUID the visible GameTooltip was last populated for (set by the Unit post-call, cleared on hide); lets the async inspect handler confirm identity before touching it.
     local _tipShownGUID = nil
@@ -646,70 +636,12 @@ end
         end
         return nil
     end
-    -- Watchdog for the user's own inspect: a dropped request leaves InspectFrame.unit
-    -- set with no event ever arriving, and Blizzard neither retries nor reports it.
-    -- Re-send the same request a few times until the window shows itself. A single
-    -- timer chain serves every inspect (a newer one just retargets it), and each send
-    -- first waits until nobody else has asked for WD_CLEAR seconds, so a retry never
-    -- lands right on top of another request and restarts the lockout.
-    local function _inspectWatchdogTick()
-        _insp.wdArmed = false
-        local guid = _insp.wdGUID
-        if not guid then return end
-        local frame = InspectFrame
-        local unit = frame and frame.unit
-        local now = GetTime()
-        if not _insp.active or not frame or frame:IsShown() or not unit
-            or (_isSecret and _isSecret(unit))
-            or _insp.wdTries >= _insp.WD_TRIES or now >= _insp.wdDeadline then
-            _insp.wdGUID = nil
-            return
-        end
-        -- UnitGUID can come back secret in a restricted state; comparing it would raise.
-        local live = UnitGUID(unit)
-        if not live or (_isSecret and _isSecret(live)) or live ~= guid then
-            _insp.wdGUID = nil
-            return
-        end
-        local wait = math.max(_insp.wdNotBefore, _insp.lastAny + _insp.WD_CLEAR) - now
-        if wait <= 0 then
-            _insp.wdTries = _insp.wdTries + 1
-            _insp.ourAt = now
-            NotifyInspect(unit)
-            _insp.wdNotBefore = now + _insp.WD_GAP
-            wait = _insp.WD_GAP
-        end
-        _insp.wdArmed = true
-        C_Timer.After(wait, _inspectWatchdogTick)
-    end
-    -- Installed by _insp.Activate. Both the tooltip hold-off and the watchdog belong to
-    -- Show Item Level; with it off this does nothing, since EUI then sends no inspects
-    -- of its own. The option test covers a mid-session toggle-off before the handler
-    -- has seen an event and cleared _insp.active.
+    -- InspectFrame_Show's NotifyInspect ran just before this post-hook, in the same frame,
+    -- and was counted as foreign. It is the user's own inspect, not another addon
+    -- polling, so it must not switch the tooltip to passive mode.
     local function _onInspectUnit()
-        if not _insp.active then return end
-        if EllesmereUIDB and EllesmereUIDB.tooltipItemLevel == false then return end
-        _userInspectUntil = GetTime() + 2
-        -- Runs after InspectFrame_Show, so InspectFrame.unit is already set -- unless
-        -- CanInspect failed there. In that case InspectFrame.unit still holds the
-        -- PREVIOUS target (it is only cleared in OnHide, which never ran for a window
-        -- that never opened), so gate on INSPECTED_UNIT, which Blizzard does nil out
-        -- on a failed CanInspect. Without it the watchdog could open the window for
-        -- the person inspected before this one.
-        local frame = InspectFrame
-        local unit = frame and frame.unit
-        if not unit or (_isSecret and _isSecret(unit)) or not INSPECTED_UNIT then return end
-        local guid = UnitGUID(unit)
-        if not guid or (_isSecret and _isSecret(guid)) then return end
-        -- A newer inspect retargets the running chain instead of starting a second one.
-        local now = GetTime()
-        _insp.wdGUID = guid
-        _insp.wdTries = 0
-        _insp.wdNotBefore = now + _insp.WD_FIRST
-        _insp.wdDeadline = now + _insp.WD_DEADLINE
-        if not _insp.wdArmed then
-            _insp.wdArmed = true
-            C_Timer.After(_insp.WD_FIRST, _inspectWatchdogTick)
+        if _insp.active and _insp.lastForeign == GetTime() then
+            _insp.lastForeign = _insp.prevForeign
         end
     end
     -- Caches every INSPECT_READY, including the ones other addons asked for, which is
@@ -771,13 +703,12 @@ end
     -- or from the first unit tooltip after it is turned back on), so with it or the
     -- tooltip reskin off after a /reload nothing is registered, hooked or created.
     -- hooksecurefunc cannot be undone: after a mid-session toggle-off the hook returns
-    -- at once. Starts passive, since there is no request history yet and a first hover
-    -- could otherwise land right inside another addon's polling.
+    -- at once. Passive mode starts only once another addon's request is actually seen;
+    -- the first request just waits MIN_GAP, so it cannot land inside that polling.
     _insp.Activate = function()
         if _insp.active then return end
         _insp.active = true
-        local now = GetTime()
-        _insp.lastForeign, _insp.lastAny = now, now
+        _insp.lastAny = GetTime()
         if not _inspectFrame then
             _inspectFrame = CreateFrame("Frame")
             _inspectFrame:SetScript("OnEvent", _onInspectReady)
@@ -788,7 +719,10 @@ end
                 if not _insp.active then return end
                 local t = GetTime()
                 _insp.lastAny = t
-                if _insp.ourAt ~= t then _insp.lastForeign = t end
+                if _insp.ourAt ~= t then
+                    _insp.prevForeign = _insp.lastForeign
+                    _insp.lastForeign = t
+                end
             end)
             if InspectUnit then hooksecurefunc("InspectUnit", _onInspectUnit) end
         end
@@ -821,10 +755,10 @@ end
     end
 
     -- Hard blocks for a tooltip request, checked before the dwell and again in it: the
-    -- user's own inspect owns the queue, the talent frame is inspecting someone
-    -- (ClearInspectPlayer would retarget it), or another addon is polling (passive mode).
+    -- inspect window is open or waiting on this player, the talent frame is inspecting
+    -- someone (ClearInspectPlayer would retarget it), or another addon is polling
+    -- (passive mode). Timed hold-offs are not blocks; _dwellTick waits them out.
     local function _inspBlocked(guid, now)
-        if _insp.wdGUID and now < _insp.wdDeadline then return true end
         local psf = PlayerSpellsFrame
         if psf and psf.IsInspecting and psf:IsInspecting() then return true end
         if (now - _insp.lastForeign) < _insp.FOREIGN_WINDOW then return true end
@@ -870,10 +804,10 @@ end
             _insp.dwellGUID = nil
             return
         end
-        -- Timing gates only postpone: wait for the latest of dwell, user inspect, the
-        -- gap after anyone's last request, and our own outstanding request's expiry.
-        local readyAt = math.max(_insp.dwellAt + _insp.DWELL, _userInspectUntil,
-            _insp.lastAny + _insp.MIN_GAP)
+        -- Timing gates only postpone: wait for the dwell, the gap after anyone's last
+        -- request (the user's own Inspect included), and our outstanding request's expiry.
+        -- Raid frames never refresh their tooltip, so a dropped hover would stay blank.
+        local readyAt = math.max(_insp.dwellAt + _insp.DWELL, _insp.lastAny + _insp.MIN_GAP)
         if guid == _inspectPendingGUID then
             readyAt = math.max(readyAt, _insp.pendingAt + _insp.PENDING_TTL)
         end
@@ -1156,9 +1090,9 @@ end
                         end
                     end
                     local inspOpen = InspectFrame and InspectFrame:IsShown()
-                    if not ilvl and not inspOpen and GetTime() > _userInspectUntil
+                    if not ilvl and not inspOpen
                         and CanInspect(unit) and not InCombatLockdown() then
-                        -- Paced and re-checked there; a refresh tick that lands during the dwell is a no-op.
+                        -- Paced and re-checked there; timed gaps are waited out, not dropped.
                         _requestTooltipInspect(guid)
                     end
                 end
