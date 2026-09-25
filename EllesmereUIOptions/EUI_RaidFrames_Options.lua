@@ -2472,10 +2472,10 @@ initFrame:SetScript("OnEvent", function(self)
                 icon = EllesmereUI.DIRECTIONS_ICON,
                 title = "Name Offset",
                 rows = {
-                    { type="slider", label="Offset X", min=-150, max=150, step=1,
+                    { type="slider", label="Offset X", min=-500, max=500, step=1,
                       get=function() return SVal("nameOffsetX", 0) end,
                       set=function(v) SSet("nameOffsetX", v) end },
-                    { type="slider", label="Offset Y", min=-75, max=75, step=1,
+                    { type="slider", label="Offset Y", min=-500, max=500, step=1,
                       get=function() return SVal("nameOffsetY", 0) end,
                       set=function(v) SSet("nameOffsetY", v) end },
                 },
