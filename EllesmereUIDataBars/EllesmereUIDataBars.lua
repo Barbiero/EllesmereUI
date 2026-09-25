@@ -3202,18 +3202,25 @@ end
 --  like the action bar spin. Driver, combat pause and rest tracking live in
 --  the shared engine (EllesmereUI.PartySpin_Create, EllesmereUI_PartyMode.lua).
 -------------------------------------------------------------------------------
-if EllesmereUI.PartySpin_Create then
+do
     local groups = {}
-    EllesmereUI.PartySpinDataBars_Refresh = EllesmereUI.PartySpin_Create({
-        enabledKey = "partyModeSpinDataBars",
-        speedKey   = "partyModeSpinDataBarsSpeed",
+    local groupOf = setmetatable({}, { __mode = "k" })   -- bar rec -> reused group
+    EllesmereUI.PartySpin_Create({
+        target = "dataBars",
         collect = function()
             wipe(groups)
             for _, rec in pairs(live) do
                 if rec.enabled and rec.bar and rec.slots then
-                    local list = {}
+                    local grp = groupOf[rec]
+                    if not grp then
+                        grp = { frames = {} }
+                        groupOf[rec] = grp
+                    end
+                    grp.pivot = rec.bar
+                    local list = grp.frames
+                    wipe(list)
                     for _, slot in pairs(rec.slots) do list[#list + 1] = slot end
-                    groups[#groups + 1] = { pivot = rec.bar, frames = list }
+                    groups[#groups + 1] = grp
                 end
             end
             return groups

@@ -1275,16 +1275,14 @@ local function GatherMinimapButtons()
             end
         end
     end
-    -- The lone grouped button, if the scan left exactly one: it shows on the
-    -- row ungrouped and no group toggle appears (IsUngrouped reads this). A
-    -- second button, or the user grouping one back, ends the solo state on
-    -- the next scan.
-    local mp = EBS.db and EBS.db.profile.minimap
-    local ug = mp and mp.ungroupedButtons
+    -- The only minimap button at all, if the scan found exactly one: it shows
+    -- on the row ungrouped and no group toggle appears (IsUngrouped reads
+    -- this). With two or more, grouping is the user's choice alone, even when
+    -- they ungroup all but one. A second button ends the solo state on the
+    -- next scan.
     local solo, count = nil, 0
     for _, btn in ipairs(cachedAddonButtons) do
-        local name = btn:GetName()
-        if _addonVisible[btn] ~= false and not (ug and name and ug[name]) then
+        if _addonVisible[btn] ~= false then
             count = count + 1
             solo = btn
         end
@@ -5413,9 +5411,8 @@ do
                 end)
 
                 y = y - BUTTON_H
-            elseif EllesmereUI.SecureSnippetsOK() then
-                -- Secure click passthrough to a Blizzard MicroButton (the
-                -- entry is skipped where snippets cannot compile: WoW Forever beta)
+            else
+                -- Secure click passthrough to a Blizzard MicroButton
                 local microRef = item.microButton and _G[item.microButton]
                 local btnName = "EUI_MicroMenu_" .. item.text:gsub("%s", "")
                 local btn = CreateFrame("Button", btnName, menuFrame, "SecureActionButtonTemplate,SecureHandlerStateTemplate")

@@ -105,52 +105,6 @@ end
 -- and the tracker read the same truth).
 local MOVEMENT_DEFAULT_OFF = EllesmereUI._MovementDefaultOff or {}
 
--- Reuses EllesmereUI._groupDeathSoundPaths/_groupDeathSoundNames/_groupDeathSoundOrder
--- (built by EllesmereUIQoL.lua, merged with every LibSharedMedia-3.0 "sound" entry at
--- login via EllesmereUI.AppendSharedMediaSounds) instead of querying LSM directly a
--- second time -- one sound-list implementation in the addon, not two. Values can be a
--- file path (string) or a Blizzard SoundKitID (number, most LSM-registered SOUNDKIT.*
--- entries); PlayLSMSound (shared from EllesmereUIQoL_MovementAlert.lua, which loads
--- first per the .toc order) routes preview playback by type.
-local function PlayLSMSound(value)
-    if EllesmereUI._PlayLSMSound then
-        EllesmereUI._PlayLSMSound(value)
-        return
-    end
-    if not value or value == 1 then return end
-    if type(value) == "number" then
-        PlaySound(value, "Master")
-    else
-        PlaySoundFile(value, "Master")
-    end
-end
-
-local function SoundDropdownValues()
-    local paths = EllesmereUI._groupDeathSoundPaths or {}
-    local names = EllesmereUI._groupDeathSoundNames or { none = "None" }
-    local order = EllesmereUI._groupDeathSoundOrder or { "none" }
-    local values = {}
-    for k, v in pairs(names) do values[k] = v end
-    values._menuOpts = {
-        itemHeight = 26,
-        maxTextWidthPct = 0.8,
-        searchable = true,
-        iconAtlas = function(key)
-            if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound"
-        end,
-        iconPressedAtlas = function(key)
-            if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound-pressed"
-        end,
-        iconOnClick = function(key)
-            PlayLSMSound(paths[key])
-        end,
-        iconTooltip = function() return "Preview Sound" end,
-    }
-    return values, order
-end
-
 -- Voices are enumerated live from C_VoiceChat rather than a static list --
 -- availability varies by client/OS. Falls back to a single "Default" entry
 -- (voiceID 0) if the API or voice list isn't available.
@@ -506,7 +460,7 @@ local function BuildMovementAlertPage(pageName, parent, yOffset)
     -- Display/alert settings as page rows (moved out of the old cog popup):
     -- every slot keeps the exact profile keys and side-effects the popup rows had;
     -- RefreshPage() is added only where a value gates another widget's disabled state.
-    local sndValues, sndOrder = SoundDropdownValues()
+    local sndValues, sndOrder = EllesmereUI.BuildSoundDropdownValues()
     local ttsValues, ttsOrder = TTSVoiceDropdownValues()
 
     -- Bar texture dropdown: identical catalog + SharedMedia merge +
@@ -1046,7 +1000,7 @@ local function BuildMovementAlertPage(pageName, parent, yOffset)
     -- Time Spiral settings cog (left slot)
     if not EllesmereUI._prebuilding then
         local leftRgn = extraRow._leftRegion
-        local sndValues2, sndOrder2 = SoundDropdownValues()
+        local sndValues2, sndOrder2 = EllesmereUI.BuildSoundDropdownValues()
         local ttsValues2, ttsOrder2 = TTSVoiceDropdownValues()
         EllesmereUI.BuildInlineCog(leftRgn, {
             title = "Time Spiral Settings",
@@ -1094,7 +1048,7 @@ local function BuildMovementAlertPage(pageName, parent, yOffset)
     -- Gateway Shard settings cog (right slot); Combat Only lives in here.
     if not EllesmereUI._prebuilding then
         local rgn = extraRow._rightRegion
-        local sndValues2, sndOrder2 = SoundDropdownValues()
+        local sndValues2, sndOrder2 = EllesmereUI.BuildSoundDropdownValues()
         local ttsValues2, ttsOrder2 = TTSVoiceDropdownValues()
         EllesmereUI.BuildInlineCog(rgn, {
             title = "Gateway Shard Settings",

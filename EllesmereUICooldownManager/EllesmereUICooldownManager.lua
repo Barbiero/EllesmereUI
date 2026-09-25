@@ -116,7 +116,10 @@ do
             end)
             btn:SetScript("OnClick", function()
                 C_AddOns.DisableAddOn("EllesmereUICooldownManager")
-                ReloadUI()
+                -- Take this popup down first: its dimmer (level 150) would sit over
+                -- the reload popup RequestReload opens on the Forever client.
+                dimmer:Hide()
+                EllesmereUI.RequestReload()
             end)
         end
 
@@ -3200,14 +3203,10 @@ local function EnforceCooldownViewerEditModeSettings()
     end
 
     -- Forced (non-dismissable) reload popup. On first install the Welcome picker is
-    -- pending/open and ALWAYS ends in its own forced ReloadUI, which applies the layout we
+    -- pending/open and ALWAYS ends in its own reload, which applies the layout we
     -- just saved -- a second forced popup would stomp the picker, so stay silent and ride that reload.
     if EllesmereUI and EllesmereUI._firstInstallPending then return end
     C_Timer.After(0, function()
-        if not EllesmereUI or not EllesmereUI.ShowConfirmPopup then
-            ReloadUI()
-            return
-        end
         EllesmereUI:ShowConfirmPopup({
             title = "Edit Mode Update",
             message = "EllesmereUI has updated your CDM Edit Mode settings to ensure cooldown tracking works correctly.\n\nA UI reload is required for the changes to take effect.",
@@ -10016,7 +10015,7 @@ function ECME:CDMFinishSetup()
     )
 
     -- One-time vehicle/petbattle proxy. Drives _CDMApplyVisibility on state change so CDM bars hide while the vehicle UI or pet battle UI is active.
-    if not _cdmVehicleProxy and EllesmereUI.SecureSnippetsOK() then
+    if not _cdmVehicleProxy then
         _cdmVehicleProxy = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
         _cdmVehicleProxy:SetAttribute("_onstate-cdmvehicle", [[
             self:CallMethod("OnVehicleStateChanged", newstate)

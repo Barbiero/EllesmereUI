@@ -1193,6 +1193,132 @@ end
 -------------------------------------------------------------------------------
 EllesmereUI._WHATSNEW_PATCHES = {
     {
+        version = "9.2.9",
+        heroes = {
+            {
+                module = "Unit Frames",
+                title  = "Heal Prediction",
+                desc   = "Player, target and focus frames can show incoming heals on the health bar, yours and other players' in separate colors. Choose the opacity, texture and how far heals may run past a full bar; off by default under Absorbs and Heals.",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames",
+                           section = "ABSORBS AND HEALS", highlight = "Heal Prediction",
+                           preSelect = function() EllesmereUI._setUnitFrameUnit("player"); EllesmereUI._pendingUnitSelect = "player" end },
+            },
+            {
+                module = "Unit Frames & Nameplates",
+                title  = "Faction Indicators",
+                desc   = "Player and target frames and nameplates can show a Horde or Alliance badge in seven icon styles, dimmed or hidden on units not flagged for PvP. Nameplates take it in any Core Positions slot or with Rare/Quest, and full friendly plates show it by the name; off by default.",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames",
+                           section = "EXTRAS", highlight = "Faction Indicator",
+                           preSelect = function() EllesmereUI._setUnitFrameUnit("target"); EllesmereUI._pendingUnitSelect = "target" end },
+            },
+            {
+                -- The Forever Essentials module only exists on WoW Forever: clickable
+                -- there, a static card on retail.
+                forever = true,
+                module = "Forever Essentials",
+                title  = "Threat Meter",
+                desc   = "A bar for each group member's threat on your target, or on what your friendly target is fighting, with a pull aggro bar and an optional warning sound as you near aggro. Off by default on the Threat tab of the new Forever Essentials module, with layout, text and color options.",
+                nav    = EllesmereUI.IS_FOREVER and { module = "EllesmereUIForeverEssentials", page = "Threat",
+                           section = "THREAT METER", highlight = "Enable Threat Meter" } or nil,
+            },
+            {
+                forever = true,
+                module = "General",
+                title  = "Raid Frames and Quickdraw",
+                desc   = "Raid Frames, click-casting included, and Quickdraw are available now that Blizzard's client runs secure handlers. Action bar stance and form paging, conditional hiding and Cast Actions on Key Down work too, as do micro menu clicks, Raid Tools, the Shifter and Disable Right Click.",
+                nav    = { module = "EllesmereUIRaidFrames", page = "Frames" },
+            },
+        },
+        features = {
+            {
+                forever = true,
+                module = "Blizz UI Enhanced",
+                title  = "Character Sheet Item Stats",
+                desc   = "Slots show item stats like +14 Int / +9 Stam, weapon DPS and the enchant, with an eye button to hide them",
+                nav    = { module = "EllesmereUIBlizzardSkin", page = "Blizzard Window Skins",
+                           section = "CORE OPTIONS", highlight = "Show Item Stats" },
+            },
+            {
+                module = "Party Mode",
+                title  = "Spin More of Your UI",
+                desc   = "The Spinning checklist adds Data Bars, Unit Frames, Resource Bars and Power Bars to the Action Bars spin",
+                nav    = { module = "EllesmereUIPartyMode", page = "Party Mode",
+                           section = "PARTY MODE", highlight = "Spinning" },
+            },
+            {
+                -- The Swing Timer page only exists on WoW Forever: clickable there, a
+                -- static card on retail. Combine Hands lives in the Tracked Weapons cog.
+                forever = true,
+                module = "Resource Bars",
+                title  = "Swing Timer Options",
+                desc   = "Combine both hands on one bar with an off-hand spark, give Cleave its own queued color and offset the text",
+                nav    = EllesmereUI.IS_FOREVER and { module = "EllesmereUIResourceBars", page = "Swing Timer",
+                           section = "DISPLAY", highlight = "Tracked Weapons" } or nil,
+            },
+            {
+                -- The toggle lives in the Buff Settings cog on the Buff Display row.
+                module = "Unit Frames",
+                title  = "Buff Dispel Type Borders",
+                desc   = "Target, focus and boss buffs can take a border in their dispel type color, from the Buff Settings cog",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames",
+                           section = "BUFFS AND DEBUFFS", highlight = "Buff Display",
+                           preSelect = function() EllesmereUI._setUnitFrameUnit("target"); EllesmereUI._pendingUnitSelect = "target" end },
+            },
+            {
+                forever = true,
+                module = "Unit Frames",
+                title  = "Pet Happiness",
+                desc   = "Hunter pets show their happiness icon beside the pet frame, with a tooltip plus size and position options",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Mini Frames",
+                           section = "PET HAPPINESS", highlight = "Show Happiness",
+                           preSelect = function() EllesmereUI._setMiniUnit("pet"); EllesmereUI._pendingMiniSelect = "pet" end },
+            },
+            {
+                forever = true,
+                module = "Unit Frames",
+                title  = "Pet Power Bar",
+                desc   = "The pet frame shows its focus or mana on a power bar, with height, color, position and text options",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Mini Frames",
+                           section = "POWER BAR", highlight = "Power Bar Height",
+                           preSelect = function() EllesmereUI._setMiniUnit("pet"); EllesmereUI._pendingMiniSelect = "pet" end },
+            },
+            {
+                forever = true,
+                module = "Unit Frames",
+                title  = "Spell Cost Prediction",
+                desc   = "While you cast, the player power bar marks the mana the spell will cost, in a color you choose",
+                nav    = { module = "EllesmereUIUnitFrames", page = "Main Frames",
+                           section = "POWER BAR", highlight = "Spell Cost Prediction",
+                           preSelect = function() EllesmereUI._setUnitFrameUnit("player"); EllesmereUI._pendingUnitSelect = "player" end },
+            },
+            {
+                -- The level toggles live in the level text slot's cog.
+                module = "Unit Frames & Nameplates",
+                title  = "Level Difficulty Colors",
+                desc   = "Level text can take Blizzard's difficulty colors, with an option for friendly units; Blizzard Style levels too",
+                nav    = { module = "EllesmereUINameplates", page = "Display",
+                           section = "CORE TEXT POSITIONS", highlight = "Left Text" },
+            },
+        },
+        fixes = {
+            { forever = true, module = "Blizz UI Enhanced", text = "Show Item Level on vendor items no longer causes Lua errors." },
+            { forever = true, module = "Blizz UI Enhanced & QoL", text = "The Character Sheet card no longer offers Show Mythic+ Rating and Item Level, and the QoL page no longer offers AH Current Expansion Only and Hide Talking Head, as they had nothing to act on." },
+            { module = "Chat", text = "Undocked chat windows no longer show a flickering or faint black bar beside them, and their minimize button fades in on hover without flickering." },
+            { forever = true, module = "Cooldown Manager", text = "Spells, trinkets and items can now be added to bars, clicking a bar icon in the options no longer causes a Lua error, and Sync Generic CDs/Buffs now lists your specs." },
+            { module = "General", text = "Visibility checklists have new Party Mode and Dungeons rows, to show or hide an element while Party Mode is on or in five-player dungeons and Mythic+, leaving delves out." },
+            { forever = true, module = "General", text = "The Reload UI button, /rl, profile imports, turning a module on or off and the other actions that reload the UI now open a reload popup instead of being blocked, and /rl in combat asks you to type /reload." },
+            { forever = true, module = "General", text = "The Macro Factory's Potion and Food macros no longer cause Lua errors." },
+            { module = "Minimap", text = "Ungrouping all but one of several minimap buttons now keeps the last one in the button group instead of forcing it onto the minimap, and Ungroup Minimap Buttons is greyed out with fewer than two buttons." },
+            { forever = true, module = "Nameplates & QoL", text = "The nameplate Range Check and the crosshair's Color Out of Range no longer cause Lua errors." },
+            { forever = true, module = "QoL", text = "The Travel tab and its Flight Timer moved to the new Forever Essentials module, keeping its settings and position." },
+            { forever = true, module = "Resource Bars", text = "The Class, Power and Health Bars tab is now called Main Resources." },
+            { forever = true, module = "Resource Bars", text = "Between swings the Swing Timer no longer shows 0.0, and with Show Spark on, the spark shows only while a swing is running." },
+            { forever = true, module = "Resource Bars", text = "The Swing Timer now defaults to In Combat with Deplete Fill on, and a timer still set to Always moves to In Combat once." },
+            { forever = true, module = "Unit Frames & Nameplates", text = "Player names now include the character's surname, as Blizzard's own frames show them." },
+            { module = "Localization", text = "Brazilian Portuguese translations updated." },
+        },
+    },
+    {
         version = "9.2.8",
         mini = true,
         features = {
@@ -1976,14 +2102,6 @@ EllesmereUI._WHATSNEW_PATCHES = {
             { module = "Localization", text = "Simplified Chinese caught up on the recent additions (chat recall, the performance reminder, Ignore Pain tracking and more)." },
         },
     },
-    {
-        version = "9.1.3",
-        mini = true,
-        fixes = {
-            { module = "Cooldown Manager", text = "Duration text no longer randomly disappears on bar icons during dungeon and raid combat." },
-            { module = "Localization", text = "Traditional Chinese, Korean and Brazilian Portuguese gained the 9.1 option strings (Quick Fire, the Broker Plugin block, Glow at Stacks and more)." },
-        },
-    },
 }
 
 -------------------------------------------------------------------------------
@@ -2626,12 +2744,7 @@ initFrame:SetScript("OnEvent", function(self)
         _, h = W:DualRow(parent, y,
             { type="toggle", text="Cast Actions on Key Down",
               tooltip="Keybinds respond on key down instead of key up. This helps make your abilities feel more responsive.",
-              -- Without secure snippets the bars force key up (see
-              -- ns.UseKeyDownEffective); the row shows that effective state.
-              disabled=function() return not EllesmereUI.SecureSnippetsOK() end,
-              disabledTooltip="This client cannot run the safeguard that stops a drag from casting the spell, so actions stay on key up until Blizzard fixes it.",
-              rawTooltip=true,
-              getValue=function() return GetCVarBool("ActionButtonUseKeyDown") and EllesmereUI.SecureSnippetsOK() end,
+              getValue=function() return GetCVarBool("ActionButtonUseKeyDown") end,
               setValue=function(v)
                 SetCVarSafe("ActionButtonUseKeyDown", v and "1" or "0")
                 if _G._EAB_ApplyKeyDown then _G._EAB_ApplyKeyDown() end
@@ -2871,6 +2984,7 @@ initFrame:SetScript("OnEvent", function(self)
                     disclaimer  = "This resets every EUI addon, not just the current one.",
                     confirmText = "Reset All & Reload",
                     cancelText  = "Cancel",
+                    reload      = true,
                     onConfirm   = function()
                         -- Nuclear wipe: same logic as the beta-exit popup
                         local svNames = {
@@ -2931,7 +3045,6 @@ initFrame:SetScript("OnEvent", function(self)
                         for k, v in pairs(savedQoL) do
                             EllesmereUIDB[k] = v
                         end
-                        ReloadUI()
                     end,
                 })
             end)
@@ -4739,9 +4852,9 @@ initFrame:SetScript("OnEvent", function(self)
                             title   = EllesmereUI.L("Profile Imported"),
                             content = EllesmereUI.Lf("\"%1$s\" was saved but cannot be loaded because this spec has an assigned profile. Switch specs or remove the spec assignment to use it.", name),
                         })
-                        ReloadUI()
+                        EllesmereUI.RequestReload(EllesmereUI.L("Profile Imported"), EllesmereUI.L("Reload to finish importing."))
                     elseif ok then
-                        ReloadUI()
+                        EllesmereUI.RequestReload(EllesmereUI.L("Profile Imported"), EllesmereUI.L("Reload to finish importing."))
                     else
                         EllesmereUI:ShowInfoPopup({ title = EllesmereUI.L("Import Failed"), content = err or EllesmereUI.L("Unknown error") })
                     end
@@ -5484,7 +5597,7 @@ initFrame:SetScript("OnEvent", function(self)
                             return
                         end
                         EllesmereUI.SaveCurrentAsProfile(name)
-                        ReloadUI()
+                        EllesmereUI.RequestReload(EllesmereUI.L("Copy Profile"), EllesmereUI.L("Reload to finish switching to the new profile."))
                     end,
                 })
             end)

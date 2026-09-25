@@ -16,6 +16,12 @@ local PAGE_SWING     = "Swing Timer"   -- WoW Forever only (C_SwingTimer)
 local PAGE_TOTEM     = "Totem Bar"
 local PAGE_UNLOCK    = "Unlock Mode"
 
+-- WoW Forever shows the first tab as "Main Resources". Display only: the page
+-- identity above stays the same for nav targets, unlock and saved state.
+if EllesmereUI.IS_FOREVER then
+    EllesmereUI.TAB_LABEL_OVERRIDES[PAGE_DISPLAY] = "Main Resources"
+end
+
 -- Classic WoW UI: each bar's Border Size slot sizes the vanilla frame round
 -- the bar (stockBorderScale, a percentage of the frame's full size; nil =
 -- the shared default) in place of the gated EUI border size. The border
@@ -10507,8 +10513,9 @@ initFrame:SetScript("OnEvent", function(self)
               setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.width = v; RefreshST() end }
         );  y = y - h
 
-        -- Row: Row Spacing | Text Size
-        _, h = W:DualRow(parent, y,
+        -- Row: Row Spacing | Text Size (+ text offsets cog)
+        local stTextRow
+        stTextRow, h = W:DualRow(parent, y,
             { type = "slider", pixel = true, text = "Row Spacing", min = 0, max = 20, step = 1,
               tooltip = "Gap between the weapon rows.",
               disabled = stOff, disabledTooltip = ST_TIP,
@@ -10519,6 +10526,23 @@ initFrame:SetScript("OnEvent", function(self)
               getValue = function() local p = DB(); return p and p.swingTimer.textSize or 11 end,
               setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.textSize = v; RefreshST() end }
         );  y = y - h
+        if not EllesmereUI._prebuilding then
+            local function OffsetRow(label, key)
+                return { type = "slider", label = label, min = -100, max = 100, step = 1,
+                  get = function() local p = DB(); return p and p.swingTimer[key] or 0 end,
+                  set = function(v) local p = DB(); if not p then return end; p.swingTimer[key] = v; RefreshST() end }
+            end
+            EllesmereUI.BuildInlineCog(stTextRow._rightRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
+                disabled = stOff, disabledTooltip = ST_TIP,
+                title = "Text Position",
+                rows = {
+                    OffsetRow("Time X Offset", "timeX"),
+                    OffsetRow("Time Y Offset", "timeY"),
+                    OffsetRow("Label X Offset", "labelX"),
+                    OffsetRow("Label Y Offset", "labelY"),
+                },
+            })
+        end
 
         -- Row: Visibility (shared checklist) | Hide When Idle (+ idle fill cog)
         local stShowRow
@@ -10755,42 +10779,76 @@ initFrame:SetScript("OnEvent", function(self)
             EllesmereUI.RegisterWidgetRefresh(UpdateBgSwatch)
         end
 
-        -- Row: Bar Texture | Show Spark
+        -- Row: Bar Texture | Deplete Fill
         _, h = W:DualRow(parent, y,
             { type = "dropdown", text = "Bar Texture",
               disabled = stOff, disabledTooltip = ST_TIP,
               values = texValues, order = texOrder,
               getValue = function() local p = DB(); return p and p.swingTimer.texture or "none" end,
               setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.texture = v; RefreshST() end },
-            { type = "toggle", text = "Show Spark",
-              tooltip = "Show a small glowing spark that moves along the leading edge of the fill.",
-              disabled = stOff, disabledTooltip = ST_TIP,
-              getValue = function() local p = DB(); return p and p.swingTimer.showSpark end,
-              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.showSpark = v; RefreshST() end }
-        );  y = y - h
-
-        -- Row: Deplete Fill | Range Check (+ out-of-range alpha cog)
-        local rangeRow
-        rangeRow, h = W:DualRow(parent, y,
             { type = "toggle", text = "Deplete Fill",
               tooltip = "Start each row full and drain it as the swing timer elapses, instead of filling it up.",
               disabled = stOff, disabledTooltip = ST_TIP,
               getValue = function() local p = DB(); return p and p.swingTimer.depleteFill end,
-              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.depleteFill = v; RefreshST() end },
-            { type = "toggle", text = "Range Check",
-              tooltip = "Dim a row and paint its text red while the current target is out of that weapon's auto attack range.",
+              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.depleteFill = v; RefreshST() end }
+        );  y = y - h
+
+        -- Row: Show Spark | Tracked Weapons (checkbox dropdown, built below)
+        local sparkRow
+        sparkRow, h = W:DualRow(parent, y,
+            { type = "toggle", text = "Show Spark",
+              tooltip = "Show a small glowing spark that moves along the leading edge of the fill while a swing is running.",
               disabled = stOff, disabledTooltip = ST_TIP,
-              getValue = function() local p = DB(); return p and p.swingTimer.rangeCheck ~= false end,
-              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.rangeCheck = v; RefreshST() end }
+              getValue = function() local p = DB(); return p and p.swingTimer.showSpark end,
+              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.showSpark = v; RefreshST() end },
+            { type = "dropdown", text = "Tracked Weapons",
+              tooltip = "Choose which weapons get a swing row. A row also needs a weapon in that slot.",
+              disabled = stOff, disabledTooltip = ST_TIP,
+              values = { __placeholder = "..." }, order = { "__placeholder" },
+              getValue = function() return "__placeholder" end,
+              setValue = function() end }
         );  y = y - h
         if not EllesmereUI._prebuilding then
-            EllesmereUI.BuildInlineCog(rangeRow._rightRegion, {
-                title = "Range Check",
+            local rgn = sparkRow._rightRegion
+            if rgn._control then rgn._control:Hide() end
+            -- Checked = the row shows. The keys are the per-row toggles this
+            -- list replaces (nil = on), so every profile carries over as is.
+            local WEAPON_ITEMS = {
+                { key = "showMH", label = "Main Hand" },
+                { key = "showOH", label = "Off Hand" },
+                { key = "showR",  label = "Ranged" },
+            }
+            local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                rgn, 210, rgn:GetFrameLevel() + 2, WEAPON_ITEMS,
+                function(k) local p = DB(); return not p or p.swingTimer[k] ~= false end,
+                function(k, v)
+                    local p = DB(); if not p then return end
+                    p.swingTimer[k] = v
+                    -- The cog's Combine Hands greys out while a hand is off.
+                    RefreshST(); EllesmereUI:RefreshPage()
+                end)
+            PP.Point(cbDD, "RIGHT", rgn, "RIGHT", -20, 0)
+            rgn._control = cbDD
+            rgn._lastInline = nil
+            local function UpdateWeaponsDD()
+                local off = stOff()
+                cbDD:SetAlpha(off and 0.3 or 1)
+                cbDD:EnableMouse(not off)
+                cbDDRefresh()
+            end
+            UpdateWeaponsDD()
+            EllesmereUI.RegisterWidgetRefresh(UpdateWeaponsDD)
+            -- Combine Hands needs both hands tracked, so it rides this row's cog.
+            EllesmereUI.BuildInlineCog(rgn, {
+                disabled = stOff, disabledTooltip = ST_TIP,
+                title = "Tracked Weapons",
                 rows = {
-                    { type = "slider", label = "Out of Range Opacity", min = 0, max = 100, step = 1,
-                      tooltip = "Opacity of a row whose target is out of range.",
-                      get = function() local p = DB(); return math.floor(((p and p.swingTimer.outOfRangeAlpha or 0.4) * 100) + 0.5) end,
-                      set = function(v) local p = DB(); if not p then return end; p.swingTimer.outOfRangeAlpha = v / 100; RefreshST() end },
+                    { type = "toggle", label = "Combine Hands",
+                      tooltip = "Show the off hand as a spark on the Main Hand bar instead of its own row.",
+                      disabled = function() local p = DB(); return p and (p.swingTimer.showMH == false or p.swingTimer.showOH == false) end,
+                      disabledTooltip = function() local p = DB(); return (p and p.swingTimer.showMH == false) and "Main Hand" or "Off Hand" end,
+                      get = function() local p = DB(); return p and p.swingTimer.combineHands == true end,
+                      set = function(v) local p = DB(); if not p then return end; p.swingTimer.combineHands = v; RefreshST() end },
                 },
             })
         end
@@ -10809,44 +10867,71 @@ initFrame:SetScript("OnEvent", function(self)
               setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.showLabel = v; RefreshST() end }
         );  y = y - h
 
-        -- Per-row toggles (a row also needs a weapon in the slot).
-        local function RowToggle(label, key, tip)
-            return { type = "toggle", text = label, tooltip = tip,
-              disabled = stOff, disabledTooltip = ST_TIP,
-              getValue = function() local p = DB(); return p and p.swingTimer[key] ~= false end,
-              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer[key] = v; RefreshST() end }
-        end
-        -- Row: Main Hand | Off Hand
-        _, h = W:DualRow(parent, y,
-            RowToggle("Main Hand", "showMH", "Show the Main Hand row."),
-            RowToggle("Off Hand", "showOH", "Show the Off Hand row while an off-hand weapon is equipped.")
-        );  y = y - h
-
-        -- Row: Ranged | Highlight Queued Attacks (+ inline queue colour swatch)
+        -- Row: Range Check (+ out-of-range alpha cog) | Highlight Queued Attacks
+        -- (+ inline Heroic Strike / Maul and Cleave colour swatches)
         local queueRow
         queueRow, h = W:DualRow(parent, y,
-            RowToggle("Ranged", "showR", "Show the Ranged row while a ranged weapon is equipped."),
+            { type = "toggle", text = "Range Check",
+              tooltip = "Dim a row and paint its text red while the current target is out of that weapon's auto attack range.",
+              disabled = stOff, disabledTooltip = ST_TIP,
+              getValue = function() local p = DB(); return p and p.swingTimer.rangeCheck ~= false end,
+              setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.rangeCheck = v; RefreshST() end },
             { type = "toggle", text = "Highlight Queued Attacks",
-              tooltip = "While an on-next-swing attack is queued (Heroic Strike, Cleave, Maul), the Main Hand and Off Hand rows take the queue color and show the attack's name.",
+              tooltip = "While an on-next-swing attack is queued, the Main Hand and Off Hand rows take its color and show its name (Heroic Strike and Maul share one color, Cleave has its own).",
               disabled = stOff, disabledTooltip = ST_TIP,
               getValue = function() local p = DB(); return p and p.swingTimer.queueHighlight ~= false end,
               setValue = function(v) local p = DB(); if not p then return end; p.swingTimer.queueHighlight = v; RefreshST(); EllesmereUI:RefreshPage() end }
         );  y = y - h
         if not EllesmereUI._prebuilding then
+            EllesmereUI.BuildInlineCog(queueRow._leftRegion, {
+                title = "Range Check",
+                rows = {
+                    { type = "slider", label = "Out of Range Opacity", min = 0, max = 100, step = 1,
+                      tooltip = "Opacity of a row whose target is out of range.",
+                      get = function() local p = DB(); return math.floor(((p and p.swingTimer.outOfRangeAlpha or 0.4) * 100) + 0.5) end,
+                      set = function(v) local p = DB(); if not p then return end; p.swingTimer.outOfRangeAlpha = v / 100; RefreshST() end },
+                },
+            })
+        end
+        if not EllesmereUI._prebuilding then
             local rgn = queueRow._rightRegion
             local ctrl = rgn._control
+            -- Heroic Strike / Maul (the "queue" keys) beside the toggle, Cleave to its left.
             local qSwatch, qUpdateSwatch = EllesmereUI.BuildColorSwatch(
                 rgn, queueRow:GetFrameLevel() + 3,
                 function() local p = DB(); return (p and p.swingTimer.queueR or 1), (p and p.swingTimer.queueG or 0.70), (p and p.swingTimer.queueB or 0.20), (p and p.swingTimer.queueA or 1) end,
                 function(r, g, b, a) local p = DB(); if not p then return end; p.swingTimer.queueR, p.swingTimer.queueG, p.swingTimer.queueB, p.swingTimer.queueA = r, g, b, a; RefreshST() end,
                 true, 20)
             PP.Point(qSwatch, "RIGHT", ctrl, "LEFT", -8, 0)
+            local cSwatch, cUpdateSwatch = EllesmereUI.BuildColorSwatch(
+                rgn, queueRow:GetFrameLevel() + 3,
+                function() local p = DB(); return (p and p.swingTimer.queueCleaveR or 0.95), (p and p.swingTimer.queueCleaveG or 0.35), (p and p.swingTimer.queueCleaveB or 0.25), (p and p.swingTimer.queueCleaveA or 1) end,
+                function(r, g, b, a) local p = DB(); if not p then return end; p.swingTimer.queueCleaveR, p.swingTimer.queueCleaveG, p.swingTimer.queueCleaveB, p.swingTimer.queueCleaveA = r, g, b, a; RefreshST() end,
+                true, 20)
+            PP.Point(cSwatch, "RIGHT", qSwatch, "LEFT", -4, 0)
+            rgn._lastInline = cSwatch
+            -- Hover names the attack a swatch colours, or the requirement while disabled.
+            local function SwatchTip(sw, name)
+                sw:SetMotionScriptsWhileDisabled(true)
+                sw:HookScript("OnEnter", function(self)
+                    EllesmereUI.ShowWidgetTooltip(self, self._disabledTooltip and EllesmereUI.DisabledTooltip(self._disabledTooltip) or name)
+                end)
+                sw:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            end
+            SwatchTip(qSwatch, "Heroic Strike / Maul Color")
+            SwatchTip(cSwatch, "Cleave Color")
             local function UpdateQueueSwatch()
                 local p = DB()
-                if not p or not p.swingTimer.enabled then qSwatch:SetAlpha(0.15); qSwatch:Disable(); qSwatch._disabledTooltip = ST_TIP
-                elseif p.swingTimer.queueHighlight == false then qSwatch:SetAlpha(0.15); qSwatch:Disable(); qSwatch._disabledTooltip = "Highlight Queued Attacks"
-                else qSwatch:SetAlpha(1); qSwatch:Enable(); qSwatch._disabledTooltip = nil end
-                qUpdateSwatch()
+                local tip
+                if not p or not p.swingTimer.enabled then tip = ST_TIP
+                elseif p.swingTimer.queueHighlight == false then tip = "Highlight Queued Attacks" end
+                if tip then
+                    qSwatch:SetAlpha(0.15); qSwatch:Disable(); cSwatch:SetAlpha(0.15); cSwatch:Disable()
+                else
+                    qSwatch:SetAlpha(1); qSwatch:Enable(); cSwatch:SetAlpha(1); cSwatch:Enable()
+                end
+                qSwatch._disabledTooltip = tip; cSwatch._disabledTooltip = tip
+                qUpdateSwatch(); cUpdateSwatch()
             end
             UpdateQueueSwatch()
             EllesmereUI.RegisterWidgetRefresh(UpdateQueueSwatch)

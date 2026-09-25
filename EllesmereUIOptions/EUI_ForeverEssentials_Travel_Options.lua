@@ -1,10 +1,10 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
-if not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end -- the QoL module lists the Travel tab on WoW Forever only
+if not (EllesmereUI and EllesmereUI.IS_FOREVER) then return end -- Forever Essentials loads on WoW Forever only
 -------------------------------------------------------------------------------
---  EUI_QoL_FlightTimer_Options.lua
---  Builds the "Travel" page inside the Quality of Life module.
+--  EUI_ForeverEssentials_Travel_Options.lua
+--  Builds the "Travel" page inside the Forever Essentials module.
 -------------------------------------------------------------------------------
-if not EllesmereUI._ModuleNS["EllesmereUIQoL"] then return end  -- module disabled: no options page
+if not EllesmereUI._ModuleNS["EllesmereUIForeverEssentials"] then return end  -- module disabled: no options page
 
 local TEXT_SIDES = { none = "None", left = "Left", center = "Center", right = "Right" }
 local TEXT_SIDE_ORDER = { "none", "left", "center", "right" }

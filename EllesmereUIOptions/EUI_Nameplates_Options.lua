@@ -1287,10 +1287,12 @@ initFrame:SetScript("OnEvent", function(self)
                 local fcX = DBVal(fcPos .. "SlotXOffset") or 0
                 local fcY = DBVal(fcPos .. "SlotYOffset") or 0
                 local fcSz = DBVal(fcPos .. "SlotSize") or defaults[fcPos .. "SlotSize"] or 20
-                -- Sharing the slot with a showing Rare/Quest icon: stack up behind it,
-                -- overlapping by 40% (matches NameplateFrame:UpdateFaction).
+                -- Sharing the slot with a showing Rare/Quest icon: stack behind it,
+                -- overlapping by 40%, up or down in the Bottom slot (matches
+                -- NameplateFrame:UpdateFaction).
                 if fcCombined and classIcon:IsShown() then
-                    fcY = fcY + math.floor(reIconSz * 0.6 + 0.5)
+                    local step = math.floor(reIconSz * 0.6 + 0.5)
+                    fcY = fcY + ((fcPos == "bottom") and -step or step)
                 end
                 local mine = UnitFactionGroup("player")
                 local fac = (mine == "Horde") and "Alliance" or "Horde"
@@ -4344,10 +4346,11 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 plate:UpdateRaidIcon()
                 plate:UpdateClassification()
-                if plate.UpdateFaction then plate:UpdateFaction() end
+                -- Rare/Quest + Faction: the classification pass already ran it.
+                if not DBVal("classificationIncludeFaction") then plate:UpdateFaction() end
                 if ns.ApplySlotStrata then ns.ApplySlotStrata(plate) end
             end
-            if ns.NP_RefreshFriendlyFaction then ns.NP_RefreshFriendlyFaction() end
+            ns.NP_RefreshFriendlyFaction()
             UpdatePreview()
             EllesmereUI:RefreshPage()
         end
@@ -5455,11 +5458,13 @@ initFrame:SetScript("OnEvent", function(self)
                 pf._clickOutside = function(self, dt)
                     local down = IsMouseButtonDown("LeftButton")
                     if down and not wasDown then
-                        -- The Grow/Strata dropdown menus float outside this popup's rect; a click there must not count as click-outside.
+                        -- The Grow/Strata/second dropdown menus float outside this popup's rect; a click there must not count as click-outside.
                         local m = self._gDD and self._gDD._ddMenu
                         local m2 = self._stDD and self._stDD._ddMenu
+                        local m3 = self._d2DD and self._d2DD._ddMenu
                         local overMenu = (m and m:IsShown() and m:IsMouseOver())
                             or (m2 and m2:IsShown() and m2:IsMouseOver())
+                            or (m3 and m3:IsShown() and m3:IsMouseOver())
                         if not self:IsMouseOver() and not (cogPopupOwner and cogPopupOwner:IsMouseOver()) and not overMenu then
                             self:Hide()
                         end
@@ -6074,7 +6079,7 @@ initFrame:SetScript("OnEvent", function(self)
                     end
                 end
                 -- Rare/Quest Indicator: "Show In Instances" lifts the open-world-only gates (UpdateClassification render gate + IsQuestMob's tooltip-scan gate); RefreshQuestObjective wipes quest-mob caches AND re-runs UpdateClassification everywhere.
-                if element == "classification" then
+                if element == "classification" or element == "classfaction" then
                     opts.toggleLabel = "Show In Instances"
                     opts.toggleGet = function() return DBVal("classificationShowInInstances") == true end
                     opts.toggleSet = function(v)
@@ -6088,13 +6093,6 @@ initFrame:SetScript("OnEvent", function(self)
                 if element == "classfaction" then
                     local function refresh()
                         RefreshAllSlots()
-                        UpdatePreview()
-                    end
-                    opts.toggleLabel = "Show In Instances"
-                    opts.toggleGet = function() return DBVal("classificationShowInInstances") == true end
-                    opts.toggleSet = function(v)
-                        DB().classificationShowInInstances = v and true or false
-                        if ns.RefreshQuestObjective then ns.RefreshQuestObjective() end
                         UpdatePreview()
                     end
                     opts.dropdown2Label = "Icon Style"
@@ -6138,7 +6136,7 @@ initFrame:SetScript("OnEvent", function(self)
                     opts.toggleGet = function() return DBVal("factionOppositeOnly") == true end
                     opts.toggleSet = function(v) DB().factionOppositeOnly = v and true or false; refresh() end
                     opts.wrapLabel = "Players Only"
-                    opts.wrapTooltip = "Hide the badge on faction NPCs such as guards."
+                    opts.wrapTooltip = "Hide the faction badge on faction NPCs such as guards."
                     opts.wrapGet = function() return DBVal("factionPlayersOnly") == true end
                     opts.wrapSet = function(v) DB().factionPlayersOnly = v and true or false; refresh() end
                     opts.growthLabel = "PvP Flag"
@@ -10444,7 +10442,7 @@ initFrame:SetScript("OnEvent", function(self)
                 _db._activePreset = "ellesmereui"
                 _db._color_activePreset = "ellesmereui"
             end
-            ReloadUI()
+            EllesmereUI.RequestReload()
             return
         end
 

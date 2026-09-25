@@ -663,13 +663,14 @@ end
 local BAR_TYPE_SPECS = {}
 
 local function BuildBarTypeSpecMap()
-    -- Vanilla-based clients (WoW Forever) have classes but no specialization
-    -- API at all, so the map stays empty there.
-    if not (GetNumClasses and GetNumSpecializationsForClassID and GetSpecializationInfoForClassID) then return end
+    -- The spec positions below are retail's: WoW Forever's specs are its
+    -- vanilla talent trees, none of which has these resources, so the map
+    -- stays empty there.
+    if EllesmereUI.IS_FOREVER then return end
     for classID = 1, GetNumClasses() do
         local _, classFile = GetClassInfo(classID)
         if classFile then
-            local numSpecs = GetNumSpecializationsForClassID(classID) or 0
+            local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classID) or 0
             for specIndex = 1, numSpecs do
                 local specID = GetSpecializationInfoForClassID(classID, specIndex)
                 if specID then
@@ -1338,7 +1339,7 @@ local DEFAULTS = {
             gradientDir   = "HORIZONTAL",  -- "HORIZONTAL","VERTICAL"
             texture       = "none",
             showSpark     = false,
-            depleteFill   = false,  -- start full and deplete instead of filling up
+            depleteFill   = true,   -- start full and deplete instead of filling up
             idleShowFill  = nil,    -- true = idle row sits full of its fill colour
             hideWhenIdle  = false,  -- hide the whole bar while no swing is running
             showTime      = true,   -- remaining seconds on each row
@@ -1346,17 +1347,19 @@ local DEFAULTS = {
             showMH        = true,   -- per-row toggles (a row also needs a weapon in the slot)
             showOH        = true,
             showR         = true,
+            combineHands  = false,  -- off hand as a spark on the Main Hand bar instead of its own row
             textSize      = 11,
             rangeCheck    = true,   -- dim rows whose target is out of auto-attack range
             outOfRangeAlpha = 0.4,
             queueHighlight = true,  -- melee rows take the queue colour + spell name while an on-next-swing attack is queued
-            queueR = 1, queueG = 0.70, queueB = 0.20, queueA = 1,
+            queueR = 1, queueG = 0.70, queueB = 0.20, queueA = 1,   -- Heroic Strike / Maul
+            queueCleaveR = 0.95, queueCleaveG = 0.35, queueCleaveB = 0.25, queueCleaveA = 1,   -- Cleave
             borderSize    = 1,
             borderR       = 0, borderG = 0, borderB = 0, borderA = 1,
             borderTexture = "solid",
             bgR           = 0, bgG = 0, bgB = 0, bgA = 0.7,
             frameStrata   = "MEDIUM",
-            visibility    = "always",
+            visibility    = "in_combat",   -- swing_timer_visibility_in_combat_v1 moves old "always" profiles
             visHideHousing = false,
             visOnlyInstances = false,
             visHideMounted = false,
@@ -10456,7 +10459,7 @@ function ERB:ApplyAll()
     -- condition). Secure frame creation + RegisterStateDriver both need combat OOC.
     if not ERB._vehicleProxy then
         local function InitVehicleProxy()
-            if ERB._vehicleProxy or not EllesmereUI.SecureSnippetsOK() then return end
+            if ERB._vehicleProxy then return end
             ERB._vehicleProxy = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
             ERB._vehicleProxy:SetAttribute("_onstate-erbvehicle", [[
                 self:CallMethod("OnVehicleStateChanged", newstate)
@@ -11124,11 +11127,12 @@ end
 if EllesmereUI.RegisterVisEdge then
     EllesmereUI.RegisterVisEdge(function() UpdateVisibility() end)
 end
-if EllesmereUI.PartySpin_Create then
+do
     -- The backdrop, gap fills and ticks are drawn on the bar and cannot turn,
     -- and empty pips are transparent, so while spinning those layers fade out
     -- and each pip gets its own backing. Restore puts the saved alphas back.
     local resGroups, resList = {}, {}
+    local resGroup = { frames = resList }
     local savedA = {}          -- texture -> alpha before we faded it
     local backings = {}        -- pip/rune -> our backing texture
 
@@ -11151,9 +11155,8 @@ if EllesmereUI.PartySpin_Create then
         t:Show()
     end
 
-    EllesmereUI.PartySpinResource_Refresh = EllesmereUI.PartySpin_Create({
-        enabledKey = "partyModeSpinResource",
-        speedKey   = "partyModeSpinResourceSpeed",
+    EllesmereUI.PartySpin_Create({
+        target = "resource",
         collect = function()
             wipe(resGroups); wipe(resList)
             if secondaryFrame and not ns._erbArtOn then
@@ -11165,7 +11168,8 @@ if EllesmereUI.PartySpin_Create then
                     local r = runeFrames[i]
                     if r and r:IsShown() then resList[#resList + 1] = r end
                 end
-                resGroups[1] = { pivot = secondaryFrame, frames = resList }
+                resGroup.pivot = secondaryFrame
+                resGroups[1] = resGroup
             end
             return resGroups
         end,
@@ -11184,15 +11188,14 @@ if EllesmereUI.PartySpin_Create then
         end,
     })
 
-    local powGroups, powList = {}, {}
-    EllesmereUI.PartySpinPower_Refresh = EllesmereUI.PartySpin_Create({
-        enabledKey = "partyModeSpinPower",
-        speedKey   = "partyModeSpinPowerSpeed",
+    local powList = {}
+    local powGroups = { { pivot = UIParent, frames = powList } }
+    EllesmereUI.PartySpin_Create({
+        target = "power",
         collect = function()
-            wipe(powGroups); wipe(powList)
+            wipe(powList)
             if healthBar then powList[#powList + 1] = healthBar end
             if primaryBar then powList[#powList + 1] = primaryBar end
-            powGroups[1] = { pivot = UIParent, frames = powList }
             return powGroups
         end,
     })

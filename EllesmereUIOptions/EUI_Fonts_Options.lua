@@ -1090,6 +1090,7 @@ local TILE_BUILDERS = {
     EllesmereUIResourceBars      = { TileResourceBars,     "Health, power, class resource, cast and totem bar text" },
     EllesmereUIAuraBuffReminders = { TileAuraBuffReminders,"Reminder names, item counts and the mana warning" },
     EllesmereUIQoL               = { TileQoL,              "Alerts, trackers, battle res and popup text" },
+    EllesmereUIForeverEssentials = { TileFontOnly,         "Font face and outline only" },
     EllesmereUIBlizzardSkin      = { TileBlizzardSkin,     "Tooltip text scale, enchant text and dragonriding speed" },
     EllesmereUIFriends           = { TileFontOnly,         "Font face and outline only" },
     EllesmereUIMythicTimer       = { TileMythicTimer,      "M+ timer, objectives, thresholds and spell bar text" },

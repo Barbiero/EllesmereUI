@@ -1094,9 +1094,11 @@ initFrame:SetScript("OnEvent", function(self)
         side = side or "left"
 
         -- Mini frames (ToT/FoT/Pet) render no power bar, debuffs or castbar at
-        -- runtime, so the preview must match.
+        -- runtime, so the preview must match. WoW Forever's pet has power: its
+        -- bar draws here in the EUI look (the stock styles paint their own).
         local isMiniPreview = (unitKey == "targettarget" or unitKey == "focustarget" or unitKey == "pet")
         local noPowerPreview = isMiniPreview
+            and not (unitKey == "pet" and ns.UF_PetHasPower and not ResolveBlizzPreview(unitKey, settings))
         local noDebuffPreview = isMiniPreview
         local noCastbarPreview = isMiniPreview
 
@@ -2505,6 +2507,18 @@ initFrame:SetScript("OnEvent", function(self)
         pf._pvElite = combatIndHolder:CreateTexture(nil, "OVERLAY", nil, 6)
         pf._pvElite:SetAtlas("nameplates-icon-elite-gold")
         pf._pvElite:Hide()
+        -- WoW Forever: the pet's happiness icon (the happy face as the sample),
+        -- placed each Update beside the frame as the live icon is. It sits on
+        -- its own frame so the page's click overlay shows and hides with it.
+        if unitKey == "pet" and EllesmereUI.IS_FOREVER == true then
+            local happyInd = CreateFrame("Frame", nil, pf)
+            happyInd:SetFrameLevel(pf:GetFrameLevel() + 20)
+            local happyTex = happyInd:CreateTexture(nil, "OVERLAY")
+            happyTex:SetAllPoints()
+            happyTex:SetAtlas("UI-PetHappiness")
+            happyInd:Hide()
+            pf._happyInd = happyInd
+        end
         pf:SetSize(totalW, totalH)
 
         -- Blizzard Style: the stock look laid over the built mock at the end of
@@ -2754,9 +2768,12 @@ initFrame:SetScript("OnEvent", function(self)
                     pm:SetPoint("TOPLEFT", pw, "TOPLEFT", G.power.mx, G.power.my)
                     ns.UF_SetMask(fill, pm)
                     ns.UF_SetMask(bg, pm)
+                    ns.UF_SetMask(pf._pvCostSeg, pm)
                 elseif pm then
                     if fill then pcall(fill.RemoveMaskTexture, fill, pm) end
                     if bg then pcall(bg.RemoveMaskTexture, bg, pm) end
+                    local cs = pf._pvCostSeg
+                    if cs then pcall(cs.RemoveMaskTexture, cs, pm) end
                 end
                 ns.UF_BlizzBarShadow(pw, pMaskOK and pm or nil, G.power.h)
                 if isMini or (s.powerHeight or 6) > 0 then pw:Show() end
@@ -3447,18 +3464,18 @@ initFrame:SetScript("OnEvent", function(self)
                     pf._powerFill:SetAlpha(s.powerGradientEnabled and 1 or pOpacity)
                 end
                 if pf._powerBg then pf._powerBg:SetColorTexture(pvPbR, pvPbG, pvPbB, 1) end
-                -- Spell Cost Prediction eyeball (player): the last third of the
-                -- fill in the prediction color, as during a cast.
-                if unitKey == "player" and pf._powerFill and ns._ufShowPowerCostPreview
-                   and s.powerCostPrediction == true then
+                -- Spell Cost Prediction eyeball (player, WoW Forever): the last
+                -- third of the fill in the prediction color, as during a cast.
+                -- Mana only, as live.
+                if unitKey == "player" and EllesmereUI.IS_FOREVER == true and pf._powerFill
+                   and ns._ufShowPowerCostPreview and s.powerCostPrediction == true
+                   and UnitPowerType("player") == Enum.PowerType.Mana then
                     local seg = pf._pvCostSeg
                     if not seg then
                         seg = power:CreateTexture(nil, "ARTWORK", nil, 2)
                         pf._pvCostSeg = seg
                     end
-                    local r, g, b
-                    if ns.UF_PowerCostColor then r, g, b = ns.UF_PowerCostColor(s)
-                    else r, g, b = 0.40, 0.70, 1 end
+                    local r, g, b = ns.UF_PowerCostColor(s)
                     local curTP = (ns.healthBarTextures or {})[s.healthBarTexture or db.profile.healthBarTexture or "none"]
                     if curTP then
                         seg:SetTexture(curTP)
@@ -4584,6 +4601,10 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end
             if blizzG then pf._blizzApply(s, blizzG, blizzMirror, blizzExtras, ch, stackDrop) end
+            -- Spell cost preview: a third of the fill as the stock styles left it.
+            if pf._pvCostSeg and pf._pvCostSeg:IsShown() and pf._powerFill then
+                pf._pvCostSeg:SetWidth(math.floor(pf._powerFill:GetWidth() / 3 + 0.5))
+            end
 
             -- Determine how much extra space buffs/debuffs need above/below the frame
             local auraTopPad = 0  -- extra space above frame (push preview down)
@@ -4616,6 +4637,10 @@ initFrame:SetScript("OnEvent", function(self)
             -- Floating "top" class power pips
             if cpTopH > 0 then
                 detTopExtra = detTopExtra + cpTopH
+            end
+            -- WoW Forever pet happiness icon centred above the frame
+            if pf._happyInd and s.happinessEnabled ~= false and s.happinessAlign == "top" then
+                detTopExtra = detTopExtra + math.max(0, (s.happinessSize or 20) + (s.happinessY or 0))
             end
             auraTopPad = auraTopPad + detTopExtra
 
@@ -4718,7 +4743,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- Opposite Faction shows).
             if factionInd then
                 local fMode = s.factionIndicatorMode or "off"
-                local fEye = EllesmereUI._ufPvEyes and EllesmereUI._ufPvEyes.faction
+                local fEye = ns._ufPvEyes and ns._ufPvEyes.faction
                 if (unitKey == "player" or unitKey == "target") and fMode ~= "off" and fEye then
                     local mine = UnitFactionGroup("player")
                     local fac = mine
@@ -4752,7 +4777,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- live frames: raid marker centred on a frame corner, the other two on
             -- a health-bar corner or the portrait.
             do
-                local eyes = EllesmereUI._ufPvEyes or {}
+                local eyes = ns._ufPvEyes or {}
                 local isPT = unitKey == "player" or unitKey == "target"
                 local function PlaceCorner(tex, pos, ox, oy)
                     tex:ClearAllPoints()
@@ -4813,6 +4838,28 @@ initFrame:SetScript("OnEvent", function(self)
             -- Click overlays follow their badges (see the hit-overlay setup).
             if pf._badgeOv then
                 for tex, ov in pairs(pf._badgeOv) do ov:SetShown(tex:IsShown()) end
+            end
+            -- WoW Forever pet happiness icon: outside the frame's left or right
+            -- edge, or centred above it, moved by the offsets (as live).
+            if pf._happyInd then
+                local hInd = pf._happyInd
+                if s.happinessEnabled ~= false then
+                    local hSz = s.happinessSize or 20
+                    local hX, hY = s.happinessX or 0, s.happinessY or 0
+                    local hAl = s.happinessAlign or "right"
+                    hInd:SetSize(hSz, hSz)
+                    hInd:ClearAllPoints()
+                    if hAl == "left" then
+                        hInd:SetPoint("RIGHT", barArea, "LEFT", hX, hY)
+                    elseif hAl == "top" then
+                        hInd:SetPoint("BOTTOM", barArea, "TOP", hX, hY)
+                    else
+                        hInd:SetPoint("LEFT", barArea, "RIGHT", hX, hY)
+                    end
+                    hInd:Show()
+                else
+                    hInd:Hide()
+                end
             end
             -- Sync disabled overlay AFTER pf is fully sized/positioned
             if not isEnabled then
@@ -5121,6 +5168,9 @@ initFrame:SetScript("OnEvent", function(self)
         -- with the frame for the same reason: copying the modifier to a frame that kept
         -- its own mode changes how that mode reads.
         if key == "barVisibility" or key == "visibilityMatch" or key:sub(1, 1) == "_" then return false end
+        -- WoW Forever: the pet's power bar position has no counterpart on the
+        -- other small frames (theirs never shows), so it stays with the pet.
+        if key == "powerPosition" and ns.UF_PetHasPower and groupUnits == MINI_GROUP_ORDER then return false end
         local sup = UNIT_SUPPORTS[key]
         if sup then
             for _, u in ipairs(groupUnits) do
@@ -5250,6 +5300,21 @@ initFrame:SetScript("OnEvent", function(self)
             local v = UNIT_DB_MAP[selectedUnit]()[key]
             if v ~= nil then return v end
             return default
+        end
+        -- True while one of the unit's text slots shows its level (Level,
+        -- Level | Name, Name | Level). The Level Text: Difficulty Color row is
+        -- built only then, so the text setters rebuild the page when it flips.
+        local SShowsLevel
+        do
+            local slots = { "leftTextContent", "rightTextContent", "centerTextContent", "extraTextContent" }
+            local levelText = { level = true, levelname = true, namelevel = true }
+            SShowsLevel = function()
+                local d = UNIT_DB_MAP[selectedUnit]()
+                for i = 1, #slots do
+                    if levelText[d[slots[i]]] then return true end
+                end
+                return false
+            end
         end
         -- Set that also writes to the current unit (for UNIT_SUPPORTS keys)
         local function SSetSupported(key, val)
@@ -7232,23 +7297,25 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Left Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("leftTextContent", "name") end,
               setValue=function(v)
+                  local hadLevel = SShowsLevel()
                   SSet("leftTextContent", v)
                   if v ~= "none" then
                       if SGet("rightTextContent") == v then SSet("rightTextContent", "none") end
                       if SGet("centerTextContent") == v then SSet("centerTextContent", "none") end
                   end
-                  UpdatePreview(); EllesmereUI:RefreshPage()
+                  UpdatePreview(); EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end,
             },
             { type="dropdown", text="Right Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("rightTextContent", "both") end,
               setValue=function(v)
+                  local hadLevel = SShowsLevel()
                   SSet("rightTextContent", v)
                   if v ~= "none" then
                       if SGet("leftTextContent") == v then SSet("leftTextContent", "none") end
                       if SGet("centerTextContent") == v then SSet("centerTextContent", "none") end
                   end
-                  UpdatePreview(); EllesmereUI:RefreshPage()
+                  UpdatePreview(); EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end,
             });  y = y - h
         -- Sync icon: Left Text (left)
@@ -7606,14 +7673,18 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Center Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("centerTextContent", "none") end,
               setValue=function(v)
+                  local hadLevel = SShowsLevel()
                   SSet("centerTextContent", v)
                   ReloadAndUpdate(); UpdatePreview()
+                  EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end },
             { type="dropdown", text="Extra Text (full length)", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("extraTextContent", "none") end,
               setValue=function(v)
+                  local hadLevel = SShowsLevel()
                   SSet("extraTextContent", v)
                   ReloadAndUpdate(); UpdatePreview()
+                  EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end });  y = y - h
         -- Sync icon: Center Text (left)
         if not EllesmereUI._prebuilding then
@@ -7940,10 +8011,32 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
+        -- Level text in Blizzard's difficulty colors: the level part of the
+        -- Level, Level | Name and Name | Level texts, so the row exists only
+        -- while one of the unit's text slots shows one. It sits above Show
+        -- Level, whose blank slot stays last in the section.
+        if SShowsLevel() then
+            local _
+            _, h = W:DualRow(parent, y,
+                { type="toggle", text="Level Text: Difficulty Color",
+                  tooltip="Colors level text by difficulty, from grey (trivial) through green, yellow and orange to red (5+ levels above you).",
+                  getValue=function() return SVal("levelDifficultyColor", false) == true end,
+                  setValue=function(v)
+                      SSet("levelDifficultyColor", v); UpdatePreview()
+                      EllesmereUI:RefreshPage()
+                  end },
+                { type="toggle", text="Level Text: Include Friendly",
+                  tooltip="Friendly units get their level's color too, instead of gold.",
+                  disabled=function() return SVal("levelDifficultyColor", false) ~= true end,
+                  disabledTooltip="Level Text: Difficulty Color",
+                  getValue=function() return SVal("levelDifficultyColorFriendly", false) == true end,
+                  setValue=function(v) SSet("levelDifficultyColorFriendly", v); UpdatePreview() end });  y = y - h
+        end
+
         -- Blizzard Style: the stock level number in the frame's level circle,
-        -- with its size and offsets on a cog. The row is the preview level
-        -- text's click target (stashed on the page: the targets table at the
-        -- end reads it).
+        -- with its size, offsets and difficulty colouring on a cog. The row is
+        -- the preview level text's click target (stashed on the page: the
+        -- targets table at the end reads it).
         if EllesmereUI.BlizzStyle.Get("unitframes") then
             parent._ufLevelRow, h = W:DualRow(parent, y,
                 { type="toggle", text="Show Level",
@@ -7967,29 +8060,16 @@ initFrame:SetScript("OnEvent", function(self)
                         { type="slider", label="Y Offset", min=-150, max=150, step=1,
                           get=function() return SVal("blizzLevelY", 0) end,
                           set=function(v) SSet("blizzLevelY", v); UpdatePreview() end },
+                        -- The player's own level never takes a difficulty colour.
+                        { type="toggle", label="Difficulty Color",
+                          tooltip="Colors an attackable unit's level by difficulty, as the default UI does.",
+                          disabled=function() return selectedUnit == "player" end,
+                          disabledTooltip="This option does not apply to the player frame.",
+                          get=function() return SVal("blizzLevelDifficultyColor", true) end,
+                          set=function(v) SSet("blizzLevelDifficultyColor", v); UpdatePreview() end },
                     },
                 })
             end
-        end
-
-        -- Level text in Blizzard's difficulty colors: the level part of the
-        -- Level, Level | Name and Name | Level texts.
-        do
-            local _
-            _, h = W:DualRow(parent, y,
-                { type="toggle", text="Level Text: Difficulty Color",
-                  tooltip="Colors level text by difficulty, from grey (trivial) through green, yellow and orange to red (5+ levels above you).",
-                  getValue=function() return SVal("levelDifficultyColor", false) == true end,
-                  setValue=function(v)
-                      SSet("levelDifficultyColor", v); UpdatePreview()
-                      EllesmereUI:RefreshPage()
-                  end },
-                { type="toggle", text="Level Text: Include Friendly",
-                  tooltip="Friendly units get their level's color too, instead of gold.",
-                  disabled=function() return SVal("levelDifficultyColor", false) ~= true end,
-                  disabledTooltip="Level Text: Difficulty Color",
-                  getValue=function() return SVal("levelDifficultyColorFriendly", false) == true end,
-                  setValue=function(v) SSet("levelDifficultyColorFriendly", v); UpdatePreview() end });  y = y - h
         end
 
         _, h = W:Spacer(parent, y, 20); y = y - h
@@ -8762,10 +8842,10 @@ initFrame:SetScript("OnEvent", function(self)
             EllesmereUI.RegisterWidgetRefresh(function() updatePBSwatch() end)
         end
 
-        -- Spell Cost Prediction (player only; the page rebuilds on unit change):
-        -- toggle with a preview eyeball | its color. Above Power Type, which keeps
-        -- its height when hidden.
-        if selectedUnit == "player" then
+        -- Spell Cost Prediction (player only, WoW Forever only; the page rebuilds
+        -- on unit change): toggle with a preview eyeball | its color. Above Power
+        -- Type, which keeps its height when hidden.
+        if selectedUnit == "player" and EllesmereUI.IS_FOREVER == true then
             local costRow
             costRow, h = W:DualRow(parent, y,
                 { type="toggle", text="Spell Cost Prediction",
@@ -8776,11 +8856,8 @@ initFrame:SetScript("OnEvent", function(self)
                   disabled=function() return SVal("powerCostPrediction", false) ~= true end,
                   disabledTooltip="Spell Cost Prediction",
                   getValue=function()
-                      if ns.UF_PowerCostColor then
-                          local r, g, b = ns.UF_PowerCostColor(SDB())
-                          return r, g, b
-                      end
-                      return 0.40, 0.70, 1
+                      local r, g, b = ns.UF_PowerCostColor(SDB())
+                      return r, g, b
                   end,
                   setValue=function(r, g, b)
                       SSet("powerCostColor", { r=r, g=g, b=b }); UpdatePreview()
@@ -8836,15 +8913,22 @@ initFrame:SetScript("OnEvent", function(self)
                 },
             }
             local classAlts = SPEC_POWER_ALTS[playerClass]
-            if classAlts then
-                local spec = GetSpecialization and GetSpecialization()
-                local data = spec and classAlts[spec]
+            -- Retail only: these alternatives are retail spec resources, and the
+            -- WoW Forever classes have no specs to key them on.
+            if classAlts and not EllesmereUI.IS_FOREVER then
+                local GetSpec = C_SpecializationInfo.GetSpecialization
+                -- Labels follow the CURRENT spec: the page is built once and
+                -- cached, so they are refilled on every spec change (see
+                -- UpdatePowerTypeRow), never only at build time.
                 local ptValues = {}
                 local ptOrder  = { "default", "alt" }
-                if data then
-                    ptValues["default"] = data[1]
-                    ptValues["alt"]     = data[2]
+                local function FillPowerTypeValues(s)
+                    local data = s and classAlts[s]
+                    ptValues["default"] = data and data[1] or nil
+                    ptValues["alt"]     = data and data[2] or nil
                 end
+                local labelSpec = GetSpec()
+                FillPowerTypeValues(labelSpec)
 
                 local sharedPowerRow5
                 sharedPowerRow5, h = W:DualRow(parent, y,
@@ -8855,7 +8939,7 @@ initFrame:SetScript("OnEvent", function(self)
                       -- classes (slot 3 is Guardian, Shadow AND Augmentation).
                       -- classAlts stays index-keyed, it is already per class.
                       getValue = function()
-                          local s = GetSpecialization and GetSpecialization()
+                          local s = GetSpec()
                           if not s or not classAlts[s] then return "default" end
                           local sid = C_SpecializationInfo
                               and C_SpecializationInfo.GetSpecializationInfo(s)
@@ -8865,7 +8949,7 @@ initFrame:SetScript("OnEvent", function(self)
                           return "default"
                       end,
                       setValue = function(v)
-                          local s = GetSpecialization and GetSpecialization()
+                          local s = GetSpec()
                           if not s then return end
                           local sid = C_SpecializationInfo
                               and C_SpecializationInfo.GetSpecializationInfo(s)
@@ -8882,7 +8966,13 @@ initFrame:SetScript("OnEvent", function(self)
                     { type="label", text="" }); y = y - h
 
                 local function UpdatePowerTypeRow()
-                    local s = GetSpecialization and GetSpecialization()
+                    local s = GetSpec()
+                    if s ~= labelSpec then
+                        labelSpec = s
+                        FillPowerTypeValues(s)
+                        local dd = sharedPowerRow5._leftRegion and sharedPowerRow5._leftRegion._control
+                        if dd and dd._invalidateMenu then dd._invalidateMenu() end
+                    end
                     if selectedUnit == "player" and s and classAlts[s] then
                         sharedPowerRow5:Show()
                     else
@@ -12623,7 +12713,7 @@ initFrame:SetScript("OnEvent", function(self)
         local healPredRow
         healPredRow, h = W:DualRow(parent, y,
             { type="toggle", text="Heal Prediction",
-              tooltip="Shows incoming heals past the health bar: yours, then other players'. Boss Frames use the Target setting.",
+              tooltip="Shows incoming heals past the health bar: yours, then other players'.",
               getValue=function() return SValSupported("healPrediction", false) == true end,
               setValue=function(v) SSetSupported("healPrediction", v); EllesmereUI:RefreshPage() end },
             { type="slider", text="Prediction Opacity", min=5, max=100, step=1,
@@ -12944,14 +13034,14 @@ initFrame:SetScript("OnEvent", function(self)
         end -- _showAbsorbsCombat
 
         -- Preview eye for an indicator row, like the Combat Indicator's: toggles
-        -- EllesmereUI._ufPvEyes[key], which the preview reads. The raid marker
-        -- picks a random marker each time it is switched on. (A table field, not
-        -- a local: this builder is long.)
-        EllesmereUI._ufPvEyes = EllesmereUI._ufPvEyes or {}
-        EllesmereUI._ufAddPvEye = function(rgn, key, what)
+        -- ns._ufPvEyes[key], which the preview reads. The raid marker picks a
+        -- random marker each time it is switched on. (Module-namespace fields,
+        -- not locals: this builder is long.)
+        ns._ufPvEyes = ns._ufPvEyes or {}
+        ns._ufAddPvEye = function(rgn, key, what)
             if EllesmereUI._prebuilding or not rgn then return end
             if selectedUnit ~= "player" and selectedUnit ~= "target" then return end
-            local eyes = EllesmereUI._ufPvEyes
+            local eyes = ns._ufPvEyes
             local eyeBtn = CreateFrame("Button", nil, rgn)
             eyeBtn:SetSize(26, 26)
             eyeBtn:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -13082,11 +13172,11 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
-        EllesmereUI._ufAddPvEye(sharedAddRow4._leftRegion, "raid", "raid marker")
+        ns._ufAddPvEye(sharedAddRow4._leftRegion, "raid", "raid marker")
 
         -- Row 5: Leader Indicator toggle | Leader Icon Size slider + inline directions cog (X/Y)
         -- Visible for player and target.
-        local sharedAddRow5
+        local sharedAddRow5, BuildLeaderSync
         local function leaderIndOff()
             return SValSupported("leaderIndicatorEnabled", true) == false
         end
@@ -13127,7 +13217,8 @@ initFrame:SetScript("OnEvent", function(self)
                     },
                 })
             end
-            local function BuildLeaderSync(rgn, key, default, tooltip)
+            -- Player + target sync link; the Faction Indicator row below reuses it.
+            BuildLeaderSync = function(rgn, key, default, tooltip)
                 local function GetValue(unit)
                     local v = UNIT_DB_MAP[unit]()[key]
                     if v == nil then return default end
@@ -13170,7 +13261,7 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         if sharedAddRow5 then
-            EllesmereUI._ufAddPvEye(sharedAddRow5._leftRegion, "leader", "leader indicator")
+            ns._ufAddPvEye(sharedAddRow5._leftRegion, "leader", "leader indicator")
         end
 
         -- Row 5b: Elite/Rare Indicator (+ Show-in-Instances cog) | Icon Size (+ X/Y
@@ -13224,7 +13315,7 @@ initFrame:SetScript("OnEvent", function(self)
                     },
                 })
             end
-            EllesmereUI._ufAddPvEye(eliteRow._leftRegion, "elite", "elite/rare indicator")
+            ns._ufAddPvEye(eliteRow._leftRegion, "elite", "elite/rare indicator")
             parent._ufEliteRow = eliteRow
         end
 
@@ -13274,7 +13365,7 @@ initFrame:SetScript("OnEvent", function(self)
                 }
                 if isTarget then
                     rows[#rows + 1] = { type="toggle", label="Players Only",
-                      tooltip="Hide the badge on faction NPCs such as guards.",
+                      tooltip="Hide the faction badge on faction NPCs such as guards.",
                       get=function() return SValSupported("factionIndicatorPlayersOnly", false) == true end,
                       set=function(v) SSetSupported("factionIndicatorPlayersOnly", v) end }
                 end
@@ -13305,7 +13396,13 @@ initFrame:SetScript("OnEvent", function(self)
                     },
                 })
             end
-            EllesmereUI._ufAddPvEye(factionRow._leftRegion, "faction", "faction indicator")
+            -- Size only: the player's mode list (Off/On) differs from the target's
+            -- (with Opposite Faction), so the mode has no clean cross-frame copy.
+            if not EllesmereUI._prebuilding then
+                BuildLeaderSync(factionRow._rightRegion, "factionIndicatorSize", 18,
+                    "Apply Faction Icon Size to all Frames")
+            end
+            ns._ufAddPvEye(factionRow._leftRegion, "faction", "faction indicator")
             parent._ufFactionRow = factionRow
         end
 
@@ -14604,12 +14701,16 @@ initFrame:SetScript("OnEvent", function(self)
                         { type="slider", label="Y Offset", min=-150, max=150, step=1,
                           get=function() return MVal("blizzLevelY", 0) end,
                           set=function(v) MSet("blizzLevelY", v) end },
+                        { type="toggle", label="Difficulty Color",
+                          tooltip="Colors an attackable unit's level by difficulty, as the default UI does.",
+                          get=function() return MVal("blizzLevelDifficultyColor", true) end,
+                          set=function(v) MSet("blizzLevelDifficultyColor", v) end },
                     },
                 })
             end
         end
 
-        -- POWER BAR section (only for mini units that render a power bar, i.e. boss).
+        -- POWER BAR section (mini units with a power bar: boss, and the pet on WoW Forever).
         -- Fill always uses the unit's power color (powerPercentPowerColor default on);
         -- a height of 0 effectively hides the bar.
         if opts.hasPowerBar then
@@ -15063,8 +15164,66 @@ initFrame:SetScript("OnEvent", function(self)
             return portraitRow, h
         end
 
+        -- WoW Forever: the pet has power (its POWER BAR section exists in the
+        -- EUI look only; the stock styles paint their own stock bar) and
+        -- hunter pets track happiness (PET HAPPINESS, below the power bar).
+        -- Retail builds neither.
+        local petOpts, petPower, happyHeader, happyRow
+        if EllesmereUI.IS_FOREVER == true then
+            petPower = ns.UF_PetHasPower and not EllesmereUI.BlizzStyle.Get("unitframes")
+            local P = db.profile.pet
+            local function happyOff() return P.happinessEnabled == false end
+            -- The live icon repaints itself; the preview mirrors it.
+            local function happyApply() ns.UF_ApplyPetHappiness(); UpdatePreview() end
+            petOpts = { hasPowerBar = petPower, afterPowerRow = function(Ww, pp, yy)
+                local hh
+                happyHeader, hh = Ww:SectionHeader(pp, "PET HAPPINESS", yy);  yy = yy - hh
+
+                -- Row 1: Show Happiness | Size
+                happyRow, hh = Ww:DualRow(pp, yy,
+                    { type="toggle", text="Show Happiness",
+                      tooltip="Shows your hunter pet's happiness beside the pet frame.",
+                      getValue=function() return P.happinessEnabled ~= false end,
+                      setValue=function(v)
+                          P.happinessEnabled = v
+                          happyApply()
+                          EllesmereUI:RefreshPage()
+                      end },
+                    { type="slider", text="Size", min=10, max=64, step=1,
+                      disabled=happyOff, disabledTooltip="Show Happiness",
+                      getValue=function() return P.happinessSize or 20 end,
+                      setValue=function(v) P.happinessSize = v; happyApply() end });  yy = yy - hh
+
+                -- Row 2: Position (+ offsets cog) | blank (odd last slot)
+                local posRow
+                posRow, hh = Ww:DualRow(pp, yy,
+                    { type="dropdown", text="Position",
+                      values={ left="Left", right="Right", top="Top" }, order={ "left", "right", "top" },
+                      disabled=happyOff, disabledTooltip="Show Happiness",
+                      getValue=function() return P.happinessAlign or "right" end,
+                      setValue=function(v) P.happinessAlign = v; happyApply() end },
+                    EllesmereUI.BlankRowCfg());  yy = yy - hh
+                if not EllesmereUI._prebuilding then
+                    EllesmereUI.BuildInlineCog(posRow._leftRegion, {
+                        icon = EllesmereUI.DIRECTIONS_ICON,
+                        disabled = happyOff, disabledTooltip = "Show Happiness",
+                        title = "Happiness Position",
+                        rows = {
+                            { type="slider", label="X Offset", min=-100, max=100, step=1,
+                              get=function() return P.happinessX or 0 end,
+                              set=function(v) P.happinessX = v; happyApply() end },
+                            { type="slider", label="Y Offset", min=-100, max=100, step=1,
+                              get=function() return P.happinessY or 0 end,
+                              set=function(v) P.happinessY = v; happyApply() end },
+                        },
+                    })
+                end
+                return yy
+            end }
+        end
+
         local displayHeader, sizeRow, textHeader, textRow
-        y, displayHeader, sizeRow, textHeader, textRow = BuildMiniTextAndSize(W, parent, y, db.profile.pet, "pet", enableRow)
+        y, displayHeader, sizeRow, textHeader, textRow = BuildMiniTextAndSize(W, parent, y, db.profile.pet, "pet", enableRow, nil, petOpts)
 
         -- Store click targets for hover highlight system
         parent._ufClickTargets = {
@@ -15073,6 +15232,16 @@ initFrame:SetScript("OnEvent", function(self)
             nameText   = { section = textHeader or displayHeader,  target = textRow or sizeRow },
             healthText = { section = textHeader or displayHeader,  target = textRow or sizeRow },
         }
+        -- WoW Forever: the preview's power bar, power text and happiness icon
+        -- (only once the sections exist: an inactive frame builds none).
+        if happyRow then
+            local tg = parent._ufClickTargets
+            if petPower then
+                tg.powerBar     = { section = parent._powerHeaderFrame, target = parent._powerHeightRow, slotSide = "left" }
+                tg.powerBarText = { section = parent._powerHeaderFrame, target = parent._powerTextRow, slotSide = "left" }
+            end
+            tg.petHappiness = { section = happyHeader, target = happyRow, slotSide = "left" }
+        end
 
         return abs(y)
     end
@@ -16562,6 +16731,11 @@ initFrame:SetScript("OnEvent", function(self)
             local baseLevel = (pv._health and pv._health:GetFrameLevel() or 20) + 15
             local textLevel = baseLevel + 10
             if pv._health then CreateHitOverlay(pv._health, "healthBar", false, baseLevel, { hlAnchor = pv._border or pv._health }) end
+            -- WoW Forever's pet: power bar, power text and happiness icon (the
+            -- other mini previews build none of them).
+            if pv._power then CreateHitOverlay(pv._power, "powerBar", false, baseLevel) end
+            if pv._ppFS and pv._ppFS:IsShown() then CreateHitOverlay(pv._ppFS, "powerBarText", true, textLevel) end
+            if pv._happyInd then CreateHitOverlay(pv._happyInd, "petHappiness", false, baseLevel + 20) end
             if pv._portraitFrame and pv._portraitFrame:IsShown() then CreateHitOverlay(pv._portraitFrame, "portrait", false, baseLevel) end
             if pv._castbar then
                 local castLevel = pv._castbar:GetFrameLevel() + 20
@@ -16822,7 +16996,7 @@ initFrame:SetScript("OnEvent", function(self)
         end,
         onReset     = function()
             db:ResetProfile()
-            ReloadUI()
+            -- No reload here: the footer Reset popup (reload = true) reloads after this returns.
         end,
         -- Tears down Boss Preview on module switch (RegisterOnHide above
         -- only covers closing the whole options window).
@@ -16845,7 +17019,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         if msg == "reset" then
             db:ResetProfile()
-            ReloadUI()
+            EllesmereUI.RequestReload()
             return
         end
 

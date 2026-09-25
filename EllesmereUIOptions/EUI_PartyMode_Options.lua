@@ -156,23 +156,48 @@ do
             nil
         );  y = y - h
 
-        -- Row 3b: Spinning Action Bars (+ speed cog)
-        -- The behaviour lives in EllesmereUIActionBars (ns.PartySpin_Refresh);
-        -- this page owns only the shared EllesmereUIDB keys, so the option is a
-        -- harmless no-op when that addon is disabled.
+        -- Row 3b: Spinning (checkbox dropdown + speed cog). Full-width row
+        -- (nil right slot expands the left region), matching the rest of
+        -- this section. Each target's spin lives in its own module; this page
+        -- owns only the shared EllesmereUIDB keys, so a target whose addon is
+        -- disabled is a harmless no-op. partyModeSpinBars is a boolean (Action
+        -- Bars only) or a per-target table: EllesmereUI.PartySpinOn reads
+        -- both and EllesmereUI.PartySpinSet turns a boolean into the table on
+        -- its first write, with the same meaning. One speed drives every target.
         do
+            local SPIN_ITEMS = {
+                { key = "actionBars", label = "Action Bars" },
+                { key = "dataBars",   label = "Data Bars" },
+                { key = "unitFrames", label = "Unit Frames" },
+                { key = "resource",   label = "Resource Bars" },
+                { key = "power",      label = "Power Bars" },
+            }
             local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Action Bars", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinBars or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinBars = v
-                    if EllesmereUI.PartySpin_Refresh then EllesmereUI.PartySpin_Refresh() end
-                end,
-                "Slowly orbits your action bar buttons around each bar's centre while Party Mode is active. The buttons stay upright, so clicking, cooldowns and keybinds are unaffected. Pauses in combat, where moving a button is blocked."
+            spinRow, h = W:DualRow(parent, y,
+                { type="dropdown", text="Spinning",
+                  tooltip="Slowly orbits the checked elements while Party Mode is active; they stay upright and pause in combat.",
+                  values={ ["_placeholder"]="..." }, order={ "_placeholder" },
+                  getValue=function() return "_placeholder" end,
+                  setValue=function() end },
+                nil
             );  y = y - h
             if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
+                local rgn = spinRow._leftRegion
+                if rgn._control then rgn._control:Hide() end
+                local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                    rgn, 200, rgn:GetFrameLevel() + 2,
+                    SPIN_ITEMS,
+                    -- The setting itself, whether or not Party Mode is on.
+                    function(k) return EllesmereUI.PartySpinOn(k, true) end,
+                    function(k, v)
+                        EllesmereUI.PartySpinSet(k, v)
+                        EllesmereUI.PartySpin_RefreshAll()
+                    end)
+                PP.Point(cbDD, "RIGHT", rgn, "RIGHT", -20, 0)
+                rgn._control = cbDD
+                rgn._lastInline = nil
+                EllesmereUI.RegisterWidgetRefresh(cbDDRefresh)
+                EllesmereUI.BuildInlineCog(rgn, {
                     title = "Spin",
                     rows = {
                         { type="slider", label="Speed", min=0, max=720, step=10,
@@ -185,257 +210,10 @@ do
                           set=function(v)
                               if not EllesmereUIDB then EllesmereUIDB = {} end
                               EllesmereUIDB.partyModeSpinSpeed = v
+                              EllesmereUI.PartySpin_RefreshAll()
                           end },
                     },
                 })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing: the toggle control is 40 wide
-                -- at RIGHT -20, and cogs sit 9px left of the control's edge
-                -- (same as the General options rows).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-            end
-        end
-
-        -- Row 3c: Spinning Cooldown Manager (+ speed cog)
-        -- The behaviour lives in EllesmereUICooldownManager
-        -- (ns.PartySpinCDM_Refresh); this page owns only the shared
-        -- EllesmereUIDB keys, so the option is a harmless no-op when that
-        -- addon is disabled.
-        do
-            local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Cooldown Manager", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinCDM or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinCDM = v
-                    if EllesmereUI.PartySpinCDM_Refresh then EllesmereUI.PartySpinCDM_Refresh() end
-                end,
-                "Slowly orbits your Cooldown Manager icons around each bar's centre while Party Mode is active. The icons stay upright, so cooldowns, charges and glows are unaffected. Pauses in combat."
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Spin",
-                    rows = {
-                        { type="slider", label="Speed", min=0, max=720, step=10,
-                          tooltip="Degrees per second. 360 is one full turn a second; 0 parks the icons where they are.",
-                          get=function()
-                              local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinCDMSpeed
-                              if v == nil then v = 120 end
-                              return v
-                          end,
-                          set=function(v)
-                              if not EllesmereUIDB then EllesmereUIDB = {} end
-                              EllesmereUIDB.partyModeSpinCDMSpeed = v
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing (matches the action bar row).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-            end
-        end
-
-        -- Row 3d: Spinning Data Bars (+ speed cog)
-        -- The behaviour lives in EllesmereUIDataBars
-        -- (EllesmereUI.PartySpinDataBars_Refresh, via the shared spin engine); this page owns only the shared
-        -- EllesmereUIDB keys, so the option is a harmless no-op when that
-        -- addon is disabled.
-        do
-            local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Data Bars", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinDataBars or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinDataBars = v
-                    if EllesmereUI.PartySpinDataBars_Refresh then EllesmereUI.PartySpinDataBars_Refresh() end
-                end,
-                "Slowly orbits the blocks on your data bars around each bar's centre while Party Mode is active. The blocks stay upright, so clicking and tooltips are unaffected. Pauses in combat."
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Spin",
-                    rows = {
-                        { type="slider", label="Speed", min=0, max=720, step=10,
-                          tooltip="Degrees per second. 360 is one full turn a second; 0 parks the blocks where they are.",
-                          get=function()
-                              local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinDataBarsSpeed
-                              if v == nil then v = 120 end
-                              return v
-                          end,
-                          set=function(v)
-                              if not EllesmereUIDB then EllesmereUIDB = {} end
-                              EllesmereUIDB.partyModeSpinDataBarsSpeed = v
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing (matches the action bar row).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-            end
-        end
-
-        -- Row 3e: Spinning Unit Frames (+ speed cog)
-        -- The behaviour lives in EllesmereUIUnitFrames
-        -- (EllesmereUI.PartySpinUF_Refresh, via the shared spin engine); this page owns only the shared
-        -- EllesmereUIDB keys, so the option is a harmless no-op when that
-        -- addon is disabled.
-        do
-            local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Unit Frames", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinUF or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinUF = v
-                    if EllesmereUI.PartySpinUF_Refresh then EllesmereUI.PartySpinUF_Refresh() end
-                end,
-                "Slowly orbits your unit frames around the centre of the screen while Party Mode is active. The frames stay upright, so clicking and targeting are unaffected. Pauses in combat, where moving a unit frame is blocked."
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Spin",
-                    rows = {
-                        { type="slider", label="Speed", min=0, max=720, step=10,
-                          tooltip="Degrees per second. 360 is one full turn a second; 0 parks the frames where they are.",
-                          get=function()
-                              local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinUFSpeed
-                              if v == nil then v = 120 end
-                              return v
-                          end,
-                          set=function(v)
-                              if not EllesmereUIDB then EllesmereUIDB = {} end
-                              EllesmereUIDB.partyModeSpinUFSpeed = v
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing (matches the action bar row).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-            end
-        end
-
-        -- Row 3f: Spinning Resource Bars (+ speed cog)
-        -- The behaviour lives in EllesmereUIResourceBars
-        -- (EllesmereUI.PartySpinResource_Refresh, via the shared spin engine); this page owns only the shared
-        -- EllesmereUIDB keys, so the option is a harmless no-op when that
-        -- addon is disabled.
-        do
-            local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Resource Bars", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinResource or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinResource = v
-                    if EllesmereUI.PartySpinResource_Refresh then EllesmereUI.PartySpinResource_Refresh() end
-                end,
-                "Spins your class resource bar on its own centre while Party Mode is active: each pip or rune orbits the middle of the bar, like the action bars. Pauses in combat."
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Spin",
-                    rows = {
-                        { type="slider", label="Speed", min=0, max=720, step=10,
-                          tooltip="Degrees per second. 360 is one full turn a second; 0 parks the pips where they are.",
-                          get=function()
-                              local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinResourceSpeed
-                              if v == nil then v = 120 end
-                              return v
-                          end,
-                          set=function(v)
-                              if not EllesmereUIDB then EllesmereUIDB = {} end
-                              EllesmereUIDB.partyModeSpinResourceSpeed = v
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing (matches the action bar row).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
-            end
-        end
-
-        -- Row 3g: Spinning Power Bars (+ speed cog)
-        -- The behaviour lives in EllesmereUIResourceBars
-        -- (EllesmereUI.PartySpinPower_Refresh, via the shared spin engine); this page owns only the shared
-        -- EllesmereUIDB keys, so the option is a harmless no-op when that
-        -- addon is disabled.
-        do
-            local spinRow
-            spinRow, h = W:Toggle(parent, "Spinning Power Bars", y,
-                function() return EllesmereUIDB and EllesmereUIDB.partyModeSpinPower or false end,
-                function(v)
-                    if not EllesmereUIDB then EllesmereUIDB = {} end
-                    EllesmereUIDB.partyModeSpinPower = v
-                    if EllesmereUI.PartySpinPower_Refresh then EllesmereUI.PartySpinPower_Refresh() end
-                end,
-                "Slowly orbits your health and power bars around the centre of the screen while Party Mode is active. The bars stay upright and keep updating. Pauses in combat."
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local _, cogShow = EllesmereUI.BuildCogPopup({
-                    title = "Spin",
-                    rows = {
-                        { type="slider", label="Speed", min=0, max=720, step=10,
-                          tooltip="Degrees per second. 360 is one full turn a second; 0 parks the bars where they are.",
-                          get=function()
-                              local v = EllesmereUIDB and EllesmereUIDB.partyModeSpinPowerSpeed
-                              if v == nil then v = 120 end
-                              return v
-                          end,
-                          set=function(v)
-                              if not EllesmereUIDB then EllesmereUIDB = {} end
-                              EllesmereUIDB.partyModeSpinPowerSpeed = v
-                          end },
-                    },
-                })
-                local cogBtn = CreateFrame("Button", nil, spinRow)
-                cogBtn:SetSize(26, 26)
-                -- Canonical inline-cog spacing (matches the action bar row).
-                cogBtn:SetPoint("RIGHT", spinRow, "RIGHT", -20 - 40 - 9, 0)
-                cogBtn:SetFrameLevel(spinRow:GetFrameLevel() + 5)
-                cogBtn:SetAlpha(0.4)
-                local cogTex = cogBtn:CreateTexture(nil, "OVERLAY")
-                cogTex:SetAllPoints(); cogTex:SetTexture(EllesmereUI.COGS_ICON)
-                cogBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
-                cogBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
-                cogBtn:SetScript("OnClick", function(self) cogShow(self) end)
             end
         end
 

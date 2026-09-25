@@ -514,6 +514,19 @@ end
 
 -- /rl reload shortcut -- only
 if not SlashCmdList["RL"] then
-    SlashCmdList["RL"] = function() ReloadUI() end
+    SlashCmdList["RL"] = function()
+        -- The Forever client blocks ReloadUI() from addon code; the reload
+        -- popup stands in there, or a chat line in combat (the popup's
+        -- button cannot reload then). Retail reloads at once.
+        if EllesmereUI and EllesmereUI.IS_FOREVER and EllesmereUI.RequestReload then
+            if InCombatLockdown() then
+                EllesmereUI.PrintError(EllesmereUI.L("Cannot reload during combat. Type /reload instead."))
+                return
+            end
+            EllesmereUI.RequestReload(EllesmereUI.L("Reload UI"), EllesmereUI.L("Reload the UI now?"))
+        else
+            ReloadUI()
+        end
+    end
     SLASH_RL1 = "/rl"
 end

@@ -638,3 +638,41 @@ local function ShowContextMenu(anchor, items, opts)
 end
 
 EllesmereUI.ShowContextMenu = ShowContextMenu
+
+-------------------------------------------------------------------------------
+--  Unit display names. WoW Forever characters carry a surname, which
+--  UnitName hands back as its second value (retail: the realm), and
+--  Blizzard's own frames show "First Last". Pass UnitName's two returns in:
+--      EllesmereUI.WithSurname(UnitName(unit))
+--  Retail gets the first value back unchanged. A secret name (protected
+--  content) comes back as is, first name only: it cannot be inspected or
+--  joined. Your own surname follows Blizzard's show-surname preference.
+--  Joined names are cached per name pair, so repaints build no strings.
+-------------------------------------------------------------------------------
+do
+    local IS_FOREVER = EllesmereUI.IS_FOREVER == true
+    local SEP = Constants and Constants.CharacterNameSeparatorConsts
+        and Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR or " "
+    local joined = {}   -- [name][surname] = the display string
+
+    function EllesmereUI.WithSurname(name, surname)
+        if not IS_FOREVER then return name end
+        if issecretvalue(name) or issecretvalue(surname) then return name end
+        if type(name) ~= "string" or type(surname) ~= "string" or surname == "" then return name end
+        local PI = C_PlayerInfo
+        if PI and PI.ShouldDisplaySurname and not PI.ShouldDisplaySurname() then
+            local myName, mySurname = (UnitNameUnmodified or UnitName)("player")
+            if name == myName and surname == mySurname then return name end
+        end
+        local row = joined[name]
+        if not row then row = {}; joined[name] = row end
+        local full = row[surname]
+        if not full then
+            local tail = SEP .. surname
+            -- Some units already carry it in the first value.
+            full = (name:sub(-#tail) == tail) and name or (name .. tail)
+            row[surname] = full
+        end
+        return full
+    end
+end

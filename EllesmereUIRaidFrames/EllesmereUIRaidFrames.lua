@@ -10,11 +10,6 @@ if not (EllesmereUI and EllesmereUI._ModuleNS) then EUI_CLIENT_BLOCKED = true; r
 EllesmereUI._ModuleNS[ADDON_NAME] = ns  -- LOD options files read this module ns via the registry
 
 local ERF = EllesmereUI.Lite.NewAddon(ADDON_NAME)
--- The group headers (initialConfigFunction) and click-casting are secure
--- handlers end to end: the enable drain stands the module down where snippets
--- cannot compile (WoW Forever beta) and Blizzard's raid frames stay
--- (EllesmereUI.SecureSnippetsOK).
-ERF.requiresSecureSnippets = true
 ns.ERF = ERF
 _G.EllesmereUIRaidFrames = ERF
 
@@ -1692,7 +1687,8 @@ ns.RF_NAME_WIDTH_FRACTION = 1.0
 -- name when unset, falling through to the next source. Every source gates itself entirely (no
 -- EUI-side toggle); pcall keeps a misbehaving external API from breaking name rendering.
 local function ResolveDisplayName(unit, applyCap, s)
-    local name = UnitName(unit) or ""
+    local name, surname = UnitName(unit)
+    name = name or ""
     local display
     if NSAPI and NSAPI.GetName then
         local ok, dn = pcall(NSAPI.GetName, NSAPI, name, "EUI")
@@ -1710,7 +1706,7 @@ local function ResolveDisplayName(unit, applyCap, s)
                and not (issecretvalue and issecretvalue(dn)) and dn ~= "" then
                 display = dn
             else
-                display = name
+                display = EllesmereUI.WithSurname(name, surname)
             end
         end
     end
@@ -1755,7 +1751,7 @@ local function ResolveDisplayName(unit, applyCap, s)
     end
     if not display then
         if Ambiguate then name = Ambiguate(name, "short") end
-        display = name
+        display = EllesmereUI.WithSurname(name, surname)
     end
     -- Cap only the in-frame name (applyCap), not the top name bar banner.
     if applyCap then display = ns.CapName(display, s) end
@@ -11584,7 +11580,7 @@ do
                     nameFS:SetText(fakeName)
                 else
                     -- Display sink: a secret name renders raw, never inspected.
-                    nameFS:SetFormattedText("%s", (unit and UnitName(unit)) or "")
+                    nameFS:SetFormattedText("%s", (unit and EllesmereUI.WithSurname(UnitName(unit))) or "")
                 end
                 nameFS:Show()
                 local w = nameFS:GetStringWidth()

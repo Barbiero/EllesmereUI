@@ -1,3 +1,4 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
 -------------------------------------------------------------------------------
 --  EllesmereUINameplates_Faction.lua
 --  Faction badge (Horde/Alliance) on friendly nameplates. Enemy plates carry it
@@ -26,23 +27,34 @@ local function GetBadge(nameplate)
     return b
 end
 
--- The full friendly plate's name text, or nil (name-only plates get no badge).
-local function VisibleName(unit)
-    local fp = ns.friendlyPlates and ns.friendlyPlates[unit]
-    if fp and fp.name and fp.name:IsVisible() then return fp.name end
+-- The target's left arrow sits just left of the name; while the badge is up it
+-- moves out past the badge instead of under it. Same fully-anchored form as
+-- the friendly plate builds (point+size regions drift inside plate subtrees).
+local function ArrowTo(fp, anchor)
+    local la = fp.leftArrow
+    if not la or fp._facArrowTo == anchor then return end
+    fp._facArrowTo = anchor
+    local x = -(2 + la:GetWidth() / 2)
+    la:ClearAllPoints()
+    la:SetPoint("TOP", anchor, "LEFT", x, 8)
+    la:SetPoint("BOTTOM", anchor, "LEFT", x, -8)
 end
 
-local function Refresh(unit)
-    local nameplate = ns.pendingUnits and ns.pendingUnits[unit]
-    if not nameplate then return end
+-- Draw (or hide) the badge beside a friendly full plate's name. No events of
+-- its own: the friendly plate's SetUnit, the main file's shared UNIT_FACTION
+-- dispatch and settings passes call it. A friendly plate exists only in
+-- full-plate mode and is released before its unit becomes an enemy plate.
+local function Refresh(fp)
+    local nameplate, unit = fp.nameplate, fp.unit
+    if not (nameplate and unit) then return end
     local b = badges[nameplate]
-    -- Promoted to an enemy plate (duel, flag): that plate draws its own badge.
-    local enemy = ns.plates and ns.plates[unit]
     local atlas, dim
-    if not enemy then atlas, dim = ns.NP_FactionBadge(unit) end
-    local fs = atlas and VisibleName(unit)
-    if not fs then
+    -- Slot None: no unit queries, only a badge left up from before is hidden.
+    if ns.NP_GetFactionSlot() ~= "none" then atlas, dim = ns.NP_FactionBadge(unit) end
+    local fs = fp.name
+    if not (atlas and fs) then
         if b then b:Hide() end
+        if fs then ArrowTo(fp, fs) end
         return
     end
     b = b or GetBadge(nameplate)
@@ -51,67 +63,33 @@ local function Refresh(unit)
     b:SetFrameLevel(nameplate:GetFrameLevel() + 5)
     b:ClearAllPoints()
     b:SetPoint("RIGHT", fs, "LEFT", -2, 0)
-    EllesmereUI.SetFactionArt(b.tex, ns.NP_GetFactionStyle(), atlas)
-    b.tex:SetDesaturated(dim)
-    b.tex:SetAlpha(dim and 0.6 or 1)
+    -- Repaint only when the art or the dim changes (inputs: faction, Icon Style, dim).
+    local style = ns.NP_GetFactionStyle()
+    if b.facArt ~= atlas or b.facStyle ~= style then
+        EllesmereUI.SetFactionArt(b.tex, style, atlas)
+        b.facArt, b.facStyle = atlas, style
+    end
+    if b.facDim ~= dim then
+        b.tex:SetDesaturated(dim)
+        b.tex:SetAlpha(dim and 0.6 or 1)
+        b.facDim = dim
+    end
     b:Show()
+    ArrowTo(fp, b)
 end
 
-local function HideFor(nameplate)
-    local b = nameplate and badges[nameplate]
+ns.NP_FriendlyFactionRefresh = Refresh
+
+-- The friendly plate is released (plate removed, switch to name-only) or its
+-- unit promoted to an enemy plate, which draws its own badge.
+function ns.NP_FriendlyFactionHide(fp)
+    local b = fp.nameplate and badges[fp.nameplate]
     if b then b:Hide() end
+    if fp.name then ArrowTo(fp, fp.name) end
 end
 
-local ev = CreateFrame("Frame")
-
--- Events only while the faction slot is in use: UNIT_FLAGS is a global firehose.
-local function Arm()
-    ev:UnregisterAllEvents()
-    pcall(ev.RegisterEvent, ev, "PLAYER_LOGIN")
-    if not (ns.NP_GetFactionSlot and ns.NP_GetFactionSlot() ~= "none") then return end
-    -- pcall'd: on the Forever beta an unknown event name throws and aborts the file.
-    for _, e in ipairs({ "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UNIT_FACTION", "UNIT_FLAGS" }) do
-        pcall(ev.RegisterEvent, ev, e)
-    end
-end
-
--- Every visible friendly plate; the options page calls this after a settings change.
+-- Every friendly full plate: runs after a settings change or profile switch.
 function ns.NP_RefreshFriendlyFaction()
-    Arm()
-    for _, b in pairs(badges) do b:Hide() end
-    if not ns.pendingUnits then return end
-    for unit in pairs(ns.pendingUnits) do Refresh(unit) end
+    -- Slot None costs one compare per plate: Refresh hides and puts arrows back.
+    for _, fp in pairs(ns.friendlyPlates) do Refresh(fp) end
 end
-
-ev:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_LOGIN" then
-        -- The profile is loaded by now: arm for the saved slot and draw.
-        C_Timer.After(0, ns.NP_RefreshFriendlyFaction)
-        return
-    end
-    if not unit then return end
-    if event == "NAME_PLATE_UNIT_REMOVED" then
-        HideFor(C_NamePlate.GetNamePlateForUnit(unit))
-        return
-    end
-    if event == "NAME_PLATE_UNIT_ADDED" then
-        -- After the main file has sorted the unit into enemy or friendly and
-        -- built (or suppressed) the name this anchors to.
-        C_Timer.After(0, function() Refresh(unit) end)
-        return
-    end
-    -- Only nameplate units have a badge; UNIT_FLAGS also fires for party, target...
-    if not unit:find("^nameplate") then return end
-    -- UNIT_FACTION / UNIT_FLAGS: faction, PvP flag or attackability changed. One
-    -- frame later, so the main file's own watchers have already moved the unit
-    -- between friendly and enemy plates (duel start/end) before this looks.
-    C_Timer.After(0, function()
-        if ns.pendingUnits and ns.pendingUnits[unit] then
-            Refresh(unit)
-        else
-            HideFor(C_NamePlate.GetNamePlateForUnit(unit))
-        end
-    end)
-end)
-
-Arm()

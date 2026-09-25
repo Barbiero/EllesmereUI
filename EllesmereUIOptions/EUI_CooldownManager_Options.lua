@@ -19165,7 +19165,7 @@ initFrame:SetScript("OnEvent", function(self)
                     sp[specKey] = nil
                 end
             end
-            ReloadUI()
+            -- No reload here: the footer Reset popup (reload = true) reloads after this returns.
         end,
     })
 

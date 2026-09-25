@@ -486,10 +486,21 @@ initFrame:SetScript("OnEvent", function(self)
         _, h = W:SectionHeader(parent, "MINIMAP & QOL BUTTONS", y);  y = y - h
 
         -- Ungroup Minimap Buttons | In-Group Button Size
+        -- A lone minimap button always shows ungrouped, so the choice needs two or more.
+        local function TooFewButtons()
+            local vis, n = _G._EBS_AddonVisible or {}, 0
+            for _, btn in ipairs(_G._EBS_CachedAddonButtons or {}) do
+                if vis[btn] ~= false and btn:GetName() then n = n + 1 end
+            end
+            return n < 2
+        end
         local ungroupRow
         ungroupRow, h = W:DualRow(parent, y,
             { type="dropdown", text="Ungroup Minimap Buttons",
               values = { __placeholder = "..." }, order = { "__placeholder" },
+              disabled = TooFewButtons,
+              disabledTooltip = "This option requires 2 or more minimap buttons.",
+              rawTooltip = true,
               getValue = function() return "__placeholder" end,
               setValue = function() end },
             { type="slider", text="In-Group Button Size", min=14, max=40, step=1,
@@ -580,6 +591,16 @@ initFrame:SetScript("OnEvent", function(self)
             leftRgn._control = cbDD
             leftRgn._lastInline = nil
             EllesmereUI.RegisterWidgetRefresh(cbDDRefresh)
+
+            -- The checkbox dropdown has no disabled state of its own: grey it and
+            -- block clicks; the row's disabled overlay shows the requirement.
+            local function ApplyUngroupDisabled()
+                local off = TooFewButtons()
+                cbDD:SetAlpha(off and 0.3 or 1)
+                cbDD:EnableMouse(not off)
+            end
+            ApplyUngroupDisabled()
+            EllesmereUI.RegisterWidgetRefresh(ApplyUngroupDisabled)
         end
 
         -- Show Extra Buttons (checkbox dropdown with drag-to-reorder)

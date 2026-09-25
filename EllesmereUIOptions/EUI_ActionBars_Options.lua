@@ -6,9 +6,6 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 local ADDON_NAME = "EllesmereUIActionBars"
 local ns = EllesmereUI._ModuleNS[ADDON_NAME]  -- module namespace (published by the module at its load)
 if not ns then return end  -- module disabled: no options page
--- Stood down for the session (secure snippets unavailable: WoW Forever beta):
--- the module is not running, so its page stays out of the sidebar.
-if (EllesmereUI.Lite.GetAddon(ADDON_NAME, true) or ns).standDown then return end
 local EAB = ns.EAB
 local VisibilityCompat = EAB and EAB.VisibilityCompat
 -- Anchor dropdown for the three button texts (keybind / charges / macro name);
@@ -4896,27 +4893,6 @@ initFrame:SetScript("OnEvent", function(self)
         local y = yOffset
         local _, h
 
-        -- Temporary: on a client that cannot run the secure handlers the bars
-        -- are built on (the WoW Forever beta) the module runs in a reduced
-        -- mode, said before anything else on the page. Skipped while the
-        -- search index prebuilds the page off screen; the height still comes
-        -- off y in both passes so everything below lands identically.
-        if not EllesmereUI.SecureSnippetsOK() then
-            if not EllesmereUI._prebuilding then
-                local PPw = EllesmereUI.PanelPP or EllesmereUI.PP
-                local warnFrame = CreateFrame("Frame", nil, parent)
-                PPw.Size(warnFrame, parent:GetWidth() - EllesmereUI.CONTENT_PAD * 2, 56)
-                PPw.Point(warnFrame, "TOPLEFT", parent, "TOPLEFT", EllesmereUI.CONTENT_PAD, y)
-                local warnFS = EllesmereUI.MakeFont(warnFrame, 13, "", 1, 0.35, 0.35, 1)
-                warnFS:SetPoint("TOPLEFT", warnFrame, "TOPLEFT", 0, 0)
-                warnFS:SetPoint("RIGHT", warnFrame, "RIGHT", 0, 0)
-                warnFS:SetJustifyH("LEFT")
-                warnFS:SetWordWrap(true)
-                warnFS:SetText(EllesmereUI.L("The current WoW Forever client has a bug that prevents some Action Bars functionality. Bars, buttons and keybinds work; page switching on stance and form changes, conditional bar hiding and empty-slot handling do not. This resolves itself once Blizzard fixes the client."))
-            end
-            y = y - 56
-        end
-
         activePreview = nil
 
         -- Consume any pending bar selection from Element Options navigation.
@@ -5764,7 +5740,7 @@ initFrame:SetScript("OnEvent", function(self)
             if EAB.db and EAB.db.sv then
                 EAB.db.sv._capturedOnce_EAB = nil
             end
-            ReloadUI()
+            -- No reload here: the footer Reset popup (reload = true) reloads after this returns.
         end,
     })
 end)

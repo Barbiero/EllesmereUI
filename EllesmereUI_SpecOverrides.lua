@@ -177,6 +177,7 @@ local FOLDER_BLACKLIST = {
     EllesmereUIBags              = true,
     EllesmereUIQoL               = true,
     EllesmereUIAuraBuffReminders = true,
+    EllesmereUIForeverEssentials = true,
     -- Minimap + Chat + CooldownManager ARE override-eligible; their
     -- spell/engine-coupled settings are excluded per-path via
     -- SETTING_BLACKLIST below (CDM spell data itself lives OUTSIDE the profile
@@ -3403,6 +3404,7 @@ local EXCLUDED_CONTEXTS = {
     ["EllesmereUIBags"]              = true,
     ["EllesmereUIQoL"]               = true,   -- whole module
     ["EllesmereUIAuraBuffReminders"] = true,
+    ["EllesmereUIForeverEssentials"] = true,
     -- CDM: module eligible (bar settings override); these two tabs are
     -- spell/spec-coupled systems with their own per-spec storage.
     ["EllesmereUICooldownManager"] = {
@@ -8344,7 +8346,12 @@ local function PromoteGroupToProfile(g)
     --    synchronously first (out of combat by the gate above), then reload --
     --    every runtime cache, ticker and session structure rebuilds clean.
     pcall(EllesmereUI.SpecOverrides_FlushUnlock)
-    ReloadUI()
+    EllesmereUI.RequestReload()
+    -- On the Forever client the reload waits on its popup: repaint the list
+    -- so the deleted groups leave it (retail is already reloading).
+    if EllesmereUI.IS_FOREVER and EllesmereUI:GetActivePage() == LIST_PAGE then
+        EllesmereUI:RefreshPage(true)
+    end
 end
 
 --- Page builder for the "Spec Overrides" tab (called from the Profiles &

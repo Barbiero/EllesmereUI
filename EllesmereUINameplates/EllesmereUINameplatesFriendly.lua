@@ -406,7 +406,6 @@ end
 --  on the nameplate.  This gives us full control over width, color, and font.
 -------------------------------------------------------------------------------
 local npcOverlays = {}        -- nameplate → overlay frame
-ns.npcOverlays = npcOverlays  -- read by EllesmereUINameplates_Faction.lua (badge anchor)
 local npcOverlayPool = {}     -- recycled overlay frames
 
 local function GetNPCNameColor(unit)
@@ -679,7 +678,7 @@ local function UpdateNameOnlyText(nameFS)
 
     local want
     if ModeHasTitle(mode) and isPlayer then want = GetTitledName(unit) end
-    if not want then want = UnitName(unit) end
+    if not want then want = EllesmereUI.WithSurname(UnitName(unit)) end
     if not want or (issecretvalue and issecretvalue(want)) then return end
 
     local guild
@@ -1233,6 +1232,7 @@ function FriendlyFrame:SetUnit(unit, nameplate)
     self:UpdateHealth()
     self:UpdateName()
     self:UpdateRaidIcon()
+    ns.NP_FriendlyFactionRefresh(self)
     self:ApplyTarget()
     -- Re-apply the enemy border settings every spawn: a pooled plate may have
     -- been released while the user changed the border size/color/toggle.
@@ -1253,6 +1253,8 @@ function FriendlyFrame:ClearUnit()
     end
     -- Restore Blizzard UF before clearing our reference
     if self.unit then RestoreBlizzardUF(self.unit) end
+    -- Its faction badge lives on the nameplate, not on this frame.
+    ns.NP_FriendlyFactionHide(self)
     self.unit = nil
     self.nameplate = nil
     self.glow:Hide()
@@ -1301,7 +1303,7 @@ function FriendlyFrame:UpdateName()
     if ModeHasTitle(GetBelowNameMode()) and UnitIsPlayer(unit) then
         unitName = GetTitledName(unit)
     end
-    if not unitName then unitName = UnitName(unit) end
+    if not unitName then unitName = EllesmereUI.WithSurname(UnitName(unit)) end
     self.name:SetText(unitName or "")
     self:UpdateSubText()
 end
@@ -1474,6 +1476,8 @@ function ns.RemoveFriendlyPlateNoRestore(unit)
     end
     -- Clear modifiedUFs entry so the friendly SetAlpha hook stops interfering
     modifiedUFs[unit] = nil
+    -- Promoted to an enemy plate, which draws its own faction badge.
+    ns.NP_FriendlyFactionHide(plate)
     plate.unit = nil
     plate.nameplate = nil
     plate.glow:Hide()
@@ -1901,10 +1905,6 @@ function ns.UpdateFriendlyNameplateSystem()
 
     -- Apply friendly click-through (independent of player/NPC plate mode).
     ApplyFriendlyClickThrough()
-
-    -- Friendly faction badges follow the plate mode: redraw after the name-only
-    -- sweep above has re-anchored the names they sit beside.
-    if ns.NP_RefreshFriendlyFaction then C_Timer.After(0.6, ns.NP_RefreshFriendlyFaction) end
 end
 
 -------------------------------------------------------------------------------
