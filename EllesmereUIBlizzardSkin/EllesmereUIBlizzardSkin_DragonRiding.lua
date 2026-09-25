@@ -1270,6 +1270,10 @@ function Rebuild()
 
     -- Column rows, bottom to top, the column centred on the icon. Rows not in
     -- the layout are hidden; rows that stay are never hidden and re-shown.
+    -- Every frame here is SHOWN BEFORE it is anchored, sized and has its pips
+    -- laid out: a row or icon re-anchored while hidden and shown afterwards
+    -- (Vigor Style Bars <-> Classic Gems, a row or the icon toggled back on)
+    -- drew its pips piled up or not at all until a later pass.
     local rowFrames = { speed = speedBar, sky = stackFrame, sw = swFrame }
     local inLayout = {}
     for _, key in ipairs(L.rows) do inLayout[key] = true end
@@ -1285,6 +1289,7 @@ function Rebuild()
         local h = p[ROW_FIELD[key]]
         local rx, ry = clusterX + L.padX, y
         geo[i] = { key = key, x = rx, y = ry, h = h }
+        f:Show()
         f:ClearAllPoints()
         f:SetPoint("BOTTOMLEFT", rootFrame, "BOTTOMLEFT", rx, ry)
         f:SetSize(p.width, h)
@@ -1293,17 +1298,16 @@ function Rebuild()
         elseif key == "sw" then
             LayoutPips(swFrame, SECONDWIND_PIPS, p.width, h, spacing)
         end
-        f:Show()
         y = y + h + p.gap
     end
     ApplyColumnChrome(L, geo, p.width, p.gap, spacing)
 
-    wsIcon:ClearAllPoints()
     if L.icon then
+        wsIcon:Show()
+        wsIcon:ClearAllPoints()
         wsIcon:SetPoint("BOTTOMLEFT", rootFrame, "BOTTOMLEFT",
             clusterX + L.colW + (L.colW > 0 and p.gap or 0), L.iconY)
         wsIcon:SetSize(L.iconSize, L.iconSize)
-        wsIcon:Show()
     else
         wsIcon:Hide()
     end
@@ -1311,11 +1315,11 @@ function Rebuild()
 
     if L.classic then
         local f = EnsureClassicFrame()
+        f:Show()
         f:SetScale(L.scale)
         f:ClearAllPoints()
         -- Offsets on a scaled frame are in its own units.
         f:SetPoint("TOPLEFT", rootFrame, "TOPLEFT", PPSnap((L.totalW - L.classicW) / 2) / L.scale, 0)
-        f:Show()
     elseif classicFrame then
         classicFrame:Hide()
     end
