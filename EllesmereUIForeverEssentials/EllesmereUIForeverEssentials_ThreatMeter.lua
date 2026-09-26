@@ -91,6 +91,11 @@ end
 -- Forever returns threat in display units already (verified in game), not the
 -- x100 scale Classic's API uses, so it is shown as is.
 local function ShortThreat(v)
+    -- Ten-thousand-grouping locales (koKR/zhCN/zhTW) take the shared number
+    -- engine's thousand/wan/yi units; everyone else keeps the compact k/m.
+    if EllesmereUI.NumberAbbrevGlyphs and EllesmereUI.NumberAbbrevGlyphs() then
+        return EllesmereUI.AbbreviateNumber(v)
+    end
     if v >= 1000000 then return string.format("%.1fm", v / 1000000) end
     if v >= 1000 then return string.format("%.1fk", v / 1000) end
     return tostring(math.floor(v + 0.5))
