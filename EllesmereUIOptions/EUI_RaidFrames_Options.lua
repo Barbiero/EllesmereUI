@@ -4059,6 +4059,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return p.petFrames
             end
             local tabKey = _partyCtx and "party" or "raid"
+            local onParty = tabKey == "party"
             local function PFEnabled()
                 return PFSet()[tabKey] == true
             end
@@ -4084,11 +4085,18 @@ initFrame:SetScript("OnEvent", function(self)
                   end) },
                 (not PFEnabled()) and { type="label", text="" } or
                 { type="dropdown", text="Position",
-                  values = { left="Before First Group", right="After Last Group", free="Free Move" },
-                  order  = { "left", "right", "free" },
-                  getValue = function() return PFSet().position or "right" end,
+                  -- Beside Owner is party only, and a flag over the shared position so the raid tab keeps its own.
+                  values = onParty
+                      and { left="Before First Group", right="After Last Group", free="Free Move", owner="Beside Owner" }
+                      or { left="Before First Group", right="After Last Group", free="Free Move" },
+                  order  = onParty and { "left", "right", "free", "owner" } or { "left", "right", "free" },
+                  getValue = function()
+                      if onParty and PFSet().ownerMode then return "owner" end
+                      return PFSet().position or "right"
+                  end,
                   setValue = function(v)
-                      PFSet().position = v
+                      if onParty then PFSet().ownerMode = (v == "owner") or nil end
+                      if v ~= "owner" then PFSet().position = v end
                       if v ~= "free" and ns.PF_SetMoverShown then ns.PF_SetMoverShown(false) end
                       if ns.PF_Apply then ns.PF_Apply() end
                       PFRefreshPreview()
@@ -4122,7 +4130,19 @@ initFrame:SetScript("OnEvent", function(self)
 
             row, h = W:DualRow(parent, y,
                 { type="label", text="Free Move Position" },
-                { type="label", text="" }); y = y - h
+                onParty and { type="dropdown", text="Pet Side",
+                  values = { right="Right", left="Left", below="Below" },
+                  order  = { "right", "left", "below" },
+                  disabled = function() return not PFSet().ownerMode end,
+                  disabledTooltip = "Position must be set to Beside Owner", rawTooltip = true,
+                  getValue = function()
+                      return PFSet().ownerSide or (db.profile.partyHorizontal and "below" or "right")
+                  end,
+                  setValue = function(v)
+                      PFSet().ownerSide = v
+                      if ns.PF_Apply then ns.PF_Apply() end
+                  end }
+                or { type="label", text="" }); y = y - h
             if not EllesmereUI._prebuilding then
                 local btn = CreateFrame("Button", nil, row)
                 btn:SetSize(140, 26)
@@ -4138,7 +4158,8 @@ initFrame:SetScript("OnEvent", function(self)
                 lbl:SetText(EllesmereUI.L("Move Frames"))
 
                 local function MoveAllowed()
-                    return PFSet().position == "free" and not InCombatLockdown()
+                    return PFSet().position == "free" and not (onParty and PFSet().ownerMode)
+                        and not InCombatLockdown()
                 end
                 local function UpdateMoveBtn()
                     local active = ns.PF_IsMoverShown and ns.PF_IsMoverShown()

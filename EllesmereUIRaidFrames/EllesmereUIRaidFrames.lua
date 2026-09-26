@@ -7160,7 +7160,7 @@ end
 -- As the raid buttons: UnitInRange's first return straight into SetAlphaFromBoolean, which takes
 -- a secret. Its unchecked case is your own units, so your pet stays at full alpha like you do.
 PF.ApplyRange = function(b)
-    local unit = b:GetAttribute("unit")
+    local unit = FB.UnitOf(b)
     if not unit then return end
     if not UnitExists(unit) or UnitIsUnit(unit, "pet") then
         b:SetAlpha(1)
@@ -7174,6 +7174,9 @@ end
 -- only exists while a pet button is on screen.
 PF.RangeTick = function()
     for _, b in ipairs(PF.buttons) do
+        if b:IsVisible() then PF.ApplyRange(b) end
+    end
+    for _, b in ipairs(PF.ownerButtons) do
         if b:IsVisible() then PF.ApplyRange(b) end
     end
 end
@@ -7289,17 +7292,160 @@ PF.EnsureBuilt = function()
         end
     end
 
-    -- Two pet tokens per frame (RegisterUnitEvent takes two units), from the shell pool.
+    PF.EnsureTrackers()
+    PF.built = true
+    return true
+end
+
+-- Two pet tokens per frame (RegisterUnitEvent takes two units), from the shell pool.
+PF.EnsureTrackers = function()
+    if PF.trackers[1] then return end
     for i = 1, #PF.UNITS, 2 do
         local t = ns.TakeShell()
         t:SetScript("OnEvent", function(_, _, u)
             local btn = PF.byUnit[u]
             if btn and btn:IsVisible() then FB.Update(btn, PF) end
+            -- Owner buttons can share a unit (your pet on the hidden self button and on the
+            -- party frame showing you), so match the shown one.
+            for _, ob in ipairs(PF.ownerButtons) do
+                if ob._fbUnit == u and ob:IsVisible() then FB.Update(ob, PF) end
+            end
         end)
         PF.trackers[#PF.trackers + 1] = { frame = t, u1 = PF.UNITS[i], u2 = PF.UNITS[i + 1] }
     end
-    PF.built = true
-    return true
+end
+
+-- Beside Owner (party only): a pet button parented to each party frame, its unit the owner's plus
+-- the "pet" suffix (SecureButton_GetUnit maps party1pet to partypet1), so it follows its owner
+-- through every re-sort, in combat too, and hides with the owner's frame (Hide Self included).
+PF.ownerButtons = {}
+
+PF.OwnerWanted = function()
+    local set = PF.Settings()
+    return set and set.party == true and set.ownerMode == true and PF.PartyMode()
+        and ns._partySelfButton ~= nil
+end
+
+PF.PetOf = function(unit)
+    if not unit then return end
+    if unit == "player" then return "pet" end
+    local kind, n = unit:match("^(%a+)(%d+)$")
+    if kind then return kind .. "pet" .. n end
+end
+
+PF.SetOwnerUnit = function(b, ownerUnit)
+    b._fbUnit = PF.PetOf(ownerUnit)
+    if b:IsVisible() then PF.Refresh(b) end
+end
+
+-- OOC only.
+PF.EnsureOwnerBuilt = function()
+    if PF.ownerBuilt then return end
+    PF.ownerBuilt = true
+    for _, owner in ipairs(ns._partyAllButtons) do
+        local isSelf = owner == ns._partySelfButton
+        -- Your pet hangs off the container, not the self button, so it can outlive Hide Self.
+        local b = CreateFrame("Button", nil, isSelf and ns._partyContainerFrame or owner, "SecureUnitButtonTemplate")
+        if isSelf then
+            PF.selfPet = b
+            b:SetAttribute("unit", "pet")
+        else
+            b:SetAttribute("useparent-unit", true)
+            b:SetAttribute("unitsuffix", "pet")
+        end
+        b:Hide()
+        PF.StyleButton(b)
+        -- The right-click menu proxy resolves its unit through this button, suffix included.
+        local proxy = EllesmereUI.GetSecureMenuProxy and EllesmereUI.GetSecureMenuProxy(b)
+        if proxy then proxy:SetAttribute("useparent-unitsuffix", true) end
+        b._pfOwner = owner
+        PF.ownerButtons[#PF.ownerButtons + 1] = b
+        PF.SetOwnerUnit(b, owner:GetAttribute("unit"))
+        owner:HookScript("OnAttributeChanged", function(_, name, value)
+            if name == "unit" then
+                PF.SetOwnerUnit(b, value)
+                PF.PlaceSelfPet()
+            end
+        end)
+    end
+    PF.EnsureTrackers()
+end
+
+-- Party frame size (the raid frame size under the Party Frames layout, whose size is its portrait
+-- box, as Friendly Boss does) plus the pet size offsets.
+PF.PartySize = function(s)
+    local w, h, sp = ns.RF_PartyDims(db.profile)
+    if ns.RF_PartyKit() then
+        w, h, sp = s.frameWidth or 125, s.frameHeight or 60, s.cellSpacing or -1
+    end
+    return w, h, sp
+end
+
+-- OOC only.
+PF.OwnerLayout = function()
+    local s = ns._scaledProfile or db.profile
+    local set = PF.Settings()
+    local w, h, sp = PF.PartySize(s)
+    w = PixelSnap(math.max(10, w + (set.extraWidth or 0)))
+    h = PixelSnap(math.max(10, h + (set.extraHeight or 0)))
+    PF.ownerGap = PixelSnap(sp)
+    PF.ownerSide = set.ownerSide or (db.profile.partyHorizontal and "below" or "right")
+    local texPath = ResolveHealthTexture()
+    local bgc = s.customBgColor or { r = 17/255, g = 17/255, b = 17/255 }
+    for _, b in ipairs(PF.ownerButtons) do
+        b:SetSize(w, h)
+        if b ~= PF.selfPet then
+            b:ClearAllPoints()
+            PF.OwnerPoint(b, b._pfOwner)
+        end
+        FB.StyleVisuals(b, s, w, h, texPath, bgc)
+    end
+end
+
+PF.OwnerPoint = function(b, owner)
+    local gap = PF.ownerGap
+    if PF.ownerSide == "left" then
+        b:SetPoint("TOPRIGHT", owner, "TOPLEFT", -gap, 0)
+    elseif PF.ownerSide == "below" then
+        b:SetPoint("TOPLEFT", owner, "BOTTOMLEFT", 0, -gap)
+    else
+        b:SetPoint("TOPLEFT", owner, "TOPRIGHT", gap, 0)
+    end
+end
+
+-- Your own pet: beside the self button while that shows you; with Hide Self, in your frame's empty
+-- slot after the last party frame (re-placed as the header reassigns units, and after combat if that
+-- happened during it); hidden while the party header shows you, where that button's pet frame has it.
+PF.PlaceSelfPet = function()
+    local b = PF.selfPet
+    if not (b and PF.ownerActive) then return end
+    if InCombatLockdown() then PF.anchorDirty = true; return end
+    local hdr, gap = ns._partyHeader, PF.ownerGap
+    b:ClearAllPoints()
+    if ns._partySelfButton:IsShown() then
+        PF.OwnerPoint(b, ns._partySelfButton)
+    elseif db.profile.partyHideSelf then
+        -- The header's own size is not the stack's (_PositionPartySlots sizes it to one slot).
+        local last = hdr
+        for i = 1, 5 do
+            if hdr[i] and hdr[i]:GetAttribute("unit") then last = hdr[i] end
+        end
+        local grow = ns._PartyGrowth(db.profile)
+        if grow == "UP" then
+            b:SetPoint("BOTTOMLEFT", last, "TOPLEFT", 0, gap)
+        elseif grow == "RIGHT" then
+            b:SetPoint("TOPLEFT", last, "TOPRIGHT", gap, 0)
+        elseif grow == "LEFT" then
+            b:SetPoint("TOPRIGHT", last, "TOPLEFT", -gap, 0)
+        else
+            b:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 0, -gap)
+        end
+    else
+        UnregisterUnitWatch(b)
+        b:Hide()
+        return
+    end
+    RegisterUnitWatch(b)
 end
 
 PF.SetTracking = function(on)
@@ -7330,7 +7476,7 @@ PF.Layout = function(restyle)
     local party = PF.PartyMode()
     local w, h, sp, unitGrowth, groupGrowth
     if party then
-        w, h, sp = ns.RF_PartyDims(db.profile)
+        w, h, sp = PF.PartySize(s)
         unitGrowth = ns._PartyGrowth(db.profile)
         groupGrowth = (unitGrowth == "RIGHT" or unitGrowth == "LEFT") and "DOWN" or "RIGHT"
     else
@@ -7362,10 +7508,15 @@ PF.Layout = function(restyle)
     changed = SetAttr(hdr, "yOffset", yOff) or changed
     changed = SetAttr(hdr, "columnSpacing", PixelSnap(s.groupSpacing or 8)) or changed
     changed = SetAttr(hdr, "columnAnchorPoint", ns._RFColAnchor(unitGrowth, groupGrowth)) or changed
-    -- A new button size alone changes no attribute, so the header would keep its old spacing.
-    if resized and not changed and hdr:IsShown() then
-        hdr:Hide()
-        hdr:Show()
+    -- Blizzard never clears a shown button's anchors, and a leftover column anchor pins button 1 to
+    -- the header's old size, so a new size or layout re-lays from cleared anchors (as the merged raid
+    -- header does). A new size alone changes no attribute, hence the Hide/Show.
+    if resized or changed then
+        for _, b in ipairs(PF.buttons) do b:ClearAllPoints() end
+        if hdr:IsShown() then
+            hdr:Hide()
+            hdr:Show()
+        end
     end
 end
 
@@ -7427,13 +7578,15 @@ PF.PV_PETS = {
 PF.OPPOSITE = { RIGHT = "LEFT", LEFT = "RIGHT", DOWN = "UP", UP = "DOWN" }
 PF.pv = {}
 
--- The pet group beside a preview, or nil without Show Pets on that tab or on Free Move: button size, count and
+-- The pet group beside a preview, or nil without Show Pets on that tab, on Free Move or on Beside
+-- Owner: button size, count and
 -- growth, the group's size, and its top-left offset from the top-left of the boxW x boxH box it
 -- attaches to (the party frames, or the first or last preview group), by the FB.Anchor rules.
 -- w, h, sp: the preview's frame size and spacing.
 function ns.PF_PreviewSpec(party, s, w, h, sp, boxW, boxH)
     local set = PF.Settings()
     if not set or set[party and "party" or "raid"] ~= true or set.position == "free" then return end
+    if party and set.ownerMode then return end
     local before = set.position == "left"
     local gap, grow, side
     if party then
@@ -7444,6 +7597,9 @@ function ns.PF_PreviewSpec(party, s, w, h, sp, boxW, boxH)
             gap = gap + extra
         end
         grow = ns._PartyGrowth(s)
+        if ns.RF_PartyKit() then
+            w, h, sp = PixelSnap(s.frameWidth or 125), PixelSnap(s.frameHeight or 60), PixelSnap(s.cellSpacing or -1)
+        end
         if s.partyHorizontal then side = before and "UP" or "DOWN"
         else side = before and "LEFT" or "RIGHT" end
     else
@@ -7561,6 +7717,7 @@ function ns.PF_HidePreview()
 end
 
 function ns.PF_ReAnchor()
+    PF.PlaceSelfPet()
     if not PF.active then return end
     PF.attachParty = PF.PartyMode()
     FB.Anchor(PF)
@@ -7589,13 +7746,34 @@ function ns.PF_Apply(restyle)
         PF.eventFrame:UnregisterAllEvents()
     end
 
-    if not PF.Wanted() or not PF.EnsureBuilt() then
+    local owner = PF.OwnerWanted()
+    if owner then
+        PF.EnsureOwnerBuilt()
+        PF.OwnerLayout()
+        for _, b in ipairs(PF.ownerButtons) do
+            if b ~= PF.selfPet then RegisterUnitWatch(b) end
+        end
+        PF.ownerActive = true
+        PF.PlaceSelfPet()
+        PF.SetTracking(true)
+        for _, b in ipairs(PF.ownerButtons) do
+            if b:IsVisible() then PF.Refresh(b) end
+        end
+    elseif PF.ownerActive then
+        PF.ownerActive = nil
+        for _, b in ipairs(PF.ownerButtons) do
+            UnregisterUnitWatch(b)
+            b:Hide()
+        end
+    end
+
+    if owner or not PF.Wanted() or not PF.EnsureBuilt() then
         PF.active = nil
         if PF.built then
             UnregisterStateDriver(PF.container, "visibility")
             PF.container:Hide()
-            PF.SetTracking(false)
         end
+        if not owner then PF.SetTracking(false) end
         return
     end
 
@@ -7626,14 +7804,18 @@ do
             end
             if PF.anchorDirty then PF.anchorDirty = nil; ns.PF_ReAnchor() end
         elseif event == "PLAYER_TARGET_CHANGED" then
-            if not PF.active then return end
             for _, b in ipairs(PF.buttons) do
+                if b:IsVisible() then FB.ApplyBorderColor(b) end
+            end
+            for _, b in ipairs(PF.ownerButtons) do
                 if b:IsVisible() then FB.ApplyBorderColor(b) end
             end
         elseif event == "UNIT_PET" then
             -- A new pet can take over a token whose button keeps its unit attribute.
-            if not PF.active then return end
             for _, b in ipairs(PF.buttons) do
+                if b:IsVisible() then PF.Refresh(b) end
+            end
+            for _, b in ipairs(PF.ownerButtons) do
                 if b:IsVisible() then PF.Refresh(b) end
             end
         else -- GROUP_ROSTER_UPDATE / PLAYER_ENTERING_WORLD: party/raid mode and anchor can change
@@ -11345,10 +11527,12 @@ ns._PositionPartySlots = function(bw, bh, cs, unitGrowth)
         ns._partyHeader:ClearAllPoints()
         ns._partyHeader:SetPoint(basePoint, ns._partyContainerFrame, basePoint, cShiftX, cShiftY)
     end
-    -- The pet frames line up with whichever frame holds slot 0.
+    -- The pet frames line up with whichever frame holds slot 0, and your own pet (Beside Owner)
+    -- goes with whichever frame shows you.
     local first = (useSelf and not pSelfLast and sb) or ns._partyHeader
-    if first ~= ns._partyFirstSlot then
-        ns._partyFirstSlot = first
+    local selfMode = (useSelf and "button") or (hideSelf and "hidden") or "header"
+    if first ~= ns._partyFirstSlot or selfMode ~= ns._partySelfMode then
+        ns._partyFirstSlot, ns._partySelfMode = first, selfMode
         ns.PF_ReAnchor()
     end
     return useSelf
