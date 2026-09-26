@@ -28,6 +28,8 @@ local sin, cos = _G.sin or math.sin, _G.cos or math.cos  -- WoW globals are degr
 local GetTime = GetTime
 local GetCursorPosition = GetCursorPosition
 local GetSpellCooldown = C_Spell.GetSpellCooldown
+-- GCD reference spell: 61304 returns nil on Forever, which uses Classic's 29515
+local GCD_SPELL = EllesmereUI.IS_FOREVER == true and 29515 or 61304
 local UnitCastingInfo = UnitCastingInfo
 local UnitChannelInfo = UnitChannelInfo
 
@@ -468,7 +470,7 @@ local function CreateGCDCircle()
         if g2.combatOnly and not InCombatLockdown() then return end
         -- On cancelled/failed/interrupted casts the GCD resets stop the ring
         if event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_STOP" then
-            local cdData = GetSpellCooldown(61304)
+            local cdData = GetSpellCooldown(GCD_SPELL)
             if not cdData or not cdData.duration or cdData.duration <= 0 or not cdData.startTime or cdData.startTime <= 0 then
                 gcdRing:StopRing()
             end
@@ -476,7 +478,7 @@ local function CreateGCDCircle()
         end
         -- Query GCD via the reference spell; duration may be a secret number
         -- so wrap the comparison in pcall to avoid taint errors
-        local cdData = GetSpellCooldown(61304)
+        local cdData = GetSpellCooldown(GCD_SPELL)
         if not cdData or not cdData.startTime then return end
         local ok, elapsed, dur = pcall(function()
             local d = cdData.duration
