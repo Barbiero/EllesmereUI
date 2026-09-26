@@ -6544,9 +6544,6 @@ L["%1$s\'s Death Recap"] = "%1$s의 죽음 요약"
 L["Overall %1$s"] = "전체 %1$s"
 L["You may only have %1$d windows active"] = "%1$d개의 창만 활성화할 수 있습니다"
 L["Modern Background Style is required."] = "모던 배경 스타일"
--- -- 번역 누락분
-L["%1$s's %2$s Breakdown"] = "%1$s의 %2$s 내역"
-L["%1$s's Death Recap"] = "%1$s의 죽음 요약"
 -- == add Bags (가방) ========================================================
 L[" Items"] = "개"
 L["(Extra quickview display, your items are also in their category)"] = "(추가 빠른보기 표시 -> 아이템은 카테고리에도 있습니다)"
