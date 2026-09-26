@@ -4045,6 +4045,65 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         -------------------------------------------------------------------
+        --  PET FRAMES (party and raid tabs, each with its own switch)
+        -------------------------------------------------------------------
+        -- Not a synced section: no onSection call, so the party tab never overlays it.
+        do
+            _, h = W:SectionHeader(parent, "PET FRAMES", y); y = y - h
+
+            local function PFSet()
+                local p = db.profile
+                if not p.petFrames then
+                    p.petFrames = { position = "right" }
+                end
+                return p.petFrames
+            end
+            local tabKey = _partyCtx and "party" or "raid"
+            local function PFEnabled()
+                return PFSet()[tabKey] == true
+            end
+
+            row, h = W:DualRow(parent, y,
+                { type="toggle", text="Show Pets",
+                  tooltip="Adds your group's pets beside these frames, with their health, name, range and click-casting.",
+                  getValue = function() return PFEnabled() end,
+                  -- Rows below are HIDDEN while off; only the on/off flip forces the rebuild.
+                  setValue = EllesmereUI.DependentSetValue(PFEnabled, function(v)
+                      PFSet()[tabKey] = v and true or false
+                      if ns.PF_Apply then ns.PF_Apply() end
+                      EllesmereUI:RefreshPage()
+                  end) },
+                (not PFEnabled()) and { type="label", text="" } or
+                { type="dropdown", text="Position",
+                  values = { left="Before First Group", right="After Last Group" },
+                  order  = { "left", "right" },
+                  getValue = function() return PFSet().position or "right" end,
+                  setValue = function(v)
+                      PFSet().position = v
+                      if ns.PF_Apply then ns.PF_Apply() end
+                  end }); y = y - h
+
+            if PFEnabled() then
+            row, h = W:DualRow(parent, y,
+                { type="slider", text="Extra Width", min=-50, max=100, step=1,
+                  tooltip="Widens or narrows the pet frames relative to the frame size.",
+                  getValue = function() return PFSet().extraWidth or 0 end,
+                  setValue = function(v)
+                      PFSet().extraWidth = v
+                      if ns.PF_Apply then ns.PF_Apply() end
+                  end },
+                { type="slider", text="Extra Height", min=-50, max=100, step=1,
+                  tooltip="Makes the pet frames taller or shorter relative to the frame size.",
+                  getValue = function() return PFSet().extraHeight or 0 end,
+                  setValue = function(v)
+                      PFSet().extraHeight = v
+                      if ns.PF_Apply then ns.PF_Apply() end
+                  end }); y = y - h
+            end
+            _secY = y
+        end
+
+        -------------------------------------------------------------------
         --  RANGE & TOOLTIP
         -------------------------------------------------------------------
         _, h = W:SectionHeader(parent, "EXTRAS", y); y = y - h
