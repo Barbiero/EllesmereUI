@@ -4062,6 +4062,12 @@ initFrame:SetScript("OnEvent", function(self)
             local function PFEnabled()
                 return PFSet()[tabKey] == true
             end
+            -- Only a preview already on screen: starting one here would show the raid preview on the
+            -- party tab, or a preview with Preview Mode set to None.
+            local function PFRefreshPreview()
+                if ns.previewActive and ns.previewActive() and ns.ShowPreview then ns.ShowPreview() end
+                if ns.partyPvActive and ns.partyPvActive() and ns.ShowPartyPreview then ns.ShowPartyPreview() end
+            end
 
             row, h = W:DualRow(parent, y,
                 { type="toggle", text="Show Pets",
@@ -4071,16 +4077,22 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue = EllesmereUI.DependentSetValue(PFEnabled, function(v)
                       PFSet()[tabKey] = v and true or false
                       if ns.PF_Apply then ns.PF_Apply() end
+                      -- The Move Frames button goes with the page rebuild; the overlay can't stay up.
+                      if not v and ns.PF_SetMoverShown then ns.PF_SetMoverShown(false) end
+                      PFRefreshPreview()
                       EllesmereUI:RefreshPage()
                   end) },
                 (not PFEnabled()) and { type="label", text="" } or
                 { type="dropdown", text="Position",
-                  values = { left="Before First Group", right="After Last Group" },
-                  order  = { "left", "right" },
+                  values = { left="Before First Group", right="After Last Group", free="Free Move" },
+                  order  = { "left", "right", "free" },
                   getValue = function() return PFSet().position or "right" end,
                   setValue = function(v)
                       PFSet().position = v
+                      if v ~= "free" and ns.PF_SetMoverShown then ns.PF_SetMoverShown(false) end
                       if ns.PF_Apply then ns.PF_Apply() end
+                      PFRefreshPreview()
+                      EllesmereUI:RefreshPage()
                   end }); y = y - h
 
             if PFEnabled() then
@@ -4091,6 +4103,10 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue = function(v)
                       PFSet().extraWidth = v
                       if ns.PF_Apply then ns.PF_Apply() end
+                      if ns.PF_IsMoverShown and ns.PF_IsMoverShown() and ns.PF_SetMoverShown then
+                          ns.PF_SetMoverShown(true)
+                      end
+                      PFRefreshPreview()
                   end },
                 { type="slider", text="Extra Height", min=-50, max=100, step=1,
                   tooltip="Makes the pet frames taller or shorter relative to the frame size.",
@@ -4098,7 +4114,56 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue = function(v)
                       PFSet().extraHeight = v
                       if ns.PF_Apply then ns.PF_Apply() end
+                      if ns.PF_IsMoverShown and ns.PF_IsMoverShown() and ns.PF_SetMoverShown then
+                          ns.PF_SetMoverShown(true)
+                      end
+                      PFRefreshPreview()
                   end }); y = y - h
+
+            row, h = W:DualRow(parent, y,
+                { type="label", text="Free Move Position" },
+                { type="label", text="" }); y = y - h
+            if not EllesmereUI._prebuilding then
+                local btn = CreateFrame("Button", nil, row)
+                btn:SetSize(140, 26)
+                btn:SetPoint("RIGHT", row._leftRegion, "RIGHT", -20, 0)
+                btn:SetFrameLevel(row:GetFrameLevel() + 5)
+                local bbg = btn:CreateTexture(nil, "BACKGROUND")
+                bbg:SetAllPoints()
+                bbg:SetColorTexture(0.06, 0.08, 0.10, 0.92)
+                EllesmereUI.MakeBorder(btn, 1, 1, 1, 0.25)
+                local lbl = btn:CreateFontString(nil, "OVERLAY")
+                EllesmereUI.ApplyModuleFont(lbl, nil, 13, "raidFrames")
+                lbl:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                lbl:SetText(EllesmereUI.L("Move Frames"))
+
+                local function MoveAllowed()
+                    return PFSet().position == "free" and not InCombatLockdown()
+                end
+                local function UpdateMoveBtn()
+                    local active = ns.PF_IsMoverShown and ns.PF_IsMoverShown()
+                    lbl:SetText(active and EllesmereUI.L("Stop Moving") or EllesmereUI.L("Move Frames"))
+                    btn:SetAlpha(MoveAllowed() and 1 or 0.35)
+                end
+                btn:SetScript("OnEnter", function(self)
+                    if not MoveAllowed() then
+                        EllesmereUI.ShowWidgetTooltip(self,
+                            EllesmereUI.DisabledTooltip("Position must be set to Free Move"))
+                    else
+                        EllesmereUI.ShowWidgetTooltip(self,
+                            "Drag the overlay to position the frames, then click again to lock")
+                    end
+                end)
+                btn:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+                btn:SetScript("OnClick", function()
+                    if not MoveAllowed() then return end
+                    local active = ns.PF_IsMoverShown and ns.PF_IsMoverShown()
+                    if ns.PF_SetMoverShown then ns.PF_SetMoverShown(not active) end
+                    UpdateMoveBtn()
+                end)
+                EllesmereUI.RegisterWidgetRefresh(UpdateMoveBtn)
+                UpdateMoveBtn()
+            end
             end
             _secY = y
         end

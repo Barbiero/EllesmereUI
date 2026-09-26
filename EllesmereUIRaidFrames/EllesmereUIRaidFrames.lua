@@ -368,7 +368,8 @@ local defaults = {
         petFrames = {
             party = false,
             raid  = false,
-            position = "right",   -- "left" | "right"
+            position = "right",   -- "left" | "right" | "free"
+            freePos  = { x = 100, y = -200 },
             healthColor = { r = 23/255, g = 172/255, b = 49/255 },
             extraWidth  = 0,      -- size offset on top of the party or raid frame size
             extraHeight = 0,
@@ -5753,6 +5754,9 @@ end
 FB.ApplyBorderColor = function(b)
     if not PP or not b._borderFrame or not db then return end
     local s = ns._scaledProfile or db.profile
+    -- Pet buttons the header has not assigned yet have no unit.
+    local unit = FB.UnitOf(b)
+    local targeted = unit and UnitIsUnit(unit, "target") and s.targetBorderEnabled ~= false
     if b.stockEdge then
         local hover = b._fbHovered and s.hoverBorderEnabled ~= false
         local lvl = b:GetFrameLevel() + (hover and ns.LVL_RAISE or 8)
@@ -5761,8 +5765,7 @@ FB.ApplyBorderColor = function(b)
             local container = PP.GetBorders(b._borderFrame)
             if container then container:SetFrameLevel(lvl + 1) end
         end
-        ns.RF_StockHighlight(b, b._borderFrame, s, hover,
-            UnitIsUnit(FB.UnitOf(b), "target") and s.targetBorderEnabled ~= false)
+        ns.RF_StockHighlight(b, b._borderFrame, s, hover, targeted)
         return
     end
     local r, g, bcol, a
@@ -5772,7 +5775,7 @@ FB.ApplyBorderColor = function(b)
         r, g, bcol, a = c.r, c.g, c.b, s.hoverBorderAlpha or 1
         raised, hlSize = true, s.hoverBorderSize or 1
         hlPx = EllesmereUI.BorderPx(s.hoverBorderSizePx, hlSize, s.borderTexture or "solid")
-    elseif UnitIsUnit(FB.UnitOf(b), "target") and s.targetBorderEnabled ~= false then
+    elseif targeted then
         local c = s.targetBorderColor or { r = 1, g = 1, b = 1 }
         r, g, bcol, a = c.r, c.g, c.b, s.targetBorderAlpha or 1
         raised, hlSize = true, s.targetBorderSize or 1
@@ -6234,6 +6237,22 @@ FB.Anchor = function(owner)
                     before, extra = ns.RF_KitAttach(s, before)
                     gap = gap + extra
                 end
+                -- Pets line up with the first party frame: Flip Frame Growth and Centered start
+                -- the stack away from the container's top-left.
+                if owner ~= FB then
+                    local first = ns._partyFirstSlot or pc
+                    local grow = ns._PartyGrowth(s)
+                    if grow == "UP" then
+                        if before then c:SetPoint("BOTTOMRIGHT", first, "BOTTOMLEFT", -gap, 0)
+                        else c:SetPoint("BOTTOMLEFT", first, "BOTTOMRIGHT", gap, 0) end
+                        return
+                    elseif grow == "LEFT" then
+                        if before then c:SetPoint("BOTTOMRIGHT", first, "TOPRIGHT", 0, gap)
+                        else c:SetPoint("TOPRIGHT", first, "BOTTOMRIGHT", 0, -gap) end
+                        return
+                    end
+                    pc = first
+                end
                 -- Party growth axis comes from partyHorizontal alone (_LayoutPartyFrames): the flip
                 -- and "centered" variants only reverse it, and the container spans all five slots
                 -- either way, so the perpendicular attach point is the same.
@@ -6449,15 +6468,19 @@ FB.SetMoverShown = function(owner, show, frameName, labelText)
         end
     end
 
-    owner.mover:SetSize(owner.container:GetWidth(), owner.container:GetHeight())
     owner.mover:ClearAllPoints()
     local oset = owner.Settings() or {}
-    if owner.FreeAnchor and oset.freeRect then
-        -- Corner-pinned owners: mirror the container's placement so the overlay always covers the live grid (FB.Anchor just ran).
-        owner.mover:SetPoint("CENTER", owner.container, "CENTER")
+    if owner.PlaceMover then
+        owner.PlaceMover(owner.mover, oset)
     else
-        local p = oset.freePos or {}
-        owner.mover:SetPoint("CENTER", UIParent, "CENTER", p.x or 100, p.y or 0)
+        owner.mover:SetSize(owner.container:GetWidth(), owner.container:GetHeight())
+        if owner.FreeAnchor and oset.freeRect then
+            -- Corner-pinned owners: mirror the container's placement so the overlay always covers the live grid (FB.Anchor just ran).
+            owner.mover:SetPoint("CENTER", owner.container, "CENTER")
+        else
+            local p = oset.freePos or {}
+            owner.mover:SetPoint("CENTER", UIParent, "CENTER", p.x or 100, p.y or 0)
+        end
     end
     owner.mover:Show()
 end
@@ -7167,6 +7190,7 @@ end
 
 PF.Refresh = function(b)
     FB.Update(b, PF)
+    FB.ApplyBorderColor(b)
     PF.ApplyRange(b)
 end
 
@@ -7243,7 +7267,12 @@ PF.EnsureBuilt = function()
         hdr:SetAttribute("sortMethod", "INDEX")
         hdr:SetAttribute("unitsPerColumn", 5)
         hdr:SetAttribute("maxColumns", 8)
+        -- The pre-create pass below lays out 40 buttons in columns, which needs a column anchor;
+        -- PF.Layout sets the real one.
+        hdr:SetAttribute("columnAnchorPoint", "LEFT")
         PF.container = hdr
+        -- Switched on with a preview up: dim it like the other real frames.
+        if ns.previewActive() or ns._partyPvActive then ns._SetRealFramesPreviewHidden(true) end
     end
     if not hdr[PF.MAX] then
         hdr:SetAttribute("startingIndex", 1 - PF.MAX)
@@ -7302,8 +7331,8 @@ PF.Layout = function(restyle)
     local w, h, sp, unitGrowth, groupGrowth
     if party then
         w, h, sp = ns.RF_PartyDims(db.profile)
-        unitGrowth = db.profile.partyHorizontal and "RIGHT" or "DOWN"
-        groupGrowth = (unitGrowth == "RIGHT") and "DOWN" or "RIGHT"
+        unitGrowth = ns._PartyGrowth(db.profile)
+        groupGrowth = (unitGrowth == "RIGHT" or unitGrowth == "LEFT") and "DOWN" or "RIGHT"
     else
         w, h, sp = s.frameWidth or 125, s.frameHeight or 60, s.cellSpacing or -1
         unitGrowth, groupGrowth = ns._RFEffectiveGrowth(s.unitGrowth or "DOWN", s.groupGrowth or "RIGHT", true)
@@ -7313,6 +7342,7 @@ PF.Layout = function(restyle)
 
     local hdr = PF.container
     local resized = w ~= PF.w or h ~= PF.h
+    PF.sp, PF.unitGrowth, PF.groupGrowth = sp, unitGrowth, groupGrowth
     if resized or restyle then
         PF.w, PF.h = w, h
         local texPath = ResolveHealthTexture()
@@ -7337,6 +7367,197 @@ PF.Layout = function(restyle)
         hdr:Hide()
         hdr:Show()
     end
+end
+
+-- Free Move: the header is pinned at the corner its pets grow from, so pet 1 stays put as pets come
+-- and go. The overlay covers five pets; until its first drag they are centred on freePos.
+PF.FreeCorner = function(set)
+    local vertical = PF.unitGrowth ~= "RIGHT" and PF.unitGrowth ~= "LEFT"
+    local hDir = vertical and PF.groupGrowth or PF.unitGrowth
+    local vDir = vertical and PF.unitGrowth or PF.groupGrowth
+    local corner = (vDir == "UP" and "BOTTOM" or "TOP") .. (hDir == "LEFT" and "RIGHT" or "LEFT")
+    local w, h = PF.w, PF.h
+    if vertical then h = 5 * h + 4 * PF.sp else w = 5 * w + 4 * PF.sp end
+    local r = set.freeRect
+    if not r then
+        local p = set.freePos or {}
+        local cx, cy = p.x or 100, p.y or 0
+        r = { left = cx - w / 2, right = cx + w / 2, bottom = cy - h / 2, top = cy + h / 2 }
+    end
+    return corner, (hDir == "LEFT") and r.right or r.left, (vDir == "UP") and r.bottom or r.top, w, h
+end
+
+PF.FreeAnchor = function(c, set)
+    local corner, x, y = PF.FreeCorner(set)
+    c:SetPoint(corner, UIParent, "CENTER", x, y)
+    return true
+end
+
+PF.PlaceMover = function(m, set)
+    local corner, x, y, w, h = PF.FreeCorner(set)
+    m:SetSize(w, h)
+    m:SetPoint(corner, UIParent, "CENTER", x, y)
+end
+
+PF.SaveFreeRect = function(mover)
+    local set = PF.Settings()
+    local ux, uy = UIParent:GetCenter()
+    local l, b, mw, mh = mover:GetRect()
+    if not (set and ux and l) then return end
+    set.freeRect = { left = l - ux, right = l + mw - ux, bottom = b - uy, top = b + mh - uy }
+end
+
+function ns.PF_SetMoverShown(show)
+    FB.SetMoverShown(PF, show, "ERFPetFramesMover", "Pet Frames")
+end
+
+function ns.PF_IsMoverShown()
+    return PF.mover and PF.mover:IsShown() or false
+end
+
+-- Options preview: made-up pets beside the preview frames, on the same visuals. Plain frames, built
+-- the first time a preview shows with Show Pets on; the preview code makes room and places them.
+PF.PV_PETS = {
+    { name = "Felhunter", hp = 100 },
+    { name = "Ghoul", hp = 64 },
+    { name = "Spirit Beast", hp = 100 },
+    { name = "Water Elemental", hp = 38 },
+    { name = "Imp", hp = 85 },
+}
+PF.OPPOSITE = { RIGHT = "LEFT", LEFT = "RIGHT", DOWN = "UP", UP = "DOWN" }
+PF.pv = {}
+
+-- The pet group beside a preview, or nil without Show Pets on that tab or on Free Move: button size, count and
+-- growth, the group's size, and its top-left offset from the top-left of the boxW x boxH box it
+-- attaches to (the party frames, or the first or last preview group), by the FB.Anchor rules.
+-- w, h, sp: the preview's frame size and spacing.
+function ns.PF_PreviewSpec(party, s, w, h, sp, boxW, boxH)
+    local set = PF.Settings()
+    if not set or set[party and "party" or "raid"] ~= true or set.position == "free" then return end
+    local before = set.position == "left"
+    local gap, grow, side
+    if party then
+        gap = s.groupSpacing or -1
+        if ns.RF_PartyKit() then
+            local extra
+            before, extra = ns.RF_KitAttach(s, before)
+            gap = gap + extra
+        end
+        grow = ns._PartyGrowth(s)
+        if s.partyHorizontal then side = before and "UP" or "DOWN"
+        else side = before and "LEFT" or "RIGHT" end
+    else
+        gap = PixelSnap(s.groupSpacing or 8)
+        grow = s.unitGrowth or "DOWN"
+        side = s.groupGrowth or "RIGHT"
+        if before then side = PF.OPPOSITE[side] end
+    end
+
+    local spec = { n = party and 3 or 5, sp = sp, grow = grow, before = before }
+    spec.w = PixelSnap(math.max(10, w + (set.extraWidth or 0)))
+    spec.h = PixelSnap(math.max(10, h + (set.extraHeight or 0)))
+    if grow == "RIGHT" or grow == "LEFT" then
+        spec.bw, spec.bh = spec.n * spec.w + (spec.n - 1) * sp, spec.h
+    else
+        spec.bw, spec.bh = spec.w, spec.n * spec.h + (spec.n - 1) * sp
+    end
+    spec.ox, spec.oy = 0, 0
+    -- Party stacks that grow up or left start at the box's bottom or right edge.
+    if party and grow == "UP" then spec.oy = spec.bh - boxH end
+    if party and grow == "LEFT" then spec.ox = boxW - spec.bw end
+    if side == "RIGHT" then spec.ox = boxW + gap
+    elseif side == "LEFT" then spec.ox = -gap - spec.bw
+    elseif side == "DOWN" then spec.oy = -(boxH + gap)
+    else spec.oy = gap + spec.bh end
+    return spec
+end
+
+-- Shows the spec's pets with the group's top-left at x, y from rel's top-left.
+function ns.PF_ShowPreview(spec, s, parent, rel, x, y)
+    local set = PF.Settings()
+    local texPath = ResolveHealthTexture()
+    local bgc = s.customBgColor or { r = 17/255, g = 17/255, b = 17/255 }
+    local hc = set.healthColor
+    local nr, ng, nb = 1, 1, 1
+    local nameMode = s.nameColorMode or "class"
+    if nameMode == "accent" then
+        local r, g, b = EllesmereUI.ResolveActiveAccent()
+        if r then nr, ng, nb = r, g, b end
+    elseif nameMode == "custom" and s.nameCustomColor then
+        nr, ng, nb = s.nameCustomColor.r, s.nameCustomColor.g, s.nameCustomColor.b
+    end
+    local tr, tg, tb = 1, 1, 1
+    local textMode = s.healthTextColorMode or "custom"
+    if textMode == "accent" then
+        local r, g, b = EllesmereUI.ResolveActiveAccent()
+        if r then tr, tg, tb = r, g, b end
+    elseif textMode == "custom" and s.healthTextCustomColor then
+        tr, tg, tb = s.healthTextCustomColor.r, s.healthTextCustomColor.g, s.healthTextCustomColor.b
+    end
+    local mode = s.healthTextMode or "none"
+
+    for i = 1, spec.n do
+        local f = PF.pv[i]
+        if not f then
+            f = CreateFrame("Frame", nil, parent)
+            FB.BuildVisuals(f)
+            PF.pv[i] = f
+        elseif f:GetParent() ~= parent then
+            f:SetParent(parent)
+        end
+        f:SetFrameStrata(parent == UIParent and "HIGH" or parent:GetFrameStrata())
+        f:SetSize(spec.w, spec.h)
+        FB.StyleVisuals(f, s, spec.w, spec.h, texPath, bgc)
+
+        local off = i - 1
+        local fx, fy = x, y
+        if spec.grow == "RIGHT" then
+            fx = x + off * (spec.w + spec.sp)
+        elseif spec.grow == "LEFT" then
+            fx = x + spec.bw - spec.w - off * (spec.w + spec.sp)
+        elseif spec.grow == "UP" then
+            fy = y - spec.bh + spec.h + off * (spec.h + spec.sp)
+        else
+            fy = y - off * (spec.h + spec.sp)
+        end
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", rel, "TOPLEFT", fx, fy)
+
+        local pet = PF.PV_PETS[i]
+        local pct = pet.hp
+        f._health:SetMinMaxValues(0, 100)
+        f._health:SetValue(pct)
+        f._health:SetStatusBarColor(hc and hc.r or 23/255, hc and hc.g or 172/255,
+            hc and hc.b or 49/255, (s.healthBarOpacity or 100) / 100)
+        f._nameText:SetText(pet.name)
+        f._nameText:SetTextColor(nr, ng, nb)
+        local hp = pct * 3000
+        local num = AbbreviateNumbers and AbbreviateNumbers(hp) or tostring(hp)
+        if mode == "percent" then
+            f._healthText:SetFormattedText("%d%%", pct)
+        elseif mode == "percentNoSign" then
+            f._healthText:SetFormattedText("%d", pct)
+        elseif mode == "number" then
+            f._healthText:SetText(num)
+        elseif mode == "numberPercent" then
+            f._healthText:SetFormattedText("%s | %d%%", num, pct)
+        elseif mode == "percentNumber" then
+            f._healthText:SetFormattedText("%d%% | %s", pct, num)
+        elseif mode == "missing" and pct < 100 then
+            local miss = (100 - pct) * 3000
+            f._healthText:SetText(AbbreviateNumbers and AbbreviateNumbers(miss) or tostring(miss))
+        else
+            f._healthText:SetText("")
+        end
+        f._healthText:SetTextColor(tr, tg, tb, 0.9)
+        f._healAbsorbText:SetText("")
+        f:Show()
+    end
+    for i = spec.n + 1, #PF.pv do PF.pv[i]:Hide() end
+end
+
+function ns.PF_HidePreview()
+    for _, f in ipairs(PF.pv) do f:Hide() end
 end
 
 function ns.PF_ReAnchor()
@@ -11123,6 +11344,12 @@ ns._PositionPartySlots = function(bw, bh, cs, unitGrowth)
         if sb and not InCombatLockdown() then sb:Hide() end
         ns._partyHeader:ClearAllPoints()
         ns._partyHeader:SetPoint(basePoint, ns._partyContainerFrame, basePoint, cShiftX, cShiftY)
+    end
+    -- The pet frames line up with whichever frame holds slot 0.
+    local first = (useSelf and not pSelfLast and sb) or ns._partyHeader
+    if first ~= ns._partyFirstSlot then
+        ns._partyFirstSlot = first
+        ns.PF_ReAnchor()
     end
     return useSelf
 end
@@ -15567,6 +15794,32 @@ local function RefreshPreview()
         topExtra = 25
     end
 
+    -- Container size (4 groups)
+    local totalW, totalH
+    if groupGrowth == "DOWN" or groupGrowth == "UP" then
+        totalW = groupW
+        totalH = MOVER_GROUPS * groupH + (MOVER_GROUPS - 1) * gs
+    else
+        totalW = MOVER_GROUPS * groupW + (MOVER_GROUPS - 1) * gs
+        totalH = groupH
+    end
+
+    -- Pets (Show Pets on the Raid tab) go before the first or after the last group. The overlay
+    -- grows to hold them; at the real position the groups stay put and the pets hang off them.
+    local petSpec = ns.PF_PreviewSpec(false, s, bw, bh, cs, groupW, groupH)
+    local petX, petY, padL, padT, padR, padB = 0, 0, 0, 0, 0, 0
+    if petSpec then
+        local slot = petSpec.before and 0 or (MOVER_GROUPS - 1)
+        petX = rawGX[slot] - minGX + petSpec.ox
+        petY = rawGY[slot] - maxGY + petSpec.oy
+        if isOverlay then
+            padL = max(0, -petX)
+            padT = max(0, petY)
+            padR = max(0, petX + petSpec.bw - totalW)
+            padB = max(0, petSpec.bh - petY - totalH)
+        end
+    end
+
     -- Hide all preview frames first
     for _, f in ipairs(previewFrames) do f:Hide() end
 
@@ -15599,7 +15852,7 @@ local function RefreshPreview()
             f:ClearAllPoints()
             local fx = gx + (rawUX[u] - minUX)
             local fy = gy + (rawUY[u] - maxUY)
-            f:SetPoint("TOPLEFT", anchor, "TOPLEFT", fx + anchorPad, fy - anchorPad - topExtra)
+            f:SetPoint("TOPLEFT", anchor, "TOPLEFT", fx + anchorPad + padL, fy - anchorPad - topExtra - padT)
             ApplyPreviewData(f, frameIdx)
 
             if f._health and previewHealthValues[frameIdx] then
@@ -15658,16 +15911,13 @@ local function RefreshPreview()
     ns._previewGroupNumberOverlay:SetFrameLevel(9000)
     ns._previewGroupNumberOverlay:Show()
     for _, lbl in ipairs(previewGroupLabels) do lbl:SetParent(ns._previewGroupNumberOverlay) end
-
-    -- Container size (4 groups)
-    local totalW, totalH
-    if groupGrowth == "DOWN" or groupGrowth == "UP" then
-        totalW = groupW
-        totalH = MOVER_GROUPS * groupH + (MOVER_GROUPS - 1) * gs
+    if petSpec then
+        ns.PF_ShowPreview(petSpec, s, reparentTo, anchor,
+            petX + anchorPad + padL, petY - anchorPad - topExtra - padT)
     else
-        totalW = MOVER_GROUPS * groupW + (MOVER_GROUPS - 1) * gs
-        totalH = groupH
+        ns.PF_HidePreview()
     end
+
     local snapW = PixelSnap(max(totalW, 1))
     local snapH = PixelSnap(max(totalH, 1))
     if previewContainer then
@@ -15705,7 +15955,8 @@ local function RefreshPreview()
 
     -- Size and position overlay container
     if isOverlay and overlayContainer then
-        overlayContainer:SetSize(totalW + anchorPad * 2, totalH + anchorPad * 2 + topExtra)
+        overlayContainer:SetSize(totalW + padL + padR + anchorPad * 2,
+            totalH + padT + padB + anchorPad * 2 + topExtra)
         if overlayContainer._title then
             ApplyFont(overlayContainer._title, 13)
             overlayContainer._title:SetText("Overlay Preview")
@@ -15802,12 +16053,14 @@ do
             if containerFrame then containerFrame:SetAlpha(a) end
             if ns._partyContainerFrame then ns._partyContainerFrame:SetAlpha(a) end
             if ns._ptModelOn then ns.RF_PtContainerAlpha(a) end
+            if ns._PF.container then ns._PF.container:SetAlpha(a) end
             setBlock(false)
         else
             local a = on and 0 or 1
             if containerFrame then containerFrame:SetAlpha(a) end
             if ns._partyContainerFrame then ns._partyContainerFrame:SetAlpha(a) end
             if ns._ptModelOn then ns.RF_PtContainerAlpha(a) end
+            if ns._PF.container then ns._PF.container:SetAlpha(a) end
             setBlock(on)
         end
     end
@@ -15889,6 +16142,7 @@ local function HidePreview(skipRestore)
         lbl:SetParent(containerFrame)
         lbl:Hide()
     end
+    ns.PF_HidePreview()
     if skipRestore then return end
     -- The containers were only alpha-hidden (never reparented or moved), so the
     -- restore is a combat-legal SetAlpha(1) plus dropping the mouse blockers. No
@@ -16602,6 +16856,16 @@ local function RefreshPartyPreview()
         totalH = h
     end
 
+    -- Pets (Show Pets on the Party tab) beside the party frames; the overlay grows to hold them.
+    local petSpec = isOverlay and ns.PF_PreviewSpec(true, s, w, h, spacing, totalW, totalH)
+    local padL, padT, padR, padB = 0, 0, 0, 0
+    if petSpec then
+        padL = math.max(0, -petSpec.ox)
+        padT = math.max(0, petSpec.oy)
+        padR = math.max(0, petSpec.ox + petSpec.bw - totalW)
+        padB = math.max(0, petSpec.bh - petSpec.oy - totalH)
+    end
+
     -- Determine parent frame: overlay container for overlay, UIParent for real
     local parentFrame
     if isOverlay then
@@ -16624,20 +16888,20 @@ local function RefreshPartyPreview()
             if isVert then
                 local yOff = slot * (h + spacing)
                 if unitGrowth == "DOWN" then
-                    f:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", anchorPad, -anchorPad - topExtra - yOff)
+                    f:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", anchorPad + padL, -anchorPad - topExtra - padT - yOff)
                 else
                     -- UP fills the same box from the bottom upward (positive
                     -- offsets); the container's extra top height creates the
                     -- title gap, so no per-frame correction is needed here.
-                    f:SetPoint("BOTTOMLEFT", parentFrame, "BOTTOMLEFT", anchorPad, anchorPad + yOff)
+                    f:SetPoint("BOTTOMLEFT", parentFrame, "BOTTOMLEFT", anchorPad + padL, anchorPad + padB + yOff)
                 end
             else
                 local xOff = slot * (w + spacing)
                 if unitGrowth == "LEFT" then xOff = -xOff end
                 if unitGrowth == "RIGHT" then
-                    f:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", anchorPad + xOff, -anchorPad - topExtra)
+                    f:SetPoint("TOPLEFT", parentFrame, "TOPLEFT", anchorPad + padL + xOff, -anchorPad - topExtra - padT)
                 else
-                    f:SetPoint("TOPRIGHT", parentFrame, "TOPRIGHT", -anchorPad + xOff, -anchorPad - topExtra)
+                    f:SetPoint("TOPRIGHT", parentFrame, "TOPRIGHT", -anchorPad - padR + xOff, -anchorPad - topExtra - padT)
                 end
             end
             ApplyPartyPreviewData(f, i)
@@ -16648,7 +16912,8 @@ local function RefreshPartyPreview()
 
     -- Size and position overlay container
     if isOverlay and ns._partyOC then
-        ns._partyOC:SetSize(totalW + anchorPad * 2, totalH + anchorPad * 2 + topExtra)
+        ns._partyOC:SetSize(totalW + padL + padR + anchorPad * 2,
+            totalH + padT + padB + anchorPad * 2 + topExtra)
         ns._partyOC:SetFrameStrata("FULLSCREEN_DIALOG")
         ns._partyOC:SetFrameLevel(10)
         if ns._partyOC._title then
@@ -16667,6 +16932,12 @@ local function RefreshPartyPreview()
             ns._partyOC:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         end
         ns._partyOC:Show()
+        if petSpec then
+            ns.PF_ShowPreview(petSpec, s, ns._partyOC, ns._partyOC,
+                anchorPad + padL + petSpec.ox, -anchorPad - topExtra - padT + petSpec.oy)
+        else
+            ns.PF_HidePreview()
+        end
     end
 
     -- Real mode: anchor frames to the actual party container, mirroring the
@@ -16694,6 +16965,13 @@ local function RefreshPartyPreview()
                 PixelSnap(se.x or 0), PixelSnap(se.y or 0))
             anchorTo = proxy
             pos = pos or se
+        end
+        local cw, ch = anchorTo:GetSize()
+        local realPets = ns.PF_PreviewSpec(true, s, w, h, spacing, cw, ch)
+        if realPets then
+            ns.PF_ShowPreview(realPets, s, UIParent, anchorTo, realPets.ox, realPets.oy)
+        else
+            ns.PF_HidePreview()
         end
         if pos then
             local stepX, stepY = 0, 0
@@ -16781,6 +17059,7 @@ local function HidePartyPreview(skipRestore)
         if ns._partyPvFrames[i] then ns._partyPvFrames[i]:Hide() end
     end
     if ns._partyOC then ns._partyOC:Hide() end
+    ns.PF_HidePreview()
     if skipRestore then return end
     -- The containers were only alpha-hidden (never reparented or moved); restore
     -- is a combat-legal SetAlpha(1) plus dropping the mouse blockers. See
