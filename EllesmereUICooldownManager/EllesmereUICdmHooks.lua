@@ -5144,10 +5144,16 @@ do
         local tex = f._tex
         if not tex then return end
         if f._rangeOut then
-            local c = CooldownViewerConstants and CooldownViewerConstants.ITEM_NOT_IN_RANGE_COLOR
-            if c then
-                tex:SetVertexColor(c:GetRGB())
-                f._rangeTinted = true
+            -- Out of range the icon is range-driven: the dim memo goes (left set, it
+            -- would hold the drain unsettled after the spell turned usable) and the
+            -- tint write is edge-gated. PaintTint is the only colour writer here.
+            f._lastVertexDim = nil
+            if not f._rangeTinted then
+                local c = CooldownViewerConstants and CooldownViewerConstants.ITEM_NOT_IN_RANGE_COLOR
+                if c then
+                    tex:SetVertexColor(c:GetRGB())
+                    f._rangeTinted = true
+                end
             end
             return
         end
@@ -5171,16 +5177,48 @@ do
     end
     ns.PaintCustomSpellTint = PaintTint
 
+    -- Out of range is a readable false only: nil (no target) and a secret answer
+    -- both read as in range.
+    local function ReadOut(id)
+        local r = C_Spell.IsSpellInRange(id)
+        if not (issecretvalue and issecretvalue(r)) and r == false then return true end
+        return nil
+    end
+
+    -- Apply one out-of-range flip. paint=true repaints here (event, target and
+    -- options paths); the preset pass paints right after, so it passes false. A
+    -- repaint that lands dimmed wakes the drain: the write happened outside the
+    -- pass, and a dim is only polled for its usable edge while the drain is awake.
+    local function SetRangeOut(f, out, paint)
+        if f._rangeOut == out then return end
+        f._rangeOut = out
+        local sid = f._cachedPresetSID
+        if paint and sid then
+            PaintTint(f, sid, f._lastOnRealCD)
+            if f._lastVertexDim and ns._MarkPresetCdDirty then ns._MarkPresetCdDirty() end
+        end
+    end
+
     local function OnRangeEvent(_, event, spellID)
-        -- A readable id touches only the frames armed on it; an unreadable id or
-        -- a target change re-reads every armed frame (a handful at most).
-        local named = event == "SPELL_RANGE_CHECK_UPDATE"
-            and not (issecretvalue and issecretvalue(spellID))
+        if event == "PLAYER_TARGET_CHANGED" then
+            -- Full re-resolve of every armed frame (a handful at most); doubles as
+            -- the talent-override re-point for icons the pass is read-skipping.
+            for f in pairs(_pcActive) do
+                if f._rangeArmedSID then ns.SyncCustomSpellRange(f, true) end
+            end
+            return
+        end
+        -- SPELL_RANGE_CHECK_UPDATE. Blizzard's own registrations are nearly every
+        -- dispatch, so a readable id no icon here armed returns before any frame is
+        -- touched. An unreadable id (instanced secrecy) re-reads every armed frame.
+        -- Either way only the in/out answer is re-read: arming stays with Sync.
+        local named = not (issecretvalue and issecretvalue(spellID))
             and type(spellID) == "number"
+        if named and not refs[spellID] then return end
         for f in pairs(_pcActive) do
             local armed = f._rangeArmedSID
             if armed and (not named or armed == spellID) then
-                ns.SyncCustomSpellRange(f, true)
+                SetRangeOut(f, ReadOut(armed), true)
             end
         end
     end
@@ -5221,8 +5259,8 @@ do
     end
 
     -- Resolve one custom-spell frame: arm, re-point (talent override) or release
-    -- its range check, then re-read range. paint=true repaints on a flip (event
-    -- and options paths); the preset pass paints right after, so it passes false.
+    -- its range check, then re-read range. paint as SetRangeOut: true on the
+    -- target and options paths, false from the preset pass (it paints right after).
     function ns.SyncCustomSpellRange(f, paint)
         local sid = f._cachedPresetSID
         if not sid then
@@ -5238,15 +5276,7 @@ do
             if C_Spell.SpellHasRange(live) then want = live end
         end
         SetArm(f, want)
-        local out
-        if want then
-            local r = C_Spell.IsSpellInRange(want)
-            if not (issecretvalue and issecretvalue(r)) and r == false then out = true end
-        end
-        if f._rangeOut ~= out then
-            f._rangeOut = out
-            if paint and sid then PaintTint(f, sid, f._lastOnRealCD) end
-        end
+        SetRangeOut(f, want and ReadOut(want) or nil, paint)
     end
 
     function ns.ReleaseCustomSpellRange(f)
