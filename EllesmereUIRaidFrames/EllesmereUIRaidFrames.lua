@@ -725,6 +725,7 @@ local defaults = {
         partyFrameHeight  = 60,
         partyShowWhenSolo = false,
         partySmallRaid    = false,  -- raid under 10 players: group 1 as party frames, others hidden
+        partyShowTargets  = false,  -- opt-in secure target buttons beside party frames
         partyCenterWhenSolo = false,  -- center the lone player frame in the container when solo
         partySyncSections = nil,  -- nil = all synced; { healthBar=false } = healthBar custom
         partySortMode     = "ROLE",
@@ -11576,6 +11577,142 @@ ns._SizePartyContainer = function(bw, bh, cs, unitGrowth)
     end
 end
 
+-------------------------------------------------------------------------------
+-- Party Targets (opt-in, Party-only)
+--
+-- Secure buttons attached to party-header children. Their unit resolves as the
+-- owner's current target at click time, so no protected unit mutation or
+-- polling is needed while in combat.
+-------------------------------------------------------------------------------
+ns._partyTargetFrames = ns._partyTargetFrames or {}
+ns._ptEnabled = false
+ns._ptDesired = false
+
+local PT_WIDTH_SCALE, PT_HEIGHT_SCALE = 0.56, 0.55
+
+local function PT_RefreshName(frame)
+    local owner = frame and frame._ptOwner
+    local unit = owner and owner:GetAttribute("unit")
+    local target = unit and unit .. "target"
+    frame._ptName:SetText(target and UnitExists(target) and (UnitName(target) or "") or "")
+end
+
+ns._PT_RefreshAll = function()
+    for _, frame in ipairs(ns._partyTargetFrames) do PT_RefreshName(frame) end
+end
+
+local function PT_OnEvent(_, event, unit)
+    if not ns._ptEnabled then return end
+    if event ~= "UNIT_TARGET" or not unit then
+        ns._PT_RefreshAll()
+        return
+    end
+    for _, frame in ipairs(ns._partyTargetFrames) do
+        if frame._ptOwner:GetAttribute("unit") == unit then PT_RefreshName(frame) end
+    end
+end
+
+ns._PT_Layout = function()
+    if not ns._ptEnabled or InCombatLockdown() then return end
+    local s = db.profile
+    local partyWidth, partyHeight, spacing = ns.RF_PartyDims(s)
+    local width = PixelSnap(partyWidth * PT_WIDTH_SCALE)
+    local height = PixelSnap(partyHeight * PT_HEIGHT_SCALE)
+    local gap = PixelSnap(spacing)
+    for _, frame in ipairs(ns._partyTargetFrames) do
+        frame:SetSize(width, height)
+        frame:ClearAllPoints()
+        frame:SetPoint("LEFT", frame._ptOwner, "RIGHT", gap, 0)
+    end
+end
+
+ns._PT_Create = function()
+    if ns._ptCreated or not ns._partyHeader then return end
+    ns._ptCreated = true
+    for i = 1, 5 do
+        local owner = ns._partyHeader[i]
+        if owner then
+            local frame = CreateFrame("Button", "ERFPartyTarget" .. i, owner, "SecureUnitButtonTemplate")
+            frame:SetAttribute("useparent-unit", true)
+            frame:SetAttribute("unitsuffix", "target")
+            frame:SetAttribute("*type1", "target")
+            frame:RegisterForClicks("AnyUp")
+            frame:Hide()
+
+            local bg = frame:CreateTexture(nil, "BACKGROUND")
+            bg:SetAllPoints()
+            local c = db.profile.customBgColor or { r = 0, g = 0, b = 0 }
+            bg:SetColorTexture(c.r, c.g, c.b, (db.profile.bgDarkness or 50) / 100)
+            if PP then PP.DisablePixelSnap(bg) end
+
+            local border = CreateFrame("Frame", nil, frame)
+            border:SetAllPoints(frame)
+            border:SetFrameLevel(frame:GetFrameLevel() + 8)
+            if PP then PP.CreateBorder(border, 0, 0, 0, 1, 1) end
+
+            local textHost = CreateFrame("Frame", nil, frame)
+            textHost:SetAllPoints(frame)
+            textHost:SetFrameLevel(frame:GetFrameLevel() + ns.LVL_TEXT)
+            local name = textHost:CreateFontString(nil, "OVERLAY")
+            ApplyFont(name, db.profile.nameSize or 10)
+            name:SetPoint("LEFT", frame, "LEFT", 3, 0)
+            name:SetPoint("RIGHT", frame, "RIGHT", -3, 0)
+            name:SetJustifyH("CENTER")
+            name:SetWordWrap(false)
+            name:SetTextColor(1, 1, 1, 1)
+
+            frame._ptOwner, frame._ptName = owner, name
+            frame:HookScript("OnShow", PT_RefreshName)
+            table.insert(ns._partyTargetFrames, frame)
+        end
+    end
+end
+
+ns._PT_Apply = function()
+    if ns._ptDesired == ns._ptEnabled then return end
+    if InCombatLockdown() then
+        if not ns._ptCombatWatcher then
+            local watcher = CreateFrame("Frame")
+            watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+            watcher:SetScript("OnEvent", function(self)
+                self:UnregisterAllEvents()
+                ns._ptCombatWatcher = nil
+                ns._PT_Apply()
+            end)
+            ns._ptCombatWatcher = watcher
+        end
+        return
+    end
+    if ns._ptDesired then
+        ns._PT_Create()
+        if not ns._ptEventFrame then
+            ns._ptEventFrame = ns.TakeShell()
+            ns._ptEventFrame:SetScript("OnEvent", PT_OnEvent)
+        end
+        local events = ns._ptEventFrame
+        events:RegisterEvent("UNIT_TARGET")
+        events:RegisterEvent("UNIT_NAME_UPDATE")
+        events:RegisterEvent("GROUP_ROSTER_UPDATE")
+        events:RegisterEvent("PLAYER_ENTERING_WORLD")
+        ns._ptEnabled = true
+        ns._PT_Layout()
+        for _, frame in ipairs(ns._partyTargetFrames) do RegisterUnitWatch(frame) end
+        ns._PT_RefreshAll()
+    else
+        if ns._ptEventFrame then ns._ptEventFrame:UnregisterAllEvents() end
+        for _, frame in ipairs(ns._partyTargetFrames) do
+            UnregisterUnitWatch(frame)
+            frame:Hide()
+        end
+        ns._ptEnabled = false
+    end
+end
+
+ns.PT_SetEnabled = function(on)
+    ns._ptDesired = on and true or false
+    ns._PT_Apply()
+end
+
 -- Layout party frames: apply unitGrowth direction and cell spacing to the header.
 ns._LayoutPartyFrames = function()
     if not ns._partyHeader then return end
@@ -11715,6 +11852,7 @@ ns._LayoutPartyFrames = function()
     -- cell spacing -- has to move it too. OOC only (this function bails in combat). In a raid the
     -- boss group hangs off the raid headers instead, so skip the re-anchor scan there.
     if (not IsInRaid() or ns._PartyInRaid()) and ns.FB_ReAnchor then ns.FB_ReAnchor() end
+    ns._PT_Layout()
 end
 
 -- Party visibility: show/hide based on group state.
@@ -11782,6 +11920,9 @@ ns._UpdatePartyVisibility = function()
     end
 
     local s = db.profile
+    if ns._ptDesired ~= (s.partyShowTargets == true) then
+        ns.PT_SetEnabled(s.partyShowTargets)
+    end
     -- Arena and Small Raid mode show party frames even though IsInRaid() is
     -- true. The header binds raid units via showRaid=true; the raid container
     -- is hidden there by UpdateVisibility.

@@ -5779,6 +5779,15 @@ initFrame:SetScript("OnEvent", function(self)
                   end
               end });  y = y - h
 
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Enable Party Targets",
+              tooltip="Show a smaller secure target button beside each party frame. Left-click a button to target that party member's current target.",
+              getValue=function() return db.profile.partyShowTargets or false end,
+              setValue=function(v)
+                  db.profile.partyShowTargets = v
+                  if ns.PT_SetEnabled then ns.PT_SetEnabled(v) end
+              end });  y = y - h
+
         -------------------------------------------------------------------
         --  PORTRAIT (party only, every style; file-scope builder)
         -------------------------------------------------------------------
