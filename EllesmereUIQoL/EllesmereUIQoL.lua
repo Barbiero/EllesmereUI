@@ -50,12 +50,12 @@ qolFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
 
     ---------------------------------------------------------------------------
-    -- Bonus roll confirmation. Only the native Roll/Pass buttons are wrapped;
+    -- Bonus roll confirmation. Addon-owned overlays intercept Roll/Pass clicks;
     -- the journal link and other children retain their original behavior.
     ---------------------------------------------------------------------------
     do
         local active, lifecycleHooked, eventFrame
-        local rollButton, passButton, rollClick, passClick, rollWrapper, passWrapper
+        local rollButton, passButton, rollOverlay, passOverlay
         local pending
 
         local function Enabled()
@@ -84,27 +84,25 @@ qolFrame:SetScript("OnEvent", function(self)
 
         local function IsCurrent(request)
             local frame = BonusRollFrame
-            return active and Enabled() and frame:IsShown() and frame.state == "prompt"
+            return active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
                 and frame.spellID == request.spellID and frame.endTime == request.endTime
-                and frame.endTime > time() and frame.remaining > 0
+                and (frame.remaining or 0) > 0
                 and request.button:IsShown() and request.button:IsEnabled()
-                and request.button:GetScript("OnClick") == request.wrapper
+                and not request.button:IsProtected()
+                and request.button:GetScript("OnClick") == request.handler
                 and (not request.isRoll or request.specID == LootSpec())
         end
 
-        local function Click(isRoll, original, wrapper, button, mouseButton, down)
-            if not active or not Enabled() then
-                return original(button, mouseButton, down)
-            end
+        local function Click(isRoll, button, mouseButton, down)
+            if not active or not Enabled() then return end
             Invalidate()
-            if not isRoll and EllesmereUIDB.bonusRollOnly ~= false then
-                return original(button, mouseButton, down)
-            end
             local frame = BonusRollFrame
+            if not frame then return end
             local specID, specName = LootSpec()
             local request = {
                 spellID = frame.spellID, endTime = frame.endTime,
-                specID = specID, isRoll = isRoll, button = button, wrapper = wrapper,
+                specID = specID, isRoll = isRoll, button = button,
+                handler = button:GetScript("OnClick"),
             }
             if not IsCurrent(request) then return end
             request.cancel = function()
@@ -124,29 +122,42 @@ qolFrame:SetScript("OnEvent", function(self)
                     local valid = EUIConfirmPopup and EUIConfirmPopup._onCancel == request.cancel
                         and IsCurrent(request)
                     Invalidate()
-                    if valid then original(button, mouseButton, down) end
+                    if valid then button:Click(mouseButton, down) end
                 end,
             })
         end
 
-        local function Restore()
-            if rollButton and rollButton:GetScript("OnClick") == rollWrapper then
-                rollButton:SetScript("OnClick", rollClick)
-            end
-            if passButton and passButton:GetScript("OnClick") == passWrapper then
-                passButton:SetScript("OnClick", passClick)
-            end
+        local function SyncOverlays()
+            if not rollOverlay then return end
+            local frame = BonusRollFrame
+            local show = active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
+            rollOverlay:SetShown(show and true or false)
+            passOverlay:SetShown(show and EllesmereUIDB.bonusRollOnly == false or false)
+        end
+
+        local function MakeOverlay(button, isRoll)
+            local overlay = CreateFrame("Button", nil, button)
+            overlay:SetAllPoints(button)
+            overlay:SetFrameLevel(button:GetFrameLevel() + 1)
+            overlay:RegisterForClicks("LeftButtonUp")
+            overlay:SetScript("OnClick", function(_, mouseButton, down)
+                Click(isRoll, button, mouseButton, down)
+            end)
+            overlay:SetScript("OnEnter", function()
+                local handler = button:GetScript("OnEnter")
+                if handler then handler(button) end
+            end)
+            overlay:SetScript("OnLeave", function()
+                local handler = button:GetScript("OnLeave")
+                if handler then handler(button) end
+            end)
+            overlay:Hide()
+            return overlay
         end
 
         local function Install()
             if rollButton then
-                -- Another addon may own a wrapper around ours. Do not stack hooks.
-                if rollButton:GetScript("OnClick") == rollClick then
-                    rollButton:SetScript("OnClick", rollWrapper)
-                end
-                if passButton:GetScript("OnClick") == passClick then
-                    passButton:SetScript("OnClick", passWrapper)
-                end
+                SyncOverlays()
                 return
             end
             local frame = BonusRollFrame
@@ -156,35 +167,39 @@ qolFrame:SetScript("OnEvent", function(self)
             if roll._brcHooked or pass._brcHooked then return end
             if not roll:GetScript("OnClick") or not pass:GetScript("OnClick") then return end
             rollButton, passButton = roll, pass
-            rollClick, passClick = roll:GetScript("OnClick"), pass:GetScript("OnClick")
-            rollWrapper = function(...) return Click(true, rollClick, rollWrapper, ...) end
-            passWrapper = function(...) return Click(false, passClick, passWrapper, ...) end
-            roll:SetScript("OnClick", rollWrapper)
-            pass:SetScript("OnClick", passWrapper)
+            rollOverlay = MakeOverlay(roll, true)
+            passOverlay = MakeOverlay(pass, false)
             if not lifecycleHooked then
                 lifecycleHooked = true
-                local function Changed() if active then Invalidate() end end
+                local function Changed()
+                    if active then Invalidate(); SyncOverlays() end
+                end
                 hooksecurefunc("BonusRollFrame_StartBonusRoll", Changed)
                 hooksecurefunc("BonusRollFrame_CloseBonusRoll", Changed)
                 frame:HookScript("OnHide", Changed)
+                frame:HookScript("OnShow", Changed)
             end
+            SyncOverlays()
         end
 
         local function Apply()
             Invalidate()
             active = Enabled()
             if not active then
-                Restore()
+                SyncOverlays()
                 if eventFrame then eventFrame:UnregisterAllEvents() end
                 return
             end
             if not eventFrame then
                 eventFrame = CreateFrame("Frame")
-                eventFrame:SetScript("OnEvent", function(_, event)
+                eventFrame:SetScript("OnEvent", function(_, event, addonName)
                     if event == "ADDON_LOADED" then
-                        EllesmereUI._applyBonusRollConfirmation()
+                        if addonName == "BonusRollConfirm" or not rollButton then
+                            EllesmereUI._applyBonusRollConfirmation()
+                        end
                     else
                         Invalidate()
+                        SyncOverlays()
                     end
                 end)
             end

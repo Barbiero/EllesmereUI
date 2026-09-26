@@ -20,7 +20,7 @@ BLOCK = "do\n" + BLOCK.split("    do\n", 1)[1].split(
 
 STUBS = r'''
 frames, hooks, actions, shown = {}, {}, {}, 0
-clock, lootSpec, currentSpec, conflict = 100, 65, 66, false
+lootSpec, currentSpec, conflict = 65, 66, false
 EllesmereUIDB = {}
 EllesmereUI = {L = function(s) return s end, Lf = string.format}
 ROLL, PASS, CANCEL, UNKNOWN = "Roll", "Pass", "Cancel", "Unknown"
@@ -31,14 +31,26 @@ C_SpecializationInfo = {
 }
 function GetLootSpecialization() return lootSpec end
 function GetSpecializationInfoByID(id) return id, "Spec " .. id end
-function time() return clock end
-function CreateFrame()
+function CreateFrame(kind, name, parent)
     local f = {scripts = {}, events = {}, visible = true, enabled = true}
+    if parent then parent.overlay = f end
+    function f:SetAllPoints() end
+    function f:GetFrameLevel() return 1 end
+    function f:SetFrameLevel() end
+    function f:RegisterForClicks() end
+    function f:SetShown(v) if v then self.visible=true else self:Hide() end end
+    function f:Click(button,down) self.scripts.OnClick(self,button,down) end
     function f:RegisterEvent(e) self.events[e] = true end
     function f:UnregisterAllEvents() self.events = {} end
     function f:SetScript(e, fn) self.scripts[e] = fn end
     function f:GetScript(e) return self.scripts[e] end
-    function f:HookScript(e, fn) self.scripts[e] = fn end
+    function f:HookScript(e, fn)
+        local previous=self.scripts[e]
+        self.scripts[e]=function(...)
+            if previous then previous(...) end
+            fn(...)
+        end
+    end
     function f:IsShown() return self.visible end
     function f:IsEnabled() return self.enabled end
     function f:IsProtected() return self.protected end
@@ -56,9 +68,9 @@ end
 function fireHook(name)
     for _, fn in ipairs(hooks[name] or {}) do fn() end
 end
-function event(name)
+function event(name, addonName)
     for _, f in ipairs(frames) do
-        if f.events[name] then f.scripts.OnEvent(f, name) end
+        if f.events[name] then f.scripts.OnEvent(f, name, addonName) end
     end
 end
 BonusRollFrame = CreateFrame()
@@ -71,6 +83,7 @@ nativeRoll = function(self, button, down)
 end
 nativePass = function(self, button, down)
     actions[#actions + 1] = {"pass", f.spellID, button, down}
+    f:Hide()
 end
 roll:SetScript("OnClick", nativeRoll)
 pass:SetScript("OnClick", nativePass)
@@ -79,7 +92,10 @@ function start(id)
     roll.enabled = true
     fireHook("BonusRollFrame_StartBonusRoll")
 end
-function click(button) button:GetScript("OnClick")(button, "LeftButton", false) end
+function click(button)
+    local target=button.overlay and button.overlay:IsShown() and button.overlay or button
+    target:Click("LeftButton", false)
+end
 function EllesmereUI:ShowConfirmPopup(opts)
     shown = shown + 1
     dialog = opts
@@ -144,7 +160,7 @@ class BonusRollTests(unittest.TestCase):
         ''')
 
     def test_expired_or_unavailable_rolls_never_accept(self):
-        for mutation in ('clock = 160', 'BonusRollFrame.remaining = 0',
+        for mutation in ('BonusRollFrame.remaining = nil', 'BonusRollFrame.remaining = 0',
                          'BonusRollFrame.state = "rolling"', 'roll.enabled = false',
                          'BonusRollFrame.visible = false', 'BonusRollFrame.spellID = 11',
                          'BonusRollFrame.endTime = 180', 'lootSpec = 66',
@@ -190,13 +206,14 @@ class BonusRollTests(unittest.TestCase):
             assert(roll:GetScript("OnClick") == nativeRoll)
         ''')
 
-    def test_late_conflict_preserves_other_addon_wrapper(self):
+    def test_late_conflict_hides_overlays_and_preserves_native_handler(self):
         self.run_lua('''
             enable(); click(roll); local ours = roll:GetScript("OnClick")
             local other = function(...) return ours(...) end
             roll:SetScript("OnClick", other)
-            conflict = true; event("ADDON_LOADED"); accept()
+            conflict = true; event("ADDON_LOADED", "BonusRollConfirm"); accept()
             assert(#actions == 0 and roll:GetScript("OnClick") == other)
+            assert(not roll.overlay:IsShown() and not pass.overlay:IsShown())
             click(roll); assert(#actions == 1 and shown == 1)
         ''')
 
@@ -208,6 +225,31 @@ class BonusRollTests(unittest.TestCase):
             stale(); assert(#actions == 0)
             event("BONUS_ROLL_STARTED")
             assert(EUIConfirmPopup._dimmer:IsShown())
+        ''')
+
+    def test_native_handlers_untouched_and_unrelated_addon_keeps_prompt(self):
+        self.run_lua('''
+            enable(false)
+            assert(roll:GetScript("OnClick")==nativeRoll and pass:GetScript("OnClick")==nativePass)
+            click(roll);event("ADDON_LOADED","UnrelatedAddon");accept()
+            assert(#actions==1)
+        ''')
+
+    def test_overlay_visibility_and_native_hover_forwarding(self):
+        self.run_lua('''
+            enable(false)
+            assert(roll.overlay:IsShown() and pass.overlay:IsShown())
+            enable(true);assert(roll.overlay:IsShown() and not pass.overlay:IsShown())
+            local entered,left=0,0
+            roll:SetScript("OnEnter",function(self) assert(self==roll);entered=entered+1 end)
+            roll:SetScript("OnLeave",function(self) assert(self==roll);left=left+1 end)
+            roll.overlay:GetScript("OnEnter")();roll.overlay:GetScript("OnLeave")()
+            assert(entered==1 and left==1)
+            BonusRollFrame.state="rolling";event("BONUS_ROLL_RESULT")
+            assert(not roll.overlay:IsShown() and not pass.overlay:IsShown())
+            start();assert(roll.overlay:IsShown())
+            BonusRollFrame.visible=false;fireHook("BonusRollFrame_CloseBonusRoll")
+            assert(not roll.overlay:IsShown() and not pass.overlay:IsShown())
         ''')
 
     def test_current_specialization_fallback(self):
