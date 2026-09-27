@@ -211,9 +211,18 @@ function ns.RF_BuildPartyPortrait(parent, y, W, PSSet)
         { type="slider", label="2D Zoom", min=50, max=100, step=1,
           get=function() return PV("partyPortraitArtScale", 100) end,
           set=function(v) PtSet("partyPortraitArtScale", v) end },
-        { type="slider", label="3D Zoom", min=100, max=300, step=1,
+        { type="slider", label="3D Zoom", min=100, max=ns.RF_PT_ZOOM3D_MAX or 500, step=1,
+          tooltip="Above 300 the camera pulls back to show the whole character.",
           get=function() return PV("partyPortrait3dZoom", 100) end,
           set=function(v) PtSet("partyPortrait3dZoom", v) end },
+        { type="slider", label="Character Size", min=50, max=200, step=1,
+          tooltip="Scales the 3D character inside the portrait box, growing up from its bottom edge. The box stays the same.",
+          disabled=function()
+              return PV("partyPortraitStyle", "none") ~= "detached" or not IsInside(PV("partyPortraitSide", "left"))
+          end,
+          disabledTooltip="This option requires an Inside position.", rawTooltip=true,
+          get=function() return PV("partyPortraitCharScale", 100) end,
+          set=function(v) PtSet("partyPortraitCharScale", v) end },
     } })
     EllesmereUI.BuildInlineCog(sizePosRow._rightRegion, { title = "Portrait Position Offsets", rows = {
         { type="slider", label="X Offset", min=-100, max=100, step=1,

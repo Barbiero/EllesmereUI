@@ -6041,6 +6041,21 @@ local function IsPresetFamilyFrame(f)
     return (pd and pd.altItemIDs and f._presetItemID == pd.itemID) and true or false
 end
 
+-- Count (charges included) of a non-pot item preset frame: the primary id, else the
+-- sum of the family alts (always the sum with countAllAlts). Returns total and first owned id.
+local function ReadItemPresetCount(f)
+    local total = C_Item.GetItemCount(f._presetItemID, false, true) or 0
+    local owned = total > 0 and f._presetItemID or nil
+    if IsPresetFamilyFrame(f) and (total == 0 or f._presetData.countAllAlts) then
+        for _, altID in ipairs(f._presetData.altItemIDs) do
+            local c = C_Item.GetItemCount(altID, false, true) or 0
+            total = total + c
+            if not owned and c > 0 then owned = altID end
+        end
+    end
+    return total, owned
+end
+
 -- Guard: after ENCOUNTER_END clears item-preset caches, subsequent events
 -- fire before Blizzard has finished resetting potion CDs. Without this guard
 -- the update loop re-caches stale cooldown data from C_Item.GetItemCooldown.
@@ -6380,22 +6395,16 @@ local function ProcessPresetCooldowns()
                     -- count-armed FOREVER and never skipped them (probe capture #12).
                     f._countArm = false
                 elseif f._countArm ~= false then
-                    -- Count-on-edge: item counts only move with bag contents
-                    -- (BAG_UPDATE_DELAYED) or a use-cast, both of which arm.
+                    -- Count-on-edge: item counts move with bag contents
+                    -- (BAG_UPDATE_DELAYED), a use-cast, or a charge-only
+                    -- change (BAG_UPDATE_COOLDOWN recheck), all of which arm.
                     -- This content edge also re-points the single watched cd
                     -- id (f._itemCdSource): first owned id wins; while
                     -- nothing is owned the LAST owned id is kept (the shared
                     -- cd lives on the id that was just used).
                     f._countArm = false
-                    total = C_Item.GetItemCount(f._presetItemID, false, true) or 0
-                    local owned = total > 0 and f._presetItemID or nil
-                    if total == 0 and IsPresetFamilyFrame(f) then
-                        for _, altID in ipairs(f._presetData.altItemIDs) do
-                            local c = C_Item.GetItemCount(altID, false, true) or 0
-                            total = total + c
-                            if not owned and c > 0 then owned = altID end
-                        end
-                    end
+                    local owned
+                    total, owned = ReadItemPresetCount(f)
                     if owned then f._itemCdSource = owned end
                     f._cachedTotal = total
                 else
@@ -6499,6 +6508,28 @@ local function _PlainNum(v)
     return type(v) == "number" and (not canaccessvalue or canaccessvalue(v))
 end
 
+-- Charge-only item count changes (a used Healthstone charge, a Soulwell refill)
+-- move no bag contents, so no BAG_UPDATE fires. Re-read the shown non-pot item
+-- counts and arm only on a real change.
+local function RecheckItemPresetCounts()
+    local hit
+    for f in pairs(_pcActive) do
+        if f._isItemPresetFrame and f._presetItemID and not f._displayItemID
+           and f._cachedTotal and f._countArm == false
+           and ReadItemPresetCount(f) ~= f._cachedTotal then
+            f._countArm = true
+            hit = true
+        end
+    end
+    if hit then
+        _presetCdDirty = true
+        _pcAllSettled = false
+        -- Fast lane like a cast: the new count lands after the cast's own pass, inside the 1 Hz cap.
+        ns._pcLast = 0
+        if ns.ArmBuffTicker then ns.ArmBuffTicker() end
+    end
+end
+
 _racialCdListener:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
     -- Trailing flush for the loot-storm cap: a bag fire swallowed inside the
     -- window re-arms on the first event past it (combat noise makes that
@@ -6552,6 +6583,8 @@ _racialCdListener:SetScript("OnEvent", function(_, event, a1, a2, a3, a4)
         return
     end
     if event == "BAG_UPDATE_COOLDOWN" then
+        -- A used item charge lands with this event, after the cast arm already read the old count.
+        RecheckItemPresetCounts()
         -- THE item-cooldown edge: fires when any item cooldown starts, ends
         -- early or is modified. Re-walk the item chains on the next pass;
         -- between these edges the cached start/dur drives the display.

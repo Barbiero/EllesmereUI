@@ -754,7 +754,8 @@ local defaults = {
         partyPortraitBorderOpacity = 100,       -- 0..100
         partyPortraitBorderSize  = 7,           -- 1..7
         partyPortraitArtScale    = 100,         -- 2D Zoom 50..100
-        partyPortrait3dZoom      = 100,         -- 3D Zoom 100..300
+        partyPortrait3dZoom      = 100,         -- 3D Zoom 100..500 (above 300: whole character)
+        partyPortraitCharScale   = 100,         -- Character Size % 50..200 (Inside, 3D)
     }
 }
 

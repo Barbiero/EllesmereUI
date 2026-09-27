@@ -597,6 +597,11 @@ local CDM_ITEM_PRESETS = {
         name     = "Healthstone",
         icon     = 538745,
         itemID   = 5512,
+        -- Pact of Gluttony turns self-conjured stones into Demonic Healthstones and a
+        -- warlock can hold both, so this icon counts the sum. The lockout stays keyed
+        -- to 6262 only: Demonic stones are reusable in combat.
+        altItemIDs = { 224464 },
+        countAllAlts = true,
         spellID  = 6262,
         combatLockout = true,
     },
