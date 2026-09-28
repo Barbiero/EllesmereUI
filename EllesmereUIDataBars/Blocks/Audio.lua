@@ -13,6 +13,7 @@ local ipairs      = ipairs
 local type        = type
 local floor       = math.floor
 local max         = math.max
+local Clamp       = Clamp
 
 local ICON_GAP             = K.ICON_GAP
 local CONTENT_BASE         = K.CONTENT_BASE
@@ -54,20 +55,20 @@ ns.BlockFactories.audio = function(blockCfg, slot, content, barCtx)
     local function Chan()
         return AUDIO_CHANNELS[D().channel] or AUDIO_CHANNELS.master
     end
-    local function GetVol()
-        local v = tonumber(GetCVar(Chan().cvar)) or 1
-        if v < 0 then v = 0 elseif v > 1 then v = 1 end
-        return v
+    -- Channel volume 0..1. A missing CVar reads as full volume on every path (bar, rows, wheel).
+    local function ReadVol(ch)
+        return Clamp(tonumber(GetCVar(ch.cvar)) or 1, 0, 1)
     end
-    -- Wheel step: 1%, or 10% with Shift. Rounds to whole percents so repeated steps never drift.
+    local function GetVol() return ReadVol(Chan()) end
+    -- Wheel step: 1%, or 10% with Shift. Rounds to whole percents so repeated steps never drift; SetChanVol clamps.
     local function WheelStep(v, delta)
-        v = floor((v + delta * (IsShiftKeyDown() and 0.10 or 0.01)) * 100 + 0.5) / 100
-        if v < 0 then v = 0 elseif v > 1 then v = 1 end
-        return v
+        return floor((v + delta * (IsShiftKeyDown() and 0.10 or 0.01)) * 100 + 0.5) / 100
     end
+    -- The one volume writer, clamped to 0..1. A sound CVar write fires CVAR_UPDATE
+    -- synchronously and the block's handler repaints the bar (and the owned tip,
+    -- outside a drag), so callers never repaint on their own.
     local function SetChanVol(ch, v)
-        if v < 0 then v = 0 elseif v > 1 then v = 1 end
-        SetCVar(ch.cvar, v)
+        SetCVar(ch.cvar, Clamp(v, 0, 1))
     end
     local function SetVol(v) SetChanVol(Chan(), v) end
 
@@ -97,11 +98,8 @@ ns.BlockFactories.audio = function(blockCfg, slot, content, barCtx)
         local scale = volTrack:GetEffectiveScale()
         if not scale or scale == 0 then scale = 1 end
         local cx = GetCursorPosition() / scale
-        local frac = (cx - left) / w
-        if frac < 0 then frac = 0 elseif frac > 1 then frac = 1 end
-        SetVol(frac)
-        -- Direct paint for zero-lag feedback; the CVAR_UPDATE refresh reconciles anything else (tooltip, other blocks).
-        volBar:SetValue(frac)
+        -- SetVol clamps; the synchronous CVAR_UPDATE refresh paints the bar.
+        SetVol((cx - left) / w)
     end
 
     hit:SetScript("OnMouseDown", function(_, btn)
@@ -120,50 +118,26 @@ ns.BlockFactories.audio = function(blockCfg, slot, content, barCtx)
 
     audioButton:SetScript("OnMouseWheel", function(_, delta)
         SetVol(WheelStep(GetVol(), delta))
-        inst:Refresh()
     end)
 
+    -- Mute flips repaint through the same synchronous CVAR_UPDATE path as volume writes.
     local function ToggleMute(ch)
         SetCVar(ch.enable, GetCVarBool(ch.enable) and 0 or 1)
-        inst:Refresh()
-    end
-
-    -- Tooltip row right-click: exact-value entry through the house input popup (never StaticPopup). Accepts 0-100; non-numbers are ignored.
-    local function OpenVolumeInput(ch)
-        local cur = floor((tonumber(GetCVar(ch.cvar)) or 0) * 100 + 0.5)
-        EllesmereUI:ShowInputPopup({
-            title = "Set Volume",
-            message = EllesmereUI.Lf("Enter a volume from 0 to 100 for %1$s:", L[ch.label]),
-            placeholder = tostring(cur),
-            confirmText = "Apply",
-            cancelText = "Cancel",
-            onConfirm = function(text)
-                local n = tonumber(text)
-                if not n then return end
-                SetChanVol(ch, n / 100)
-                inst:Refresh()
-            end,
-        })
     end
 
     -- Left-click off the bar (icon) toggles mute for the block's channel; the bar's hit frame keeps drag-to-set.
     audioButton:RegisterForClicks("LeftButtonUp")
     audioButton:SetScript("OnClick", function() ToggleMute(Chan()) end)
 
-    -- Per-channel tooltip row handlers, built once: left-click toggles mute, right-click opens exact entry, wheel steps volume.
+    -- Per-channel tooltip row handlers, built once: left-click toggles mute, wheel steps volume; other buttons do nothing.
     local rowClick, rowWheel = {}, {}
     for _, key in ipairs(AUDIO_CHANNEL_ORDER) do
         local ch = AUDIO_CHANNELS[key]
         rowClick[key] = function(mouseButton)
-            if mouseButton == "RightButton" then
-                OpenVolumeInput(ch)
-            elseif mouseButton == "LeftButton" then
-                ToggleMute(ch)
-            end
+            if mouseButton == "LeftButton" then ToggleMute(ch) end
         end
         rowWheel[key] = function(delta)
-            SetCVar(ch.cvar, WheelStep(tonumber(GetCVar(ch.cvar)) or 0, delta))
-            inst:Refresh()
+            SetChanVol(ch, WheelStep(ReadVol(ch), delta))
         end
     end
 
@@ -171,23 +145,30 @@ ns.BlockFactories.audio = function(blockCfg, slot, content, barCtx)
         ns.Tip_Begin(audioButton)
         ns.Tip_AddLine("|cFFFFFFFF[|r" .. L["AUDIO"] .. "|cFFFFFFFF]|r", 1, 1, 1)
         ns.Tip_AddLine(" ")
-        local selected = D().channel or "master"
+        local selected = Chan()
+        -- Master off silences every other channel, so their rows dim (the selected
+        -- row stays a step brighter); a muted channel keeps its red "Muted".
+        local masterOn = GetCVarBool(AUDIO_CHANNELS.master.enable)
         for _, key in ipairs(AUDIO_CHANNEL_ORDER) do
             local ch = AUDIO_CHANNELS[key]
-            local pct = floor((tonumber(GetCVar(ch.cvar)) or 0) * 100 + 0.5)
-            local lr, lg, lb = 0.65, 0.65, 0.65
-            if key == selected then lr, lg, lb = 1, 1, 1 end
+            local isSel = ch == selected
+            local lc, vc = isSel and 1 or 0.65, 1
+            if not masterOn and key ~= "master" then
+                lc, vc = isSel and 0.55 or 0.35, 0.45
+            end
             if GetCVarBool(ch.enable) then
-                ns.Tip_AddClickable(L[ch.label], pct .. "%", rowClick[key], lr, lg, lb, 1, 1, 1)
+                local pct = floor(ReadVol(ch) * 100 + 0.5)
+                ns.Tip_AddClickable(L[ch.label], pct .. "%", rowClick[key], lc, lc, lc, vc, vc, vc)
             else
-                ns.Tip_AddClickable(L[ch.label], L["AUDIO_MUTED"], rowClick[key], lr, lg, lb, 1, 0.3, 0.3)
+                ns.Tip_AddClickable(L[ch.label], L["AUDIO_MUTED"], rowClick[key], lc, lc, lc, 1, 0.3, 0.3)
             end
             ns.Tip_SetRowWheel(rowWheel[key])
         end
         ns.Tip_AddLine(" ")
         ns.Tip_AddDouble(L["LEFT_CLICK"], L["AUDIO_MUTE_HINT"], 1, 1, 1, 1, 1, 1)
-        ns.Tip_AddDouble(L["RIGHT_CLICK"], L["AUDIO_INPUT_HINT"], 1, 1, 1, 1, 1, 1)
+        ns.Tip_AddDouble(L["DRAG_BAR"], L["AUDIO_SET_HINT"], 1, 1, 1, 1, 1, 1)
         ns.Tip_AddDouble(L["SCROLL_WHEEL"], L["AUDIO_SCROLL_HINT"], 1, 1, 1, 1, 1, 1)
+        ns.Tip_AddLine(L["AUDIO_SHIFT_HINT"], 0.65, 0.65, 0.65)
         ns.Tip_Show()
     end
 

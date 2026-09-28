@@ -1,4 +1,5 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+if EllesmereUI and EllesmereUI.IS_FOREVER then return end -- no dungeon teleports on WoW Forever: no popup, no secure button, no events; the LFG Reminder options section is not built there and every reader of the _G._EUI_*TeleportPrompt hooks nil-guards
 -------------------------------------------------------------------------------
 --  EllesmereUIQoL_TeleportPrompt.lua
 --  When the player joins a Group Finder (LFGList) group for a dungeon that has
@@ -60,6 +61,7 @@ local pendingName          -- dungeon display name for the title (guaranteed cle
 local pendingAttrSpellID   -- spell attr stashed to write when leaving combat
 local pendingShow          -- join landed in combat; show on PLAYER_REGEN_ENABLED
 local pendingHide          -- hide requested in combat; hide on PLAYER_REGEN_ENABLED
+local shownSpellID         -- teleport the prompt last surfaced for in this group
 
 -- Forward declarations (closures reference each other)
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending
@@ -322,8 +324,7 @@ ResolveDungeon = function(resultID)
 end
 
 -- A leader creates or updates an active listing without receiving
--- LFG_LIST_JOINED_GROUP. Its activityIDs are documented NeverSecret, which also
--- lets an already-formed LFG group receive the reminder after a reload.
+-- LFG_LIST_JOINED_GROUP. Its activityIDs are documented NeverSecret.
 ResolveActiveEntry = function()
     if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return end
     pcall(function()
@@ -424,8 +425,20 @@ end
 -- takes effect immediately in both directions, no reload. The popup parents a
 -- secure button, so a mid-combat first enable defers the build to combat end.
 local pendingBuild
+
+-- Records the group's current listing as already shown, without showing it: a
+-- /reload or re-enable starts with an empty memory, and the next edit of a listing
+-- the player already saw must not pop the prompt again.
+local function SeedShownFromListing()
+    ClearPending()
+    ResolveActiveEntry()
+    shownSpellID = pendingSpellID
+    ClearPending()
+end
+
 ApplyTeleportPrompt = function()
     if IsEnabled() then
+        SeedShownFromListing()
         if not popup and InCombatLockdown() then
             pendingBuild = true
             ev:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -450,11 +463,7 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2)
         if IsEnabled() then
             BuildPopup()
             SyncEvents()
-            -- Covers loading/reloading while already leading or belonging to an
-            -- active LFG listing, where no join event fires in this session.
-            ClearPending()
-            ResolveActiveEntry()
-            if pendingSpellID then ShowPrompt() end
+            SeedShownFromListing()
         end
         return
     elseif event == "PLAYER_REGEN_ENABLED" then
@@ -497,21 +506,39 @@ ev:SetScript("OnEvent", function(self, event, arg1, arg2)
         -- arg1 = searchResultID. This fires when an applicant accepts an invite.
         ClearPending()
         ResolveDungeon(arg1)
-        if pendingSpellID then ShowPrompt() end
+        if pendingSpellID then
+            shownSpellID = pendingSpellID
+            ShowPrompt()
+        end
     elseif event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" then
-        -- Fires when the group leader creates/updates/removes the listing. Read
-        -- the active entry so leaders receive the same prompt as applicants.
+        -- Fires for the whole group on every create, edit and delist of the
+        -- listing, so leaders get the prompt too. It surfaces only when the
+        -- listing's dungeon is new for this group (never again for an edit or a
+        -- closed prompt), and a delist hides nothing: the usual rules (dungeon
+        -- entered, group left, combat) still hide it.
+        local prevSpell, prevName, prevShow = pendingSpellID, pendingName, pendingShow
         ClearPending()
         ResolveActiveEntry()
-        if pendingSpellID then ShowPrompt() else HidePrompt() end
+        if pendingSpellID and pendingSpellID ~= shownSpellID then
+            shownSpellID = pendingSpellID
+            ShowPrompt()
+        else
+            pendingSpellID, pendingName, pendingShow = prevSpell, prevName, prevShow
+        end
     elseif event == "GROUP_ROSTER_UPDATE" then
         if not IsInGroup() then
             ClearPending(); HidePrompt()
+            shownSpellID = nil
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
             ClearPending(); HidePrompt()
+            -- The dungeon you stand in counts as shown: re-listing it from inside
+            -- (a replacement search) must not offer a teleport to it.
+            local instName = GetInstanceInfo()
+            shownSpellID = (type(instName) == "string" and not issecretvalue(instName)
+                and EUI and EUI.ResolveTeleportSpellByName and EUI.ResolveTeleportSpellByName(instName)) or nil
         end
     end
 end)

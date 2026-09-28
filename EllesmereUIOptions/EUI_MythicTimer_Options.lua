@@ -310,6 +310,8 @@ initFrame:SetScript("OnEvent", function(self)
                 local rgn = bsRow._leftRegion
                 EllesmereUI.BuildInlineCog(rgn, {
                     title = "Border Options",
+                    -- Greys with the bars; stays usable when only Apply to Forces Bar is off.
+                    disabled = _barsOff, disabledTooltip = _barsReq,
                     rows = {
                         { type = "toggle", label = "Apply to Forces Bar",
                             get = function() return Cfg("borderApplyToForces") ~= false end,
@@ -533,7 +535,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v) Set("showTitle", v); Refresh() end },
             { type="slider", text="Title Size", min=8, max=24, step=1, trackWidth=130,
               disabled=function() return Cfg("enabled") == false or Cfg("showTitle") == false end,
-              disabledTooltip="Show Title",
+              disabledTooltip=ModuleOr("Show Title"),
               getValue=function() return Cfg("titleSize") or 16 end,
               setValue=function(v) Set("titleSize", v); Refresh() end })
         -- Regular-cog settings popup on Show Title: Show Dungeon Name (default on;
@@ -650,12 +652,11 @@ initFrame:SetScript("OnEvent", function(self)
               getValue=function() return Cfg("showTimerBar") ~= false end,
               setValue=function(v)
                   Set("showTimerBar", v)
-                  if not v and Cfg("timerInBar") then Set("timerInBar", false) end
                   Refresh(); EllesmereUI:RefreshPage()
               end },
             { type="toggle", text="Move Timer Inside Bar",
               disabled=function() return Cfg("enabled") == false or Cfg("showTimerBar") == false end,
-              disabledTooltip=function() if Cfg("showTimerBar") == false then return "Show Timer Bar" end return "the module" end,
+              disabledTooltip=ModuleOr("Show Timer Bar"),
               getValue=function() return Cfg("timerInBar") == true end,
               setValue=function(v) Set("timerInBar", v); Refresh(); EllesmereUI:RefreshPage() end })
         if not EllesmereUI._prebuilding then
@@ -666,7 +667,7 @@ initFrame:SetScript("OnEvent", function(self)
               get=function() return Cfg("barHeightExpanded") or 22 end,
               set=function(v) Set("barHeightExpanded", v); Refresh() end },
             { type="slider", label="Fill Opacity", min=0, max=1, step=0.05,
-              tooltip="Opacity of the bar fill while the timer is inside it. Lower values keep the timer text easier to read.",
+              tooltip="Opacity of the bar fill while the timer is inside it.",
               get=function() return Cfg("barFillAlphaExpanded") or 0.85 end,
               set=function(v) Set("barFillAlphaExpanded", v); Refresh() end },
             { type="toggle", label="Left Text",
@@ -686,7 +687,7 @@ initFrame:SetScript("OnEvent", function(self)
             { type="slider", text="Timer Bar Height",
               tooltip="Height of the timer bar. While the timer is inside the bar, In-Bar Height sets the minimum.",
               disabled=function() return Cfg("enabled") == false or Cfg("showTimerBar") == false end,
-              disabledTooltip="Show Timer Bar",
+              disabledTooltip=ModuleOr("Show Timer Bar"),
               min=4, max=30, step=1, isPercent=false,
               getValue=function() return Cfg("barHeight") or 8 end,
               setValue=function(v)
@@ -695,9 +696,9 @@ initFrame:SetScript("OnEvent", function(self)
                   if Cfg("enemyBarHeight") == nil then Set("enemyBarHeight", Cfg("barHeight") or 8) end
                   Set("barHeight", v); Refresh()
               end },
-            { type="dropdown", text="Bar Texture",
+            { type="dropdown", text="Timer Bar Texture",
               disabled=function() return Cfg("enabled") == false or Cfg("showTimerBar") == false end,
-              disabledTooltip="Show Timer Bar",
+              disabledTooltip=ModuleOr("Show Timer Bar"),
               values=texValues,
               order=texOrder,
               getValue=function() return Cfg("barTexture") or "none" end,
@@ -767,7 +768,7 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="dropdown", text="Ticks / Gaps",
               disabled=function() return Cfg("enabled") == false or Cfg("showTimerBar") == false end,
-              disabledTooltip="Show Timer Bar",
+              disabledTooltip=ModuleOr("Show Timer Bar"),
               values=timerBarStyleValues,
               order=timerBarStyleOrder,
               getValue=function() return Cfg("timerBarStyle") or "TICKS" end,
@@ -814,7 +815,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v) Set("showEnemyBar", v); Refresh(); EllesmereUI:RefreshPage() end },
             { type="slider", text="Forces Bar Height",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               min=4, max=30, step=1, isPercent=false,
               -- enemyBarHeight stays unset until either height slider is changed
               -- and falls back to the timer bar height, so existing layouts keep
@@ -826,14 +827,15 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="dropdown", text="Enemy Text Format",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               values=forcesTextValues,
               order=forcesTextOrder,
               getValue=function() return Cfg("enemyForcesTextFormat") or "PERCENT" end,
               setValue=function(v) Set("enemyForcesTextFormat", v); Refresh() end },
             { type="dropdown", text="Percent Position",
+              tooltip="Where the enemy forces percentage is shown: in the label text, in the bar or beside it.",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               values={ LABEL = "In Label Text", BAR = "In Bar", BESIDE = "Beside Bar" },
               order={ "LABEL", "BAR", "BESIDE" },
               getValue=function() return Cfg("enemyForcesPctPos") or "LABEL" end,
@@ -859,15 +861,15 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="dropdown", text="Enemy Forces Position",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               values={ BOTTOM = "Bottom", UNDER_BAR = "Under Timer Bar" },
               order={ "BOTTOM", "UNDER_BAR" },
               getValue=function() return Cfg("enemyForcesPos") or "BOTTOM" end,
               setValue=function(v) Set("enemyForcesPos", v); Refresh() end },
-            { type="dropdown", text="Bar Texture",
+            { type="dropdown", text="Forces Bar Texture",
               tooltip="Texture of the enemy forces bar. The swatches next to it set the Enemy Bar Color (theme accent or a custom color).",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               values=texValues,
               order=texOrder,
               getValue=function() return Cfg("enemyBarTexture") or "none" end,
@@ -906,7 +908,7 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="toggle", text="Show Current Pull in Bar",
               disabled=_forcesOff,
-              disabledTooltip="Show Enemy Forces",
+              disabledTooltip=ModuleOr("Show Enemy Forces"),
               tooltip="Previews the forces of every enemy in combat with a visible nameplate on the enemy forces bar.",
               getValue=function() return Cfg("showPullBar") == true end,
               setValue=function(v) Set("showPullBar", v); Refresh(); EllesmereUI:RefreshPage() end },
@@ -934,7 +936,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v) Set("showObjectives", v); Refresh(); EllesmereUI:RefreshPage() end },
             { type="slider", text="Objectives Size",
               disabled=function() return Cfg("enabled") == false or Cfg("showObjectives") == false end,
-              disabledTooltip="Show Boss Objectives",
+              disabledTooltip=ModuleOr("Show Boss Objectives"),
               min=8, max=20, step=1, isPercent=false,
               getValue=function() return Cfg("objectivesSize") or 12 end,
               setValue=function(v) Set("objectivesSize", v); Refresh() end })
@@ -955,10 +957,11 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="toggle", text="Show Objective Times",
               disabled=function() return Cfg("enabled") == false or Cfg("showObjectives") == false end,
-              disabledTooltip="Show Boss Objectives",
+              disabledTooltip=ModuleOr("Show Boss Objectives"),
               getValue=function() return Cfg("showObjectiveTimes") ~= false end,
               setValue=function(v) Set("showObjectiveTimes", v); Refresh() end },
             { type="dropdown", text="Time Position",
+              tooltip="Which side of each boss objective shows its split times and Split Compare text.",
               disabled=function()
                   return Cfg("enabled") == false or Cfg("showObjectives") == false
                       or (Cfg("showObjectiveTimes") == false and (Cfg("objectiveCompareMode") or "NONE") == "NONE")
@@ -977,13 +980,13 @@ initFrame:SetScript("OnEvent", function(self)
         row, h = W:DualRow(parent, y,
             { type="slider", pixel=true, text="Objective Spacing",
               disabled=function() return Cfg("enabled") == false or Cfg("showObjectives") == false end,
-              disabledTooltip="Show Boss Objectives",
+              disabledTooltip=ModuleOr("Show Boss Objectives"),
               min=0, max=12, step=1, isPercent=false,
               getValue=function() return Cfg("objectiveGap") or 4 end,
               setValue=function(v) Set("objectiveGap", v); Refresh() end },
             { type="dropdown", text="Split Compare",
               disabled=function() return Cfg("enabled") == false or Cfg("showObjectives") == false end,
-              disabledTooltip="Show Boss Objectives",
+              disabledTooltip=ModuleOr("Show Boss Objectives"),
               values=compareModeValues,
               order=compareModeOrder,
               getValue=function() return Cfg("objectiveCompareMode") or "NONE" end,
@@ -1131,8 +1134,8 @@ initFrame:SetScript("OnEvent", function(self)
     do
         local GO = EllesmereUI.GlowOptions
         local function TsbOff() local c = TSB(); return not (c and c.enabled == true) end
-        mtImpGlowDesc = GO and {
-            host = "engine", excludes = EllesmereUI.Glows.RECT_EXCLUDES,
+        mtImpGlowDesc = {
+            host = "engine",
             caps = { mode = true, params = true, bg = true },
             defaultColor = { r = 1, g = 0.2, b = 0.2 },
             disabled = TsbOff, disabledTooltip = "Enable Targeted Spell Bars",
@@ -1157,11 +1160,9 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end,
         }
-        if GO then
-            GO.RegisterSite({ id = "mt_importantcast", label = "Important Cast Glow", group = "module",
-                module = "EllesmereUIMythicTimer", page = PAGE_TSB, section = "INTERRUPT AND VISIBILITY",
-                highlight = "Important Cast Glow", desc = mtImpGlowDesc })
-        end
+        GO.RegisterSite({ id = "mt_importantcast", label = "Important Cast Glow", group = "module",
+            module = "EllesmereUIMythicTimer", page = PAGE_TSB, section = "INTERRUPT AND VISIBILITY",
+            highlight = "Important Cast Glow", desc = mtImpGlowDesc })
     end
 
     local function BuildTSBPage(pageName, parent, yOffset)
@@ -1462,9 +1463,8 @@ initFrame:SetScript("OnEvent", function(self)
                       TSBRefresh()
                   end },
               } },
-            mtDesc and GO.DropdownSpec(mtDesc, "Important Cast Glow",
-                "Glow the bar when the enemy casts a spell Blizzard flags as important.")
-                or { type="label", text="" });  y = y - h
+            GO.DropdownSpec(mtDesc, "Important Cast Glow",
+                "Glow the bar when the enemy casts a spell Blizzard flags as important."));  y = y - h
 
         if not EllesmereUI._prebuilding then
             EllesmereUI.BuildInlineCog(row._leftRegion, { tip = "Important Cast Color",
@@ -1481,7 +1481,7 @@ initFrame:SetScript("OnEvent", function(self)
                 },
             })
 
-            if mtDesc then GO.AttachInline(row._rightRegion, mtDesc) end
+            GO.AttachInline(row._rightRegion, mtDesc)
         end
 
         -- Row: Fade Out of Interrupt Range | Show Raid Target Marker.
