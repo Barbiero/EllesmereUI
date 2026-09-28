@@ -2339,6 +2339,11 @@ local _G_Glows = EllesmereUI.Glows
 ns.GLOW_VIEW = _G_Glows.MakeView({ 1, 4, 2, 3, 5, 6, 7 })
 local GLOW_STYLES = ns.GLOW_VIEW.list
 ns.GLOW_STYLES = GLOW_STYLES
+-- Blackout (shared style 8): Bar Glows-only for now, so it is added directly
+-- rather than through MakeView's order -- it must never appear in the generic
+-- GlowOptions dropdowns (Pandemic/Buff/TBB/CD-ready glow) that iterate
+-- GLOW_VIEW.ordered.
+GLOW_STYLES[8] = _G_Glows.STYLES[8]
 
 -------------------------------------------------------------------------------
 --  Cross-surface Pandemic Glow sync (CDM bars + Nameplates) -- BEST EFFORT
@@ -2697,6 +2702,11 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
         _G_Glows.StartButtonGlow(overlay, pW, cr, cg, cb, nil, pH)
     elseif entry.autocast then
         _G_Glows.StartAutoCastShine(overlay, pW, cr, cg, cb, 1.0, pH)
+    elseif entry.solidFill then
+        local ifc2 = _ecmeFC[parent]
+        local shapeMask = ifc2 and ifc2.shapeMask
+        _G_Glows.StartSolidFill(overlay, noColor and 0 or cr, noColor and 0 or cg, noColor and 0 or cb,
+            { alpha = opts and opts.alpha, shapeMask = shapeMask })
     else
         if noColor then cr, cg, cb = nil, nil, nil end
         _G_Glows.StartFlipBookGlow(overlay, pW, entry, cr, cg, cb, pH)

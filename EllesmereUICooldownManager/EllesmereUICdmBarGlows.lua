@@ -431,9 +431,9 @@ local function UpdateOverlayVisuals()
                         -- Combat replay restarts from the recorded opts, so a mask
                         -- bound out here would be missing on every texture that
                         -- replay creates fresh.
-                        StartNativeGlow(overlay, style, cr, cg, cb, { maskWith = gateSt.mask, maskWith2 = gateSt.mask2 })
+                        StartNativeGlow(overlay, style, cr, cg, cb, { maskWith = gateSt.mask, maskWith2 = gateSt.mask2, alpha = entry.glowAlpha })
                     else
-                        StartNativeGlow(overlay, style, cr, cg, cb)
+                        StartNativeGlow(overlay, style, cr, cg, cb, { alpha = entry.glowAlpha })
                     end
                 else
                     StopNativeGlow(overlay)

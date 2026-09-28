@@ -217,6 +217,13 @@ initFrame:SetScript("OnEvent", function(self)
                 labels[i] = (entry.name and EllesmereUI.L(entry.name)) or ("Style " .. i)
                 order[#order + 1] = i
             end
+            -- Blackout (shared style 8): appended manually rather than via
+            -- GLOW_VIEW.ordered, so it stays exclusive to the Bar Glows page
+            -- (Pandemic/Buff/TBB/CD-ready pickers never see it).
+            if ns.GLOW_STYLES[8] then
+                labels[8] = EllesmereUI.L(ns.GLOW_STYLES[8].name)
+                order[#order + 1] = 8
+            end
         end
         if #order == 0 then
             labels[1] = "Action Button Glow"
@@ -1570,7 +1577,7 @@ initFrame:SetScript("OnEvent", function(self)
                             cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                         end
                         ns.StopNativeGlow(ov)
-                        ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                        ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
                     end
 
                     -- At Stacks (toggle) + gear (Comparison / Stack Count), paired with
@@ -1603,6 +1610,7 @@ initFrame:SetScript("OnEvent", function(self)
                               entry.glowStyle = tonumber(v) or 1
                               Refresh()
                               RefreshPreviewGlow()
+                              EllesmereUI:RefreshPage()
                           end,
                         }
                     );  y = y - h
@@ -1635,6 +1643,23 @@ initFrame:SetScript("OnEvent", function(self)
                                   end },
                             },
                         })
+                    end
+
+                    -- Blackout Opacity: only meaningful for the solid-fill style, so
+                    -- the row is only built while it's selected.
+                    if (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) == 8 then
+                        local opRow
+                        opRow, h = W:DualRow(parent, y,
+                            { type = "slider", text = "Blackout Opacity",
+                              min = 0, max = 100, step = 1,
+                              getValue = function() return math.floor((entry.glowAlpha or 1.0) * 100 + 0.5) end,
+                              setValue = function(v)
+                                  entry.glowAlpha = v / 100
+                                  Refresh()
+                                  RefreshPreviewGlow()
+                              end },
+                            { type = "label", text = "" }
+                        );  y = y - h
                     end
 
                     -- Eyeball preview toggle (on right region of the At Stacks / Glow Type row)
@@ -1679,7 +1704,7 @@ initFrame:SetScript("OnEvent", function(self)
                                     elseif entry.colorMode == "custom" and entry.glowColor then
                                         cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                                     end
-                                    ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                                    ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
                                     _bgPreviewGlowActive[pvKey] = true
                                     -- Hide accent border so glow is visible
                                     if previewBtn._accentBrd then previewBtn._accentBrd:Hide() end
