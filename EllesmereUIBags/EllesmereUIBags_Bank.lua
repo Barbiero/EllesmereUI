@@ -190,8 +190,8 @@ end
 -------------------------------------------------------------------------------
 local EUI_Bank = CreateFrame("Frame", "EUI_BankFrame", UIParent)
 EUI_Bank:SetToplevel(true)
-EUI_Bank:SetFrameStrata("HIGH")
-EUI_Bank:SetFrameLevel(50)
+EUI_Bank:SetFrameStrata("MEDIUM")
+EUI_Bank:SetFrameLevel(1)
 EUI_Bank:EnableMouse(true)
 EUI_Bank:SetMovable(true)
 EUI_Bank:SetClampedToScreen(true)
@@ -683,6 +683,7 @@ end
 --  Shift+Drag to Move
 -------------------------------------------------------------------------------
 EUI_Bank:SetScript("OnMouseDown", function(self, button)
+    self:Raise()
     if button == "LeftButton" and IsShiftKeyDown() then
         self:StartMoving()
         self._moving = true
@@ -1020,7 +1021,7 @@ do
     local function MakeSecurePurchaseBtn(bankType)
         local b = CreateFrame("Button", nil, sidebar, "BankPanelPurchaseButtonScriptTemplate")
         b:SetAttribute("overrideBankType", bankType)
-        b:SetFrameStrata("HIGH")
+        b:SetFrameStrata(sidebar:GetFrameStrata())
         b:SetFrameLevel(sidebar:GetFrameLevel() + 20)
         b:EnableMouse(true)
         b:SetAlpha(0)
@@ -2922,6 +2923,7 @@ eventFrame:SetScript("OnEvent", function(_, event)
         local bankScale = BP().bagScale or 1
         EUI_Bank:SetScale(bankScale)
         EUI_Bank:Show()
+        EUI_Bank:Raise()
         -- Controller cursor: scroll step buttons and a visible scrollbar,
         -- built only once a controller is in use.
         if EUI_Bank._padBuilt or EUI.PadInUse() then

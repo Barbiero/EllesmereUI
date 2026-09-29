@@ -3846,7 +3846,7 @@ ExitPinSelectMode = function()
         ov._fadeOut:Play()
     end
     local sf = EUI_Bags._scrollFrame
-    if sf then sf:SetFrameStrata("HIGH") end
+    if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
 end
 
 -------------------------------------------------------------------------------
@@ -3871,7 +3871,7 @@ local function ExitAssignSelectMode()
         ov._fadeOut:Play()
     end
     local sf = EUI_Bags._scrollFrame
-    if sf then sf:SetFrameStrata("HIGH") end
+    if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
 end
 
 EnterAssignSelectMode = function(catKey)
@@ -7724,8 +7724,9 @@ local function StartAddon()
     end
 
     EUI_Bags:SetClampedToScreen(true)
-    EUI_Bags:SetFrameStrata("HIGH")
-    EUI_Bags:SetFrameLevel(100)
+    -- Share the normal panel strata so clicking the AH or bags can raise either.
+    EUI_Bags:SetFrameStrata("MEDIUM")
+    EUI_Bags:SetFrameLevel(1)
     EUI_Bags:EnableMouse(true)
     EUI_Bags:SetMovable(true)
 
@@ -7758,6 +7759,7 @@ local function StartAddon()
         EUI_Bags:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", newLeft, newTop)
     end)
     EUI_Bags:SetScript("OnMouseDown", function(self, button)
+        self:Raise()
         local noShift = BP().bagMoveNoShift
         -- A controller's emulated Shift reads as a Shift key, not the physical
         -- left one, so it also counts while a controller is in use.
@@ -7807,7 +7809,8 @@ local function StartAddon()
     -- Blizzard's backpack open/close sounds, played on the frame's show/hide
     -- transitions as Blizzard's container frames do: a Show on an already open
     -- bag fires no OnShow, and the login pre-build never shows the frame.
-    EUI_Bags:HookScript("OnShow", function()
+    EUI_Bags:HookScript("OnShow", function(self)
+        self:Raise()
         PlaySound(SOUNDKIT.IG_BACKPACK_OPEN)
         CaptureTrackedGold()
         -- Repaint if the unmerge state changed while hidden: the flag-flip refresh is gated on
@@ -7926,7 +7929,8 @@ local function StartAddon()
     -- Bag overview window
     EUI_BagsWindow:SetSize(280, 80)
     EUI_BagsWindow:SetPoint("BOTTOMRIGHT", EUI_Bags._bagsBtn, "TOPRIGHT", 0, 2)
-    EUI_BagsWindow:SetFrameStrata("HIGH")
+    EUI_BagsWindow:SetFrameStrata("MEDIUM")
+    EUI_BagsWindow:SetToplevel(true)
     EUI_BagsWindow:EnableMouse(true)
     EUI_BagsWindow.bg = EUI_BagsWindow:CreateTexture(nil, "BACKGROUND")
     EUI_BagsWindow.bg:SetAllPoints()
@@ -7936,7 +7940,8 @@ local function StartAddon()
 
     EUI_BagsReagent:SetSize(320, 300)
     EUI_BagsReagent:SetPoint("BOTTOMRIGHT", EUI_Bags, "BOTTOMLEFT", -10, 0)
-    EUI_BagsReagent:SetFrameStrata("HIGH")
+    EUI_BagsReagent:SetFrameStrata("MEDIUM")
+    EUI_BagsReagent:SetToplevel(true)
     EUI_BagsReagent:EnableMouse(true)
     EUI_BagsReagent.bg = EUI_BagsReagent:CreateTexture(nil, "BACKGROUND")
     EUI_BagsReagent.bg:SetAllPoints()
