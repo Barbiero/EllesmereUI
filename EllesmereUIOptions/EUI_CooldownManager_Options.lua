@@ -4000,7 +4000,7 @@ initFrame:SetScript("OnEvent", function(self)
                         sndBtn:SetFrameLevel(item:GetFrameLevel() + 2)
                         local sndIcon = sndBtn:CreateTexture(nil, "OVERLAY")
                         sndIcon:SetAllPoints()
-                        sndIcon:SetAtlas("common-icon-sound")
+                        sndIcon:SetAtlas(EllesmereUI.SOUND_ICON_ATLAS)
                         local function HasSound()
                             local g, l = b.buffActiveSoundKey, b.buffLostSoundKey
                             return (g and g ~= "none") or (l and l ~= "none")
@@ -10953,8 +10953,8 @@ initFrame:SetScript("OnEvent", function(self)
                                 play:SetSize(16, 16)
                                 play:SetPoint("RIGHT", si, "RIGHT", -8, 0)
                                 play:SetFrameLevel(si:GetFrameLevel() + 2)
-                                play:SetNormalAtlas("common-icon-sound")
-                                play:SetPushedAtlas("common-icon-sound-pressed")
+                                play:SetNormalAtlas(EllesmereUI.SOUND_ICON_ATLAS)
+                                play:SetPushedAtlas(EllesmereUI.SOUND_ICON_PRESSED_ATLAS)
                                 play:SetScript("OnClick", function()
                                     local paths = ns.FOCUSKICK_SOUND_PATHS
                                     local path = paths and paths[item.val]
@@ -11395,8 +11395,8 @@ initFrame:SetScript("OnEvent", function(self)
                             play:SetSize(16, 16)
                             play:SetPoint("RIGHT", si, "RIGHT", -8, 0)
                             play:SetFrameLevel(si:GetFrameLevel() + 2)
-                            play:SetNormalAtlas("common-icon-sound")
-                            play:SetPushedAtlas("common-icon-sound-pressed")
+                            play:SetNormalAtlas(EllesmereUI.SOUND_ICON_ATLAS)
+                            play:SetPushedAtlas(EllesmereUI.SOUND_ICON_PRESSED_ATLAS)
                             play:SetScript("OnClick", function()
                                 local path = ns.FOCUSKICK_SOUND_PATHS and ns.FOCUSKICK_SOUND_PATHS[item.val]
                                 if path then PlaySoundFile(path, "Master") end
@@ -12016,8 +12016,8 @@ initFrame:SetScript("OnEvent", function(self)
                             play:SetSize(16, 16)
                             play:SetPoint("RIGHT", si, "RIGHT", -8, 0)
                             play:SetFrameLevel(si:GetFrameLevel() + 2)
-                            play:SetNormalAtlas("common-icon-sound")
-                            play:SetPushedAtlas("common-icon-sound-pressed")
+                            play:SetNormalAtlas(EllesmereUI.SOUND_ICON_ATLAS)
+                            play:SetPushedAtlas(EllesmereUI.SOUND_ICON_PRESSED_ATLAS)
                             play:SetScript("OnClick", function()
                                 local paths = ns.FOCUSKICK_SOUND_PATHS
                                 local path = paths and paths[item.val]
@@ -17396,11 +17396,11 @@ initFrame:SetScript("OnEvent", function(self)
                     if key == "none" then return nil end
                     local paths = ns.FOCUSKICK_SOUND_PATHS
                     if not paths or not paths[key] then return nil end
-                    return "common-icon-sound"
+                    return EllesmereUI.SOUND_ICON_ATLAS
                 end,
                 iconPressedAtlas = function(key)
                     if key == "none" then return nil end
-                    return "common-icon-sound-pressed"
+                    return EllesmereUI.SOUND_ICON_PRESSED_ATLAS
                 end,
                 iconOnClick = function(key)
                     local paths = ns.FOCUSKICK_SOUND_PATHS

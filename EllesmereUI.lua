@@ -146,9 +146,9 @@ end
 -- EllesmereUIDB arrives from SavedVariables at ADDON_LOADED. Do NOT create it here --
 -- that overwrites saved data. (Stale child SV copy guard lives in EllesmereUI_Lite.lua.)
 
--- Widget style constants, one table instead of one file-scope local each:
--- this main chunk sits at Lua 5.1's 200-active-locals limit. Read them as
--- STYLE.X here; other files get them through the EllesmereUI.X exports below.
+-- Widget style constants, one table instead of ~75 file-scope locals, which
+-- would push this main chunk past Lua 5.1's 200-active-locals limit. Read them
+-- as STYLE.X here; other files get them through the EllesmereUI.X exports below.
 local STYLE = {
     -- Panel background
     PANEL_BG_R = 0.05, PANEL_BG_G = 0.07, PANEL_BG_B = 0.09,
@@ -212,8 +212,6 @@ local STYLE = {
     DD_TXT_HA = 0.60,                                      -- selected value text alpha hovered
     DD_ITEM_HL_A = 0.08,                                   -- menu item highlight alpha (hover)
     DD_ITEM_SEL_A = 0.04,                                  -- menu item highlight alpha (active selection)
-
-    -- Sidebar nav values inlined into NAV_* locals below to avoid an extra file-scope local
 
     -- Multi-widget layout  (dual = 2-up, triple = 3-up -- shared by all widget types)
     DUAL_ITEM_W = 350,                                     -- width of each item in a 2-up row
@@ -378,6 +376,18 @@ EllesmereUI.SEASON_PORTALS = {
     { spellID = 1286828, short = "ToS", dungeonID = 1694, names = { "temple of sethraliss", "храм сетралисс" } },
     { spellID = 1286831, short = "KR",  dungeonID = 1785, names = { "kings' rest", "king's rest", "гробница королей" } },
 }
+
+-- Great Vault shortcut (Minimap button, Data Bars block, character sheet
+-- season panel): loads Blizzard's vault on first use and toggles it directly,
+-- so opening it closes no other panel (the UIPanel fit check would close the
+-- character sheet). Escape still closes it (RegisterEscapeClose, notOwned).
+function EllesmereUI.ToggleGreatVault()
+    if not C_AddOns.IsAddOnLoaded("Blizzard_WeeklyRewards") then
+        C_AddOns.LoadAddOn("Blizzard_WeeklyRewards")
+    end
+    local vault = _G.WeeklyRewardsFrame
+    if vault then vault:SetShown(not vault:IsShown()) end
+end
 
 -- Portal flyout (Chat sidebar and Minimap): SEASON_PORTALS spell buttons plus a
 -- hearthstone column, all secure. Build lazily, never in combat; the caller
@@ -2186,6 +2196,19 @@ function EllesmereUI.BuildFullName(charName, realmName)
         suffix = suffix:sub(1, half)
     end
     return base .. "-" .. suffix
+end
+
+-- A friend or guild note for display. Old Friends builds wrote a "||EUI:Group||" tag
+-- into friend notes that was never removed: the text before it is kept, trailing
+-- space trimmed. nil for a non-string, secret or empty note.
+function EllesmereUI.StripFriendNoteTag(note)
+    if type(note) ~= "string" or issecretvalue(note) or note == "" then return nil end
+    local s = note:find("||EUI:", 1, true)
+    if s and note:find("||", s + 6, true) then
+        note = note:sub(1, s - 1):match("^(.-)%s*$")
+        if note == "" then return nil end
+    end
+    return note
 end
 
 -------------------------------------------------------------------------------
@@ -4053,6 +4076,35 @@ do
         return PP.SnapForES(sepSize * edge * (ratio or 1) / 16, es)
     end
 
+    --- Places a border style's vertical divider art (GetBorderCompanion "sepV") on tex, a
+    --- texture we own, along a vertical edge of anchor at its full height, as wide as
+    --- BorderCompanionThickness(textureKey, step, edgePx, es) (es = the scale tex draws
+    --- at). The art's line lies 2 / sepSize of that width in from its lead side, and the
+    --- lead crosses the edge by that much. right = the lead side is right of the edge (the
+    --- art mirrored), else left. over = the edge is anchor's side away from the lead, so
+    --- the lead overlaps anchor; else it is anchor's side toward the lead and the lead
+    --- hangs past anchor. Hides tex when the style has no divider or its border is off.
+    --- The caller tints tex. Settings and UI-scale re-layout passes only.
+    function EllesmereUI.PlaceBorderDividerV(tex, anchor, right, over, textureKey, step, edgePx, es)
+        local thick = EllesmereUI.BorderCompanionThickness(textureKey, step, edgePx, es)
+        if not thick or thick <= 0 then tex:Hide(); return end
+        local PP = EllesmereUI.PP
+        local lead = PP.SnapForES(thick * 2 / EllesmereUI.GetBorderCompanion(textureKey, "sepSize"), es)
+        tex:SetTexture(EllesmereUI.GetBorderCompanion(textureKey, "sepV"))
+        tex:ClearAllPoints()
+        if right then
+            tex:SetTexCoord(1, 0, 0, 1)
+            tex:SetPoint("TOPRIGHT", anchor, over and "TOPLEFT" or "TOPRIGHT", lead, 0)
+            tex:SetPoint("BOTTOMRIGHT", anchor, over and "BOTTOMLEFT" or "BOTTOMRIGHT", lead, 0)
+        else
+            tex:SetTexCoord(0, 1, 0, 1)
+            tex:SetPoint("TOPLEFT", anchor, over and "TOPRIGHT" or "TOPLEFT", -lead, 0)
+            tex:SetPoint("BOTTOMLEFT", anchor, over and "BOTTOMRIGHT" or "BOTTOMLEFT", -lead, 0)
+        end
+        tex:SetWidth(thick)
+        tex:Show()
+    end
+
     --- Check if a border texture uses scaled offset (edgeSize/2 base).
     function EllesmereUI.BorderTextureUsesScaleOffset(key)
         if not key or key == "" or key == "solid" then return false end
@@ -5551,6 +5603,24 @@ end
 function EllesmereUI.GetClassColor(classToken)
     if EllesmereUI._colorCacheDirty then EllesmereUI._RebuildColorCache() end
     return EllesmereUI._colorCache.class[classToken] or EllesmereUI._COLOR_WHITE
+end
+
+-- Class token from a localized class name (friend list entries carry only that).
+-- Male and female forms both map; built once on first use. Unknown or secret -> nil.
+function EllesmereUI.ClassTokenFromLocalized(name)
+    if type(name) ~= "string" or issecretvalue(name) then return nil end
+    local map = EllesmereUI._classByLocalName
+    if not map then
+        map = {}
+        if LOCALIZED_CLASS_NAMES_MALE then
+            for token, n in pairs(LOCALIZED_CLASS_NAMES_MALE) do map[n] = token end
+        end
+        if LOCALIZED_CLASS_NAMES_FEMALE then
+            for token, n in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do map[n] = token end
+        end
+        EllesmereUI._classByLocalName = map
+    end
+    return map[name]
 end
 
 -- Custom class colour for a unit whose identity is RESTRICTED (target-of-target, focus-target):
@@ -12931,7 +13001,7 @@ end
 -------------------------------------------------------------------------------
 --  Slash commands
 -------------------------------------------------------------------------------
-EllesmereUI.VERSION = "9.3.1"
+EllesmereUI.VERSION = "9.3.2"
 
 -- Register this addon's version into a shared global table (taint-free at load time)
 if not _G._EUI_AddonVersions then _G._EUI_AddonVersions = {} end
