@@ -1644,23 +1644,6 @@ initFrame:SetScript("OnEvent", function(self)
                         })
                     end
 
-                    -- Blackout Opacity: only meaningful for the solid-fill style, so
-                    -- the row is only built while it's selected.
-                    if (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) == 8 then
-                        local opRow
-                        opRow, h = W:DualRow(parent, y,
-                            { type = "slider", text = "Blackout Opacity",
-                              min = 0, max = 100, step = 1,
-                              getValue = function() return math.floor((entry.glowAlpha or 1.0) * 100 + 0.5) end,
-                              setValue = function(v)
-                                  entry.glowAlpha = v / 100
-                                  Refresh()
-                                  RefreshPreviewGlow()
-                              end },
-                            { type = "label", text = "" }
-                        );  y = y - h
-                    end
-
                     -- Eyeball preview toggle (on right region of the At Stacks / Glow Type row)
                     if not EllesmereUI._prebuilding then
                         local EYE_VIS   = EllesmereUI.EYE_VISIBLE_ICON
@@ -1715,20 +1698,22 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
-                    -- Row: Glow Color (swatches) | Remove Glow
+                    -- Row: Glow Color (swatches) | Blackout Opacity. Always present (like
+                    -- At Stacks) rather than only while Blackout is selected, so the layout
+                    -- never leaves a gap; the slider just locks with a tooltip otherwise.
                     local colorRow
                     colorRow, h = W:DualRow(parent, y,
                         { type = "label", text = "Glow Color" },
-                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
-                          onClick = function()
-                              table.remove(buffList, removeAIdx)
-                              if #buffList == 0 then
-                                  bg.assignments[assignKey] = nil
-                              end
+                        { type = "slider", text = "Blackout Opacity",
+                          min = 0, max = 100, step = 1,
+                          disabled = function() return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8 end,
+                          disabledTooltip = "Only available when Glow Type is set to Blackout",
+                          getValue = function() return math.floor((entry.glowAlpha or 1.0) * 100 + 0.5) end,
+                          setValue = function(v)
+                              entry.glowAlpha = v / 100
                               Refresh()
-                              EllesmereUI:RefreshPage(true)
-                          end,
-                        }
+                              RefreshPreviewGlow()
+                          end }
                     );  y = y - h
 
                     -- Inline color swatch for glow color (on left region)
@@ -1757,13 +1742,29 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
+                    -- Row: Remove Glow, bottom of the left column.
+                    local removeRow
+                    removeRow, h = W:DualRow(parent, y,
+                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
+                          onClick = function()
+                              table.remove(buffList, removeAIdx)
+                              if #buffList == 0 then
+                                  bg.assignments[assignKey] = nil
+                              end
+                              Refresh()
+                              EllesmereUI:RefreshPage(true)
+                          end,
+                        },
+                        { type = "label", text = "" }
+                    );  y = y - h
+
                     -- Buff icon to the LEFT of the Remove button
                     do
-                        local rightRgn = colorRow._rightRegion
-                        if rightRgn and rightRgn._control then
-                            local btn = rightRgn._control
+                        local leftRgn = removeRow._leftRegion
+                        if leftRgn and leftRgn._control then
+                            local btn = leftRgn._control
                             local btnH = btn:GetHeight()
-                            local ico = rightRgn:CreateTexture(nil, "ARTWORK")
+                            local ico = leftRgn:CreateTexture(nil, "ARTWORK")
                             ico:SetSize(btnH, btnH)
                             PP.Point(ico, "RIGHT", btn, "LEFT", -8, 0)
                             ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
