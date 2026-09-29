@@ -1863,13 +1863,19 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 local style = curSettings.classThemeStyle or "modern"
                 local zoom = (curSettings.portraitArtScale or 100) + (curSettings.portrait3dZoom or 100) * 1000
-                -- Mirror Portrait: 2D and class art only, never under a stock style.
+                -- Mirror Portrait also turns 3D models; never under a stock style.
                 local mirror = (curSettings.portraitMirror
                     and not EllesmereUI.BlizzStyle.Get("unitframes")) and true or false
                 -- Skip unchanged: re-initializing PlayerModel every Update() blinks
                 -- and costs massive GPU.
-                if mode == _lastAppliedMode and style == _lastAppliedStyle and zoom == _lastAppliedZoom
-                    and mirror == _lastAppliedMirror then return end
+                if mode == _lastAppliedMode and style == _lastAppliedStyle and zoom == _lastAppliedZoom then
+                    if mirror == _lastAppliedMirror then return end
+                    if mode == "3d" and portraitModel then
+                        _lastAppliedMirror = mirror
+                        ns.UF_ApplyPortraitRotation(portraitModel, mirror)
+                        return
+                    end
+                end
                 _lastAppliedMode = mode
                 _lastAppliedStyle = style
                 _lastAppliedZoom = zoom
@@ -1892,6 +1898,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local camScale = (curSettings.portrait3dZoom or 100) / 100
                     pm:SetCamDistanceScale(camScale)
                     pm:Show()
+                    ns.UF_ApplyPortraitRotation(pm, mirror)
                 elseif mode == "class" then
                     portraitFrame:Show()
                     if portraitModel then portraitModel:Hide() end
@@ -7532,21 +7539,22 @@ initFrame:SetScript("OnEvent", function(self)
                       requireState="disabled",
                       get=function() return SVal("portraitClassZoom", 100) end,
                       set=function(v) SSet("portraitClassZoom", v); UpdatePreview() end },
-                    -- 2D and class art only; the stock styles keep their full art.
+                    -- The stock styles keep their full art.
                     { type="toggle", label="Mirror Portrait",
-                      tooltip="Flips the portrait horizontally so it faces the other way.",
+                      tooltip="Flips 2D and class art horizontally. Changes the orientation of 3D models for a mirrored appearance.",
                       disabled=function()
-                          return EllesmereUI.BlizzStyle.Get("unitframes") or SVal("portraitMode", "2d") == "3d"
+                          return EllesmereUI.BlizzStyle.Get("unitframes")
                       end,
                       disabledTooltip=function()
-                          if EllesmereUI.BlizzStyle.Get("unitframes") then
-                              return EllesmereUI.BlizzStyle.Label("unitframes")
-                          end
-                          return "This option requires a 2D Portrait or Class Art Style."
+                          return EllesmereUI.BlizzStyle.Label("unitframes")
                       end,
                       requireState="disabled",
                       get=function() return SVal("portraitMirror", false) end,
-                      set=function(v) SSet("portraitMirror", v); UpdatePreview() end },
+                      set=function(v)
+                          SDB().portraitMirror = v
+                          ns.UF_RefreshPortraitMirror(selectedUnit)
+                          UpdatePreview()
+                      end },
                 },
             })
         end
