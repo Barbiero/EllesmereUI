@@ -1040,6 +1040,59 @@ function ns.ListHasHostedMarker(list, spellID)
 end
 
 -------------------------------------------------------------------------------
+--  Empty Slot markers: a purely decorative placeholder (no spell/item behind
+--  it) that reserves a grid position on a CD/utility bar. Unlike every other
+--  marker kind, there is no natural id to encode -- each Add mints a fresh one
+--  so every instance is globally unique and AddTrackedSpell/RemoveTrackedSpell/
+--  ReplaceTrackedSpell (dedup, cross-bar sweep, index-based remove/reorder) all
+--  handle it with zero special-casing, same as any other tracked entry.
+--
+--  Encoding: -(EMPTY_SLOT_MARKER_BASE + seq). BASE sits above the item-preset
+--  range (<= -100, real itemIDs never approach it) and below
+--  HOSTED_BUFF_MARKER_BASE, so it can never collide with either.
+--
+--  seq is derived from the data itself (highest existing seq across every
+--  spec's bars, +1) rather than a saved counter: the markers live in the
+--  per-spec spell store (SpellStore), but a profile-level counter lives in a
+--  DIFFERENT table -- an import/sync can bring in markers the counter never
+--  saw, so a freshly minted one could collide with an already-saved marker
+--  (the Add then either no-ops as a "duplicate" or steals the slot from
+--  whichever bar already held that id). Scanning is collision-proof by
+--  construction and only runs on an explicit Add (cold path).
+-------------------------------------------------------------------------------
+ns.EMPTY_SLOT_MARKER_BASE = 1000000000
+
+function ns.NewEmptySlotMarker()
+    local maxSeq = 0
+    local sp = SpellStore and SpellStore.GetSpecProfiles and SpellStore.GetSpecProfiles()
+    if sp then
+        for _, prof in pairs(sp) do
+            local barSpells = prof and prof.barSpells
+            if barSpells then
+                for _, bs in pairs(barSpells) do
+                    local assigned = bs and bs.assignedSpells
+                    if assigned then
+                        for _, id in ipairs(assigned) do
+                            if ns.IsEmptySlotMarker(id) then
+                                local seq = -id - ns.EMPTY_SLOT_MARKER_BASE
+                                if seq > maxSeq then maxSeq = seq end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return -(ns.EMPTY_SLOT_MARKER_BASE + maxSeq + 1)
+end
+
+-- True for any Empty Slot marker; bounded above HOSTED_BUFF_MARKER_BASE so it never misreads a hosted-buff marker.
+function ns.IsEmptySlotMarker(id)
+    return type(id) == "number" and id <= -ns.EMPTY_SLOT_MARKER_BASE
+        and id > -ns.HOSTED_BUFF_MARKER_BASE
+end
+
+-------------------------------------------------------------------------------
 --  Cd-claim markers: a collided buff (two Blizzard buff-viewer slots sharing one canonical
 --  spellID, e.g. Diabolist Demonic Art vs Diabolic Ritual) can't be told apart by spellID, so
 --  a claimed slot is tracked by its cooldownID instead, using the same marker-in-assignedSpells
@@ -1682,9 +1735,9 @@ function ns.RescanCustomItemFlag()
                 local assigned = bs and bs.assignedSpells
                 if assigned then
                     for _, sid in ipairs(assigned) do
-                        -- Hosted-buff markers are also <= -100; they are not items.
+                        -- Hosted-buff and Empty Slot markers are also <= -100; they are not items.
                         if type(sid) == "number" and sid <= -100
-                           and sid > -ns.HOSTED_BUFF_MARKER_BASE then
+                           and sid > -ns.EMPTY_SLOT_MARKER_BASE then
                             ns._cdmAnyCustomItem = true
                             return
                         end
@@ -5684,6 +5737,12 @@ local function RefreshCDMIconAppearance(barKey)
     if blizzArt then zoom = 0 end
 
     for _, icon in ipairs(icons) do
+        -- Empty Slot: pure grid spacer, deliberately never decorated (see
+        -- DecorateFrame) -- skip every bar-wide/per-icon style and cd-state pass
+        -- so a bar's Glow (CD Ready) or other "apply to bar" effect can never
+        -- attach to it (its bogus marker id never carries a real cooldown, so
+        -- it would otherwise resolve as permanently ready and glow forever).
+        if not icon._isEmptySlotFrame then
         local fd = _getFD(icon)
         local tex = fd and fd.tex or icon._tex
         local cd = fd and fd.cooldown or icon._cooldown
@@ -6208,9 +6267,12 @@ local function RefreshCDMIconAppearance(barKey)
                 end
             end
         end
+        end -- not icon._isEmptySlotFrame
         -- Only Show Numbers (bar setting): re-hide the icon art AFTER the passes above re-applied
         -- borders/shapes/textures, so the countdown number is all that remains. One field read when the bar is off; also restores one-shot right after the bar toggles off.
-        if ns.ApplyOnlyNumbers then ns.ApplyOnlyNumbers(icon, fd, barData) end
+        -- Re-fetched (never the wrapped block's `fd`): always nil for an Empty Slot, and cheap
+        -- either way, so both kinds share this one line without widening the skip above.
+        if ns.ApplyOnlyNumbers then ns.ApplyOnlyNumbers(icon, _getFD(icon), barData) end
     end
 end
 ns.RefreshCDMIconAppearance = RefreshCDMIconAppearance
