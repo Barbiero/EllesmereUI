@@ -755,6 +755,18 @@ initFrame:SetScript("OnEvent", function(self)
               end }
         );  y = y - h
 
+        -- Show Notes in Friends Tooltip
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Show Notes in Friends Tooltip",
+              tooltip="Shows the guild note or friend note on a second line under each entry in the Friends Online tooltip.",
+              getValue=function() local m = MinimapDB(); return m and m.friendsShowNotes or false end,
+              setValue=function(v)
+                local m = MinimapDB(); if not m then return end
+                m.friendsShowNotes = v
+              end },
+            { type="label", text="" }
+        );  y = y - h
+
         -- Shared row-position choices (QoL button row + Blizzard element row).
         -- The two rows are mutually exclusive per position: a value picked on
         -- one dropdown is disabled on the other.

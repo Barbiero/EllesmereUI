@@ -101,6 +101,7 @@ local defaults = {
             hideRaidDifficulty   = false,
             hideCraftingOrder    = false,
             friendsMaxRows       = 0,   -- 0 = no cap; else cap per section, show "...and N more"
+            friendsShowNotes     = false,  -- guild/friend note on a second line under each row
             hideExtraBtns        = { greatVault = false, portals = false, friendsOnline = false, groupButton = false },
             mouseoverExtraBtns   = false,  -- extra buttons only show on minimap mouseover
             greatVaultExtraInfo  = true,
@@ -1860,16 +1861,21 @@ local function GatherOnlineFriends()
     local guild, favorites, friends = {}, {}, {}
     local seenBNet = {}
     local myName = UnitName("player")
+    -- Notes: nil unless a plain, non-empty string (secret values are never compared).
+    local function CleanNote(n)
+        if type(n) ~= "string" or (issecretvalue and issecretvalue(n)) or n == "" then return nil end
+        return n
+    end
 
     if IsInGuild and IsInGuild() then
         local total = GetNumGuildMembers() or 0
         for i = 1, total do
-            local name, _, _, level, _, zone, _, _, online, _, classFile = GetGuildRosterInfo(i)
+            local name, _, _, level, _, zone, publicNote, _, online, _, classFile = GetGuildRosterInfo(i)
             if online and name then
                 local short = name:match("^([^%-]+)") or name
                 if short ~= myName then
                     -- Fix "Name-Realm-Realm" to "Name-Realm"
-                    guild[#guild + 1] = { name = short, full = EllesmereUI.BuildFullName(name) or name, class = classFile, zone = zone or "", level = level, kind = "guild" }
+                    guild[#guild + 1] = { name = short, full = EllesmereUI.BuildFullName(name) or name, class = classFile, zone = zone or "", level = level, note = CleanNote(publicNote), kind = "guild" }
                 end
             end
         end
@@ -1903,7 +1909,7 @@ local function GatherOnlineFriends()
                     bnetName = acct.accountName or acct.battleTag,
                     bnetID = acct.bnetAccountID,
                     isFavorite = acct.isFavorite,
-                    note = acct.note,
+                    note = CleanNote(acct.note),
                     kind = "bnet",
                 }
                 if charName then seenBNet[charName] = true end
@@ -1929,7 +1935,7 @@ local function GatherOnlineFriends()
                     class = info.className and info.className:upper():gsub(" ", ""),
                     zone = info.area or "",
                     level = info.level,
-                    note = info.notes,
+                    note = CleanNote(info.notes),
                     kind = "char",
                 }
             end
@@ -1982,6 +1988,9 @@ local FTT_ROW_H   = 14
 local FTT_HDR_H   = 16
 local FTT_GAP     = 2
 local FTT_DIV_PAD = 5   -- padding above and below the divider line
+local FTT_NOTE_H  = 12  -- height of the optional note line under a row
+local FTT_NOTE_INDENT = 8
+local FTT_NOTE_MAX_W  = 260  -- longer notes truncate instead of widening the tooltip
 
 -- Hover-stable hide: small grace period so cursor can travel from button to tooltip
 local _fttHideToken = 0
@@ -2166,15 +2175,25 @@ local function EnsureFTTRow(idx)
             if _friendsTT then _friendsTT:Hide() end
         end
     end)
+    -- Name/zone are centred on the first line (not the button), so a note row can grow
+    -- the button downward without moving them.
     local nameFS = btn:CreateFontString(nil, "OVERLAY")
     nameFS:SetFont(FTT_FONT(), 10, "")
     nameFS:SetJustifyH("LEFT")
-    nameFS:SetPoint("LEFT", btn, "LEFT", 0, 0)
+    nameFS:SetPoint("LEFT", btn, "TOPLEFT", 0, -FTT_ROW_H / 2)
     local zoneFS = btn:CreateFontString(nil, "OVERLAY")
     zoneFS:SetFont(FTT_FONT(), 10, "")
     zoneFS:SetJustifyH("RIGHT")
-    zoneFS:SetPoint("RIGHT", btn, "RIGHT", 0, 0)
-    _friendsTTRows[idx] = { button = btn, name = nameFS, zone = zoneFS }
+    zoneFS:SetPoint("RIGHT", btn, "TOPRIGHT", 0, -FTT_ROW_H / 2)
+    -- Optional second line: guild/friend note, indented, truncated to the row width.
+    local noteFS = btn:CreateFontString(nil, "OVERLAY")
+    noteFS:SetFont(FTT_FONT(), 9, "")
+    noteFS:SetJustifyH("LEFT")
+    noteFS:SetWordWrap(false)
+    noteFS:SetPoint("LEFT", btn, "TOPLEFT", FTT_NOTE_INDENT, -FTT_ROW_H - FTT_NOTE_H / 2)
+    noteFS:SetPoint("RIGHT", btn, "TOPRIGHT", 0, -FTT_ROW_H - FTT_NOTE_H / 2)
+    noteFS:Hide()
+    _friendsTTRows[idx] = { button = btn, name = nameFS, zone = zoneFS, note = noteFS }
     return _friendsTTRows[idx]
 end
 
@@ -2223,11 +2242,13 @@ function ShowFriendsTooltip(anchor)
     if maxRows and maxRows < 0 then maxRows = 0 end
     -- Hard cap 30 rows per section, even at 0 ("no cap") or stale over-max values -- big guilds otherwise build enormous tooltips. Overflow gets "...and N more".
     if maxRows == 0 or maxRows > 30 then maxRows = 30 end
+    local showNotes = mp and mp.friendsShowNotes
 
     local font = FTT_FONT()
     for i = 1, #_friendsTTRows do
         _friendsTTRows[i].name:SetFont(font, 10, "")
         _friendsTTRows[i].zone:SetFont(font, 10, "")
+        _friendsTTRows[i].note:SetFont(font, 9, "")
     end
     for i = 1, #_friendsTTHeaders do
         _friendsTTHeaders[i]:SetFont(font, 12, "")
@@ -2238,8 +2259,10 @@ function ShowFriendsTooltip(anchor)
         local r = _friendsTTRows[i]
         r.name:Hide()
         r.zone:Hide()
+        r.note:Hide()
         if r.button then
             r.button:Hide()
+            r.button:SetHeight(FTT_ROW_H)
             r.button._entry = nil
             FTTSetRowTarget(r.button, nil)
             if r.button._hl then r.button._hl:Hide() end
@@ -2276,7 +2299,7 @@ function ShowFriendsTooltip(anchor)
     local rowIdx = 0
     local hdrIdx = 0
     local divIdx = 0
-    local maxNameW, maxZoneW = 0, 0
+    local maxNameW, maxZoneW, maxNoteW = 0, 0, 0
     local curY = -FTT_PAD
 
     for si, sec in ipairs(sections) do
@@ -2348,7 +2371,19 @@ function ShowFriendsTooltip(anchor)
             if nw > maxNameW then maxNameW = nw end
             if zw > maxZoneW then maxZoneW = zw end
 
-            curY = curY - (FTT_ROW_H + FTT_GAP)
+            local rowH = FTT_ROW_H
+            if showNotes and e.note then
+                row.note:SetText(e.note)
+                row.note:SetTextColor(0.75, 0.75, 0.75, 0.9)
+                row.note:Show()
+                local ntw = row.note:GetUnboundedStringWidth() or 0
+                if ntw > FTT_NOTE_MAX_W then ntw = FTT_NOTE_MAX_W end
+                if ntw > maxNoteW then maxNoteW = ntw end
+                rowH = FTT_ROW_H + FTT_NOTE_H
+            end
+            row.button:SetHeight(rowH)
+
+            curY = curY - (rowH + FTT_GAP)
         end
 
         if maxRows > 0 and #sec.list > maxRows then
@@ -2369,7 +2404,8 @@ function ShowFriendsTooltip(anchor)
     end
 
     local contentW = FTT_PAD + maxNameW + 16 + maxZoneW + FTT_PAD
-    local ttW = math.max(contentW, 160)
+    local noteW = FTT_PAD + FTT_NOTE_INDENT + maxNoteW + FTT_PAD
+    local ttW = math.max(contentW, noteW, 160)
     local ttH = -curY + FTT_PAD
 
     tt:SetSize(ttW, ttH)
