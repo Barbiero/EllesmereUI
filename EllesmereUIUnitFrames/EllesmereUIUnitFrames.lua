@@ -7266,16 +7266,23 @@ function ns.UF_LayoutPowerSeam(seam)
         t._path = seam._path
     end
     local raise = PP.SnapForES(thick * 5 / 32, es)
+    local portraitSeam = seam:GetParent()._portraitSeparator
+    local leftInset, rightInset = 0, 0
+    if portraitSeam and portraitSeam:IsShown() then
+        -- Leave one physical pixel clear where the portrait divider meets the seam.
+        if portraitSeam._right then rightInset = PP.perfect / es
+        else leftInset = PP.perfect / es end
+    end
     t:ClearAllPoints()
     if seam._above then
         -- Power above health: the join is the bar's bottom edge.
         t:SetTexCoord(0, 1, 1, 0)
-        t:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", 0, -raise)
-        t:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", 0, -raise)
+        t:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", leftInset, -raise)
+        t:SetPoint("BOTTOMRIGHT", power, "BOTTOMRIGHT", -rightInset, -raise)
     else
         t:SetTexCoord(0, 1, 0, 1)
-        t:SetPoint("TOPLEFT", power, "TOPLEFT", 0, raise)
-        t:SetPoint("TOPRIGHT", power, "TOPRIGHT", 0, raise)
+        t:SetPoint("TOPLEFT", power, "TOPLEFT", leftInset, raise)
+        t:SetPoint("TOPRIGHT", power, "TOPRIGHT", -rightInset, raise)
     end
     t:SetHeight(thick)
     t:Show()
@@ -7286,6 +7293,8 @@ end
 -- bars. Built only on opt-in; layout and colour updates use existing passes.
 function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview)
     local seam = frame._portraitSeparator
+    local power = frame.Power or frame._power
+    local powerSeam = power and power._pbSeam
     local path
     if s.portraitSeparator and attached and portrait and portrait:IsShown()
        and not stock and (s.borderSize or 1) > 0 then
@@ -7295,6 +7304,7 @@ function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, p
         if seam then
             seam:Hide()
             EllesmereUI.RegisterPxReapply(seam, nil)
+            if powerSeam and powerSeam:IsShown() then ns.UF_LayoutPowerSeam(powerSeam) end
         end
         return
     end
@@ -7315,6 +7325,7 @@ function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, p
     seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, s.borderAlpha or 1)
     ns.UF_LayoutPortraitSeparator(seam)
     seam:Show()
+    if powerSeam and powerSeam:IsShown() then ns.UF_LayoutPowerSeam(powerSeam) end
     EllesmereUI.RegisterPxReapply(seam, (seam._px and not preview) and ns.UF_LayoutPortraitSeparator or nil)
 end
 
