@@ -1758,6 +1758,11 @@ initFrame:SetScript("OnEvent", function(self)
         return math.abs(y)
     end
 
+    -- Tracking Bars page with its state and hooks (CooldownManager_Options\
+    -- BuffBarsPage_Options.lua), set up here so the hooks keep their order.
+    local BuildBuffBarsPage, RefreshTBBPopout = ns.CDMO_InitBuffBarsPage(PP, DB, Refresh,
+        FONT_PATH, GetCDMOptOutline, GateBlizzardOnly, PAGE_BUFF_BARS)
+
     ---------------------------------------------------------------------------
     --  CDM Bars page
     ---------------------------------------------------------------------------
@@ -1996,15 +2001,6 @@ initFrame:SetScript("OnEvent", function(self)
         return ResolveToLive(sid)
     end
 
-    -- Shared helpers for the pickers under CooldownManager_Options\ (loaded
-    -- before this file, read when a picker opens).
-    ns._CDMO_OptEnv = {
-        durationPositionOrder = durationPositionOrder, durationPositionValues = durationPositionValues, FitMenuWidth = FitMenuWidth,
-        FONT_PATH = FONT_PATH, GetCDMOptOutline = GetCDMOptOutline, NormalizeToBase = NormalizeToBase,
-        optState = optState, RefreshCDPreview = RefreshCDPreview, ResolveToLive = ResolveToLive,
-        SelectedCDMBar = SelectedCDMBar,
-    }
-
     -- Keybind color swatch and text cog on a Show Keybind row. lockTip
     -- (optional): why the whole row is locked, nil while it is live; the
     -- swatch and cog give that reason first, then Show Keybind.
@@ -2119,6 +2115,20 @@ initFrame:SetScript("OnEvent", function(self)
             SwatchState()
         end
     end
+
+    -- Shared helpers for the pickers and page builders under
+    -- CooldownManager_Options\ (loaded before this file, read when a picker
+    -- opens or a page is built).
+    ns._CDMO_OptEnv = {
+        _cdmActivePreviewOn = _cdmActivePreviewOn, AnyIconAlwaysShowOn = AnyIconAlwaysShowOn, BuildKeybindStyleControls = BuildKeybindStyleControls,
+        DB = DB, durationPositionOrder = durationPositionOrder, durationPositionValues = durationPositionValues,
+        FitMenuWidth = FitMenuWidth, FONT_PATH = FONT_PATH, GetCDMOptOutline = GetCDMOptOutline,
+        NormalizeToBase = NormalizeToBase, optState = optState, PP = PP,
+        Refresh = Refresh, RefreshCDPreview = RefreshCDPreview, ResolveIconArt = ResolveIconArt,
+        ResolveToLive = ResolveToLive, SelectedCDMBar = SelectedCDMBar, SetPVFont = SetPVFont,
+        StartActiveStatePreview = StartActiveStatePreview, StopActiveStatePreview = StopActiveStatePreview, UpdateCDMPreview = UpdateCDMPreview,
+        UpdateCDMPreviewAndResize = UpdateCDMPreviewAndResize,
+    }
 
 
     ---------------------------------------------------------------------------
@@ -2376,7 +2386,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- normally the first time the player visits it live.
             if EllesmereUI._prebuilding then
                 if pageName == PAGE_CDM_BARS then
-                    return BuildCDMBarsPage(pageName, parent, yOffset)
+                    return ns.CDMO_BuildCDMBarsPage(pageName, parent, yOffset)
                 elseif pageName == PAGE_ROTATION_ICON then
                     return BuildRotationAssistIconPage(pageName, parent, yOffset)
                 elseif pageName == PAGE_BAR_GLOWS then
@@ -2401,7 +2411,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             if pageName == PAGE_CDM_BARS then
                 ns._cdmBarsPageOpen = true
-                local h2 = BuildCDMBarsPage(pageName, parent, yOffset)
+                local h2 = ns.CDMO_BuildCDMBarsPage(pageName, parent, yOffset)
                 if ns.UpdateCustomBuffBars then ns.UpdateCustomBuffBars() end
                 ShowBuffBarOverlay()
                 -- Show one-time button settings tip after preview renders

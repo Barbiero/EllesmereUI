@@ -1,5 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  CooldownManager_Options\LivePreview_Options.lua
+--  Cooldown Manager options: the interactive bar preview in the content header
+--  of the CDM Bars page (BuildCDMLivePreview). Definitions only; the shared
+--  helpers come from ns._CDMO_OptEnv (filled by EUI_CooldownManager_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
+if not ns then return end  -- module disabled: no options page
+
 --- Build the live CDM bar preview in the content header (interactive)
 local function BuildCDMLivePreview(parent, yOff)
+    local env = ns._CDMO_OptEnv
+    local _cdmActivePreviewOn, DB, FONT_PATH, GetCDMOptOutline = env._cdmActivePreviewOn, env.DB, env.FONT_PATH, env.GetCDMOptOutline
+    local NormalizeToBase, optState, PP, Refresh = env.NormalizeToBase, env.optState, env.PP, env.Refresh
+    local RefreshCDPreview, ResolveIconArt, ResolveToLive, SelectedCDMBar = env.RefreshCDPreview, env.ResolveIconArt, env.ResolveToLive, env.SelectedCDMBar
+    local SetPVFont, StartActiveStatePreview, StopActiveStatePreview, UpdateCDMPreviewAndResize = env.SetPVFont, env.StartActiveStatePreview, env.StopActiveStatePreview, env.UpdateCDMPreviewAndResize
     local p = DB()
     if not p or not p.cdmBars then return 0 end
 
@@ -1932,3 +1947,6 @@ local function BuildCDMLivePreview(parent, yOff)
     -- Return wrapper height (already capped by Update's resize logic)
     return wrapper:GetHeight()
 end
+
+-- Used by BarsPage_Options.lua
+ns.CDMO_BuildCDMLivePreview = BuildCDMLivePreview

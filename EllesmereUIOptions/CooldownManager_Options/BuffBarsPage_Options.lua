@@ -1,3 +1,16 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  CooldownManager_Options\BuffBarsPage_Options.lua
+--  Cooldown Manager options: the Tracking Bars page with its state, preview
+--  popout, placeholders, pickers and stack threshold editor. One init
+--  function, called by EUI_CooldownManager_Options.lua where this code used to
+--  run, so its hooks and frames are created at the same point and in the same
+--  order as before.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
+if not ns then return end  -- module disabled: no options page
+
+local function InitBuffBarsPage(PP, DB, Refresh, FONT_PATH, GetCDMOptOutline, GateBlizzardOnly, PAGE_BUFF_BARS)
     ---------------------------------------------------------------------------
     --  Buff Bars page: per-bar tracked buff bars with individual settings
     ---------------------------------------------------------------------------
@@ -4574,3 +4587,9 @@
         RefreshTBBPopout()
         return math.abs(y)
     end
+
+    return BuildBuffBarsPage, RefreshTBBPopout
+end
+
+-- Used by EUI_CooldownManager_Options.lua
+ns.CDMO_InitBuffBarsPage = InitBuffBarsPage

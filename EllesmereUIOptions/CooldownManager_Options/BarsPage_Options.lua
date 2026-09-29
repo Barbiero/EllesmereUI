@@ -1,4 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  CooldownManager_Options\BarsPage_Options.lua
+--  Cooldown Manager options: the CDM Bars page (BuildCDMBarsPage). Definitions
+--  only; the shared helpers come from ns._CDMO_OptEnv (filled by
+--  EUI_CooldownManager_Options.lua), the preview from LivePreview_Options.lua.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
+if not ns then return end  -- module disabled: no options page
+
 local function BuildCDMBarsPage(pageName, parent, yOffset)
+    local env = ns._CDMO_OptEnv
+    local AnyIconAlwaysShowOn, BuildKeybindStyleControls, DB, durationPositionOrder = env.AnyIconAlwaysShowOn, env.BuildKeybindStyleControls, env.DB, env.durationPositionOrder
+    local durationPositionValues, FONT_PATH, GetCDMOptOutline, optState = env.durationPositionValues, env.FONT_PATH, env.GetCDMOptOutline, env.optState
+    local PP, Refresh, SelectedCDMBar, UpdateCDMPreview = env.PP, env.Refresh, env.SelectedCDMBar, env.UpdateCDMPreview
+    local UpdateCDMPreviewAndResize = env.UpdateCDMPreviewAndResize
+    local BuildCDMLivePreview = ns.CDMO_BuildCDMLivePreview
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h
@@ -3623,3 +3639,6 @@ local function BuildCDMBarsPage(pageName, parent, yOffset)
 
     return math.abs(y)
 end
+
+-- Used by EUI_CooldownManager_Options.lua
+ns.CDMO_BuildCDMBarsPage = BuildCDMBarsPage
