@@ -2200,11 +2200,7 @@ ns.CDM_BAR_ROOTS = {
 local _G_Glows = EllesmereUI.Glows
 -- CDM saved glow numbering (1 Pixel, 2 Shape, 3 Action Button, 4 Auto-Cast,
 -- 5 GCD, 6 Modern, 7 Classic, 8 Blackout) as a view over the shared style
--- table. Blackout is a real member of this view (so CDReadyGlowStyle/
--- StartNativeGlow resolve it like any other numbered style); the sites that
--- should not OFFER it (Pandemic/Buff/TBB glow pickers) exclude style 8
--- explicitly in their own GlowOptions descriptor instead of it being absent
--- from the shared numbering.
+-- table. 
 ns.GLOW_VIEW = _G_Glows.MakeView({ 1, 4, 2, 3, 5, 6, 7, 8 })
 local GLOW_STYLES = ns.GLOW_VIEW.list
 ns.GLOW_STYLES = GLOW_STYLES
