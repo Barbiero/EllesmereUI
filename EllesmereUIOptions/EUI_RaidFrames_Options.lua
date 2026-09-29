@@ -1165,6 +1165,29 @@ initFrame:SetScript("OnEvent", function(self)
     }
     local allGrowthOrder        = { "DOWN", "UP", "RIGHT", "LEFT" }
 
+    -- Group Growth additionally offers the grid flow: ns._RF_GRID_ROWS groups
+    -- stack down the first column (G1 above G2) before the next column starts to
+    -- the right (G3 above G4) -- a 2x2 raid block instead of one long run. Unit
+    -- Growth has no such mode: a header's children only ever run along one axis.
+    local groupGrowthValues = {
+        DOWN      = "Down",
+        UP        = "Up",
+        RIGHT     = "Right",
+        LEFT      = "Left",
+        DOWNRIGHT = "Down and then Right",
+    }
+    local groupGrowthOrder  = { "DOWN", "UP", "RIGHT", "LEFT", "DOWNRIGHT" }
+
+    -- Merge Groups renders through Blizzard's flat header, which has a single
+    -- column axis and cannot wrap into a grid, so the grid flow degrades to the
+    -- plain RIGHT run there (same self-heal as ns._RFEffectiveGrowth in the
+    -- runtime). Report what actually renders instead of showing a value the
+    -- merged grid ignores.
+    local function ReadGroupGrowth(v)
+        if v == "DOWNRIGHT" and SVal("mergeGroups", false) then return "RIGHT" end
+        return v
+    end
+
     -- ns._RFGrowthIsVertical is the runtime module's single source of truth for
     -- this check (EllesmereUIRaidFrames.lua); reuse it here rather than a second copy.
     local GrowthIsVertical = ns._RFGrowthIsVertical
@@ -5080,10 +5103,12 @@ initFrame:SetScript("OnEvent", function(self)
                                       ReloadAndUpdate()
                                   end },
                                 { type="dropdown", label="Group Growth",
-                                  values=growthValues, order=allGrowthOrder,
+                                  values=groupGrowthValues, order=groupGrowthOrder,
                                   get=function()
                                       local ov = db.profile.raidSizeOverrides
-                                      return ov and ov[tier] and ov[tier].groupGrowth or db.profile.groupGrowth or "RIGHT"
+                                      return ReadGroupGrowth(
+                                          ov and ov[tier] and ov[tier].groupGrowth
+                                          or db.profile.groupGrowth or "RIGHT")
                                   end,
                                   set=function(v)
                                       -- Separated groups allow every combination (see
@@ -5491,10 +5516,12 @@ initFrame:SetScript("OnEvent", function(self)
         -------------------------------------------------------------------
         _, h = W:SectionHeader(parent, "LAYOUT", y); y = y - h
 
-        -- Group Growth | Unit Growth: separated groups (Merge Groups off) support all
-        -- 16 combinations, but merged mode's single Blizzard flat header can only make
-        -- its column direction perpendicular to Unit Growth, so a same-axis pair there
-        -- gets silently reinterpreted (see the colAnchor comment in EllesmereUIRaidFrames.lua)
+        -- Group Growth | Unit Growth: separated groups (Merge Groups off) support every
+        -- combination of the two axes (5 Group Growth values x 4 Unit Growth ones), but
+        -- merged mode's single Blizzard flat header can only make its column direction
+        -- perpendicular to Unit Growth, so a same-axis pair -- and the two-axis grid
+        -- flow, which it renders as a plain RIGHT run (ReadGroupGrowth above) -- gets
+        -- silently reinterpreted (see the colAnchor comment in EllesmereUIRaidFrames.lua)
         -- -- KeepGrowthPerpendicular bumps the other axis instead. A base edit can also
         -- leave a per-tier override same-axis (an override that only set one axis
         -- inherits the other from base), so fix those up too.
@@ -5511,8 +5538,8 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         _, h = W:DualRow(parent, y,
-            { type="dropdown", text="Group Growth", values=growthValues, order=allGrowthOrder,
-              getValue=function() return SVal("groupGrowth", "RIGHT") end,
+            { type="dropdown", text="Group Growth", values=groupGrowthValues, order=groupGrowthOrder,
+              getValue=function() return ReadGroupGrowth(SVal("groupGrowth", "RIGHT")) end,
               setValue=function(v)
                   db.profile.groupGrowth = v
                   if SVal("mergeGroups", false) then
