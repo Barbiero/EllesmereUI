@@ -10555,6 +10555,13 @@ end
 -- paths / names / order are a catalogue from BuildAlertSoundTables(); left out,
 -- they are the Quality of Life alert-sound catalogue (just "None" while it is
 -- absent). A path is a sound file or a SoundKit id.
+-- Sound preview icon for every sound picker and play button. WoW Forever has no
+-- common-icon-sound atlases; its dropdown speaker stands in for both states.
+EllesmereUI.SOUND_ICON_ATLAS = C_Texture.GetAtlasInfo("common-icon-sound")
+    and "common-icon-sound" or "common-dropdown-icon-sound-on"
+EllesmereUI.SOUND_ICON_PRESSED_ATLAS = C_Texture.GetAtlasInfo("common-icon-sound-pressed")
+    and "common-icon-sound-pressed" or EllesmereUI.SOUND_ICON_ATLAS
+
 function EllesmereUI.BuildSoundDropdownValues(paths, names, order)
     paths = paths or EllesmereUI._groupDeathSoundPaths or {}
     names = names or EllesmereUI._groupDeathSoundNames or { none = "None" }
@@ -10567,11 +10574,11 @@ function EllesmereUI.BuildSoundDropdownValues(paths, names, order)
         searchable = true,
         iconAtlas = function(key)
             if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound"
+            return EllesmereUI.SOUND_ICON_ATLAS
         end,
         iconPressedAtlas = function(key)
             if key == "none" or not paths[key] then return nil end
-            return "common-icon-sound-pressed"
+            return EllesmereUI.SOUND_ICON_PRESSED_ATLAS
         end,
         iconOnClick = function(key)
             local path = paths[key]

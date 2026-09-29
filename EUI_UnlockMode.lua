@@ -1677,6 +1677,9 @@ do
         if not growDir or growDir == "CENTER" then return end
         local targetBar = GetBarFrame(info.target)
         if not targetBar or not targetBar:GetLeft() then return end
+        -- A clamp-held target is not at its saved spot: pairing it would make the
+        -- child jump once the target is released. Retries next settle.
+        if EllesmereUI._RectHeldByClamp(info.target, targetBar) then return end
         -- UIParent-space target geometry, computed like ApplyAnchorPosition's tL/tR/tT/tB so the baseline is comparable.
         local uiS = UIParent:GetEffectiveScale()
         local tS = targetBar:GetEffectiveScale()
@@ -3478,6 +3481,28 @@ do
     end
 end
 
+-- True when an action bar's clamped frame touches a screen edge (or its rect
+-- cannot be read): the engine may be holding it there, so its live rect can be
+-- the clamped spot rather than the one its saved position asks for (the bars
+-- are clamped for display only and keep their saved spot even off screen).
+-- Automatic captures that bank live geometry into saved data skip such a bar
+-- and retry on a later pass; explicit user moves (drag, nudge, link changes)
+-- still capture it. Every other element, and a bar not yet clamped, is false.
+EllesmereUI._RectHeldByClamp = function(key, f)
+    local abKeys = EllesmereUI._abBarKeys
+    if not (abKeys and abKeys[key]) then return false end
+    if not (f and f:IsClampedToScreen()) then return false end
+    local l, r, t, b = f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom()
+    if not (l and r and t and b) then return true end
+    if issecretvalue and (issecretvalue(l) or issecretvalue(r)
+        or issecretvalue(t) or issecretvalue(b)) then
+        return true
+    end
+    local s = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local w, h = UIParent:GetSize()
+    return l * s <= 0.5 or b * s <= 0.5 or r * s >= w - 0.5 or t * s >= h - 0.5
+end
+
 -- Captures the growth-edge pin for an anchored custom-growth bar from LIVE
 -- geometry: which target reference edge the fixed growth edge hangs off
 -- (refX/refY = LEFT|RIGHT|TOP|BOTTOM|CENTER) and its offset from that edge
@@ -3913,8 +3938,11 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
             -- session-baseline/bless captures) or inside an unlock session. CDM bars
             -- populate icons asynchronously at login; capturing mid-population would
             -- freeze a transient half-icon edge into the pin. Until capture, the legacy pin below serves the apply.
+            -- Never from a clamp-held rect: the pin would bank the clamped spot.
             if ai.refFor ~= gd and EllesmereUI._unlockCaptureGrowPin
-               and (EllesmereUI._settleReapplyInProgress or isUnlocked) then
+               and (EllesmereUI._settleReapplyInProgress or isUnlocked)
+               and not EllesmereUI._RectHeldByClamp(childKey, childBar)
+               and not EllesmereUI._RectHeldByClamp(targetKey, targetBar) then
                 EllesmereUI._unlockCaptureGrowPin(childKey, ai, side)
             end
             if ai.refFor == gd then
@@ -4041,7 +4069,8 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
                             rt[childKey] = nil
                             b = nil
                         end
-                        if not b and EllesmereUI._settleReapplyInProgress then
+                        if not b and EllesmereUI._settleReapplyInProgress
+                           and not EllesmereUI._RectHeldByClamp(targetKey, targetBar) then
                             b = { sx = savedEdge.x, sy = savedEdge.y, tgt = targetKey,
                                   tgtx = tCX, tgty = tCY,
                                   tgtL = tL, tgtR = tR, tgtT = tT, tgtB = tB }
