@@ -5,6 +5,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  popup anchored to the sidebar. Loads after EllesmereUI_Fonts.lua.
 -------------------------------------------------------------------------------
 local EllesmereUI = _G.EllesmereUI
+-- Private namespace shared with EllesmereUI.lua (sidebar buttons).
+local _, EUI_NS = ...
 
 -------------------------------------------------------------------------------
 --  Profile Sync System (mirror groups)
@@ -932,7 +934,7 @@ do
         refreshSyncBtnLabel()
 
         local function RefreshSidebarSyncIcon()
-            local sidebarBtns = EllesmereUI._sidebarButtons
+            local sidebarBtns = EUI_NS.sidebarButtons
             if sidebarBtns and sidebarBtns[folder] and sidebarBtns[folder]._syncBtn then
                 local sb = sidebarBtns[folder]._syncBtn
                 if sb._refreshAlpha then sb._refreshAlpha() end
