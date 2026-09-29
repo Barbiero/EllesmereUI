@@ -189,6 +189,7 @@ end
 --  Main Frame
 -------------------------------------------------------------------------------
 local EUI_Bank = CreateFrame("Frame", "EUI_BankFrame", UIParent)
+EUI_Bank:SetToplevel(true)
 EUI_Bank:SetFrameStrata("HIGH")
 EUI_Bank:SetFrameLevel(50)
 EUI_Bank:EnableMouse(true)

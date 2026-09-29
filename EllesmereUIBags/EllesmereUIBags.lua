@@ -7,6 +7,7 @@ local ns = select(2, ...)
 EllesmereUI._ModuleNS["EllesmereUIBags"] = ns  -- LOD options files read this module ns via the registry
 
 EUI_Bags = CreateFrame("Frame", "EUI_MainBagFrame", UIParent)
+EUI_Bags:SetToplevel(true)
 EUI_Bags:Hide()
 -- Auto-size state: reset on close (next open sizes from its first/active tab);
 -- while open it only grows, never shrinks.
