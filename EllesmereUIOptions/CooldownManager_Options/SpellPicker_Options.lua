@@ -92,7 +92,7 @@ local function ShowSpellPicker(anchorFrame, barKey, slotIndex, excludeSet, onSel
 
     local menuW = 210
     local ITEM_H = 26
-    local MAX_H = 400  -- tall enough for the fullest per-spell menus (buff branch: actions + 10 settings incl. Threshold Text + dividers); this menu has no scroll, so anything over MAX_H gets clipped
+    local MAX_H = 400  -- full picker scrolls past this; the per-spell menu has no scroll and sizes to its rows
 
     local menu = CreateFrame("Frame", nil, UIParent)
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -3867,7 +3867,7 @@ local function ShowSpellPicker(anchorFrame, barKey, slotIndex, excludeSet, onSel
 
         -- Size and show
         inner:SetHeight(mH + 4)
-        menu:SetSize(menuW, math.min(mH + 4, MAX_H))
+        menu:SetSize(menuW, mH + 4)
         menu:ClearAllPoints()
         menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -4)
         menu._anchorFrame = anchorFrame
