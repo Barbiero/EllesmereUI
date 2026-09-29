@@ -6558,10 +6558,12 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  Spell picker dropdown (right-click on icon or click "+" button)
     ---------------------------------------------------------------------------
-    local _spellPickerMenu
+    -- Mutable state shared with the pickers under CooldownManager_Options\. A
+    -- table instead of a local so every file reads and writes the live value.
+    local optState = {}
     -- Close the spell picker when the main EUI options panel closes
     EllesmereUI:RegisterOnHide(function()
-        if _spellPickerMenu and _spellPickerMenu:IsShown() then _spellPickerMenu:Hide() end
+        if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then optState._spellPickerMenu:Hide() end
     end)
     -- Normalize a spell ID to its base (undo talent overrides), and resolve
     -- a base id to its current live version (talent overrides) -- both
@@ -7494,9 +7496,9 @@ initFrame:SetScript("OnEvent", function(self)
     --  None grayed out. Selecting moves the spell to the target bar.
     ---------------------------------------------------------------------------
     local function ShowBuffBarPicker(anchorFrame, targetBarKey, onChanged)
-        if _spellPickerMenu and _spellPickerMenu:IsShown() then
-            _spellPickerMenu:Hide()
-            if _spellPickerMenu._anchorFrame == anchorFrame then return end
+        if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then
+            optState._spellPickerMenu:Hide()
+            if optState._spellPickerMenu._anchorFrame == anchorFrame then return end
         end
 
         local mBgR  = EllesmereUI.DD_BG_R  or 0.075
@@ -7804,7 +7806,7 @@ initFrame:SetScript("OnEvent", function(self)
         menu:ClearAllPoints()
         menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -4)
         menu._anchorFrame = anchorFrame
-        _spellPickerMenu = menu
+        optState._spellPickerMenu = menu
 
         menu:SetScript("OnUpdate", function(m)
             if not m:IsMouseOver() and not anchorFrame:IsMouseOver() and IsMouseButtonDown("LeftButton") then
@@ -7826,9 +7828,9 @@ initFrame:SetScript("OnEvent", function(self)
     -- hosted and there is no Custom Spell ID row (a replacement needs a Blizzard viewer
     -- frame). Absent = the hosting picker below.
     local function ShowBuffToCDPicker(anchorFrame, targetBarKey, onChanged, onPicked)
-        if _spellPickerMenu and _spellPickerMenu:IsShown() then
-            _spellPickerMenu:Hide()
-            if _spellPickerMenu._anchorFrame == anchorFrame then return end
+        if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then
+            optState._spellPickerMenu:Hide()
+            if optState._spellPickerMenu._anchorFrame == anchorFrame then return end
         end
 
         local mBgR  = EllesmereUI.DD_BG_R  or 0.075
@@ -8046,7 +8048,7 @@ initFrame:SetScript("OnEvent", function(self)
         menu:ClearAllPoints()
         menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -4)
         menu._anchorFrame = anchorFrame
-        _spellPickerMenu = menu
+        optState._spellPickerMenu = menu
 
         menu:SetScript("OnUpdate", function(m)
             if not m:IsMouseOver() and not anchorFrame:IsMouseOver() and IsMouseButtonDown("LeftButton") then
@@ -8485,12 +8487,12 @@ initFrame:SetScript("OnEvent", function(self)
 
     local function ShowSpellPicker(anchorFrame, barKey, slotIndex, excludeSet, onSelect, removeOnly)
         -- Toggle: if the picker is already open for this same icon, close it
-        if _spellPickerMenu and _spellPickerMenu:IsShown() and _spellPickerMenu._anchorFrame == anchorFrame then
-            _spellPickerMenu:Hide()
+        if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() and optState._spellPickerMenu._anchorFrame == anchorFrame then
+            optState._spellPickerMenu:Hide()
             return
         end
         -- Close existing
-        if _spellPickerMenu then _spellPickerMenu:Hide() end
+        if optState._spellPickerMenu then optState._spellPickerMenu:Hide() end
 
         local bd = SelectedCDMBar()
         local isCustomBuff = bd and bd.barType == "custom_buff"
@@ -12324,7 +12326,7 @@ initFrame:SetScript("OnEvent", function(self)
             menu:ClearAllPoints()
             menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -4)
             menu._anchorFrame = anchorFrame
-            _spellPickerMenu = menu
+            optState._spellPickerMenu = menu
             menu._openSub = nil  -- track open subnav for close checks
             menu:SetScript("OnUpdate", function(m)
                 local overMenu = m:IsMouseOver() or anchorFrame:IsMouseOver()
@@ -13687,7 +13689,7 @@ initFrame:SetScript("OnEvent", function(self)
         end)
 
         menu:Show()
-        _spellPickerMenu = menu
+        optState._spellPickerMenu = menu
         menu._anchorFrame = anchorFrame
     end
 
@@ -14327,8 +14329,8 @@ initFrame:SetScript("OnEvent", function(self)
                     -- A per-icon settings dropdown may be open (anchored to this or
                     -- another slot). A remove reshuffles the preview slots, so any
                     -- open dropdown is about to point at the wrong spell -- close it.
-                    if _spellPickerMenu and _spellPickerMenu:IsShown() then
-                        _spellPickerMenu:Hide()
+                    if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then
+                        optState._spellPickerMenu:Hide()
                     end
                     if isDefaultBuffs then
                         -- Custom item slot (negative -itemID marker): remove it
