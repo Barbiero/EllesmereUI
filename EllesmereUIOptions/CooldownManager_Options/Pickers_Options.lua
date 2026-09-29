@@ -1,5 +1,17 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  CooldownManager_Options\Pickers_Options.lua
+--  Cooldown Manager options: buff pickers, spell/item/slot ID popups, value
+--  popups and EnsureAssignedSpells. Definitions only; the shared helpers come
+--  from ns._CDMO_OptEnv (filled by EUI_CooldownManager_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
+if not ns then return end  -- module disabled: no options page
+
 -- Ensure assignedSpells is populated from live icons if nil; shared by spell picker, preview, and all add/remove handlers.
 local function EnsureAssignedSpells(barKeyE)
+    local env = ns._CDMO_OptEnv
+    local NormalizeToBase, ResolveToLive = env.NormalizeToBase, env.ResolveToLive
     local sd = ns.GetBarSpellData(barKeyE)
     if not sd then return sd end
     if sd.assignedSpells then
@@ -349,6 +361,8 @@ end
 --  withDuration adds the duration field (custom/preset buffs); onAdded(sid) runs after spellDuration/customSpellID storage.
 ---------------------------------------------------------------------------
 local function ShowCustomSpellIDPopup(barKey, withDuration, onAdded, hideChargeWarn)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_SpellIDPopup"
     local popup = _G[popupName]
     if not popup then
@@ -586,6 +600,8 @@ end
 --  handles AddTrackedSpell.
 ---------------------------------------------------------------------------
 local function ShowCustomItemIDPopup(barKey, onAdded)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_ItemIDPopup"
     local popup = _G[popupName]
     if not popup then
@@ -739,6 +755,8 @@ end
 --  its tinker). The name line echoes the typed slot (localized name + equipped item) so a bare number is confirmed before Add.
 ---------------------------------------------------------------------------
 local function ShowEquipmentSlotPopup(barKey, onAdded)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_SlotIDPopup"
     local popup = _G[popupName]
     if not popup then
@@ -905,6 +923,8 @@ end
 --  None grayed out. Selecting moves the spell to the target bar.
 ---------------------------------------------------------------------------
 local function ShowBuffBarPicker(anchorFrame, targetBarKey, onChanged)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline, RefreshCDPreview, optState = env.FONT_PATH, env.GetCDMOptOutline, env.RefreshCDPreview, env.optState
     if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then
         optState._spellPickerMenu:Hide()
         if optState._spellPickerMenu._anchorFrame == anchorFrame then return end
@@ -1237,6 +1257,8 @@ end
 -- hosted and there is no Custom Spell ID row (a replacement needs a Blizzard viewer
 -- frame). Absent = the hosting picker below.
 local function ShowBuffToCDPicker(anchorFrame, targetBarKey, onChanged, onPicked)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline, optState = env.FONT_PATH, env.GetCDMOptOutline, env.optState
     if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then
         optState._spellPickerMenu:Hide()
         if optState._spellPickerMenu._anchorFrame == anchorFrame then return end
@@ -1473,6 +1495,8 @@ end
 -- Simple numeric "timer" popup for custom Active State on preset icons.
 -- onConfirm(seconds) fires only when a positive number is entered.
 local function ShowDurationPopup(currentVal, onConfirm)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_DurationPopup"
     local popup = _G[popupName]
     if not popup then
@@ -1574,6 +1598,8 @@ end
 -- enters an opacity percent (1-100) that the icon uses while on cooldown.
 -- Mirrors ShowDurationPopup's look; onConfirm receives the integer percent.
 local function ShowAlphaPopup(currentPct, onConfirm)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_AlphaPopup"
     local popup = _G[popupName]
     if not popup then
@@ -1676,6 +1702,8 @@ end
 -- Threshold Decimals apply. 0 disarms the feature for the spell. Mirrors
 -- ShowAlphaPopup's look; onConfirm receives the integer seconds (0-59).
 local function ShowThresholdSecondsPopup(currentVal, onConfirm)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_ThresholdSecondsPopup"
     local popup = _G[popupName]
     if not popup then
@@ -1780,6 +1808,8 @@ end
 -- typo is visible before saving). onConfirm gets the integer fileID or nil
 -- for remove. On ns (not a page-scope local): Lua 5.1 200-local cap.
 ns.ShowCDMCustomIconPopup = function(currentID, onConfirm)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_CustomIconPopup"
     local popup = _G[popupName]
     if not popup then
@@ -1893,3 +1923,13 @@ ns.ShowCDMCustomIconPopup = function(currentID, onConfirm)
     popup._box:SetFocus()
     popup._box:HighlightText()
 end
+
+-- Used by EUI_CooldownManager_Options.lua and SpellPicker_Options.lua
+ns.CDMO_EnsureAssignedSpells = EnsureAssignedSpells
+ns.CDMO_ShowAlphaPopup = ShowAlphaPopup
+ns.CDMO_ShowBuffBarPicker = ShowBuffBarPicker
+ns.CDMO_ShowBuffToCDPicker = ShowBuffToCDPicker
+ns.CDMO_ShowCustomItemIDPopup = ShowCustomItemIDPopup
+ns.CDMO_ShowDurationPopup = ShowDurationPopup
+ns.CDMO_ShowEquipmentSlotPopup = ShowEquipmentSlotPopup
+ns.CDMO_ShowThresholdSecondsPopup = ShowThresholdSecondsPopup

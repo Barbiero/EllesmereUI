@@ -1,3 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  CooldownManager_Options\SpellPicker_Options.lua
+--  Cooldown Manager options: the per-bar spell picker (ShowSpellPicker).
+--  Definitions only; the shared helpers come from ns._CDMO_OptEnv (filled by
+--  EUI_CooldownManager_Options.lua), the other pickers from Pickers_Options.lua.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
+if not ns then return end  -- module disabled: no options page
+
 local function ShowWrongBarTypePopup(spellName, isSpellBuff)
     if not EllesmereUI or not EllesmereUI.ShowConfirmPopup then return end
     local correctBar = isSpellBuff and "a Buff bar" or "a Cooldown or Utility bar"
@@ -16,6 +26,11 @@ local function ShowWrongBarTypePopup(spellName, isSpellBuff)
 end
 
 local function ShowSpellPicker(anchorFrame, barKey, slotIndex, excludeSet, onSelect, removeOnly)
+    local env = ns._CDMO_OptEnv
+    local FONT_PATH, FitMenuWidth, GetCDMOptOutline, RefreshCDPreview = env.FONT_PATH, env.FitMenuWidth, env.GetCDMOptOutline, env.RefreshCDPreview
+    local SelectedCDMBar, durationPositionOrder, durationPositionValues, optState = env.SelectedCDMBar, env.durationPositionOrder, env.durationPositionValues, env.optState
+    local EnsureAssignedSpells, ShowAlphaPopup, ShowBuffToCDPicker, ShowCustomItemIDPopup = ns.CDMO_EnsureAssignedSpells, ns.CDMO_ShowAlphaPopup, ns.CDMO_ShowBuffToCDPicker, ns.CDMO_ShowCustomItemIDPopup
+    local ShowDurationPopup, ShowEquipmentSlotPopup, ShowThresholdSecondsPopup = ns.CDMO_ShowDurationPopup, ns.CDMO_ShowEquipmentSlotPopup, ns.CDMO_ShowThresholdSecondsPopup
     -- Toggle: if the picker is already open for this same icon, close it
     if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() and optState._spellPickerMenu._anchorFrame == anchorFrame then
         optState._spellPickerMenu:Hide()
@@ -5222,3 +5237,6 @@ local function ShowSpellPicker(anchorFrame, barKey, slotIndex, excludeSet, onSel
     optState._spellPickerMenu = menu
     menu._anchorFrame = anchorFrame
 end
+
+-- Used by EUI_CooldownManager_Options.lua
+ns.CDMO_ShowSpellPicker = ShowSpellPicker

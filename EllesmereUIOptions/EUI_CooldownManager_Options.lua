@@ -6572,6 +6572,15 @@ initFrame:SetScript("OnEvent", function(self)
         return ResolveToLive(sid)
     end
 
+    -- Shared helpers for the pickers under CooldownManager_Options\ (loaded
+    -- before this file, read when a picker opens).
+    ns._CDMO_OptEnv = {
+        durationPositionOrder = durationPositionOrder, durationPositionValues = durationPositionValues, FitMenuWidth = FitMenuWidth,
+        FONT_PATH = FONT_PATH, GetCDMOptOutline = GetCDMOptOutline, NormalizeToBase = NormalizeToBase,
+        optState = optState, RefreshCDPreview = RefreshCDPreview, ResolveToLive = ResolveToLive,
+        SelectedCDMBar = SelectedCDMBar,
+    }
+
     --- Build the live CDM bar preview in the content header (interactive)
     local function BuildCDMLivePreview(parent, yOff)
         local p = DB()
@@ -7238,7 +7247,7 @@ initFrame:SetScript("OnEvent", function(self)
                         RefreshCDPreview()
                         return
                     end
-                    local sdMid = EnsureAssignedSpells(bd.key)
+                    local sdMid = ns.CDMO_EnsureAssignedSpells(bd.key)
                     if not sdMid or not sdMid.assignedSpells then return end
                     local t = sdMid.assignedSpells
                     -- Remove every assignedSpells entry collapsed into this preview slot. A legacy
@@ -7272,7 +7281,7 @@ initFrame:SetScript("OnEvent", function(self)
                     if not hasAssigned and not self._previewSpellID then return end
 
                     -- Show remove-only dropdown (per-icon settings + Remove)
-                    ShowSpellPicker(self, bd.key, dataIdx, {}, function()
+                    ns.CDMO_ShowSpellPicker(self, bd.key, dataIdx, {}, function()
                         -- onSelect unused -- remove is handled inside ShowSpellPicker
                     end, true)  -- removeOnly flag
                 end
@@ -7686,7 +7695,7 @@ initFrame:SetScript("OnEvent", function(self)
             if ns.IsBarBuffFamily(bd) then
                 -- Buff bars use ShowBuffBarPicker (walks the BuffIcon viewer pool). Click routes
                 -- AddTrackedSpell -- the family sweep removes the spell from every other buff-family bar (including the ghost hidden bar, the "unhide" step) before claiming it for bd.key.
-                ShowBuffBarPicker(self, bd.key, function(newSpellID, newCdID)
+                ns.CDMO_ShowBuffBarPicker(self, bd.key, function(newSpellID, newCdID)
                     if newSpellID then
                         -- Collided pair (two viewer slots, one shared spellID): claim by cooldownID
                         -- so each slot is addable on its own. Non-collided buffs keep the sid path -- spellID identity survives talent swaps, cooldownIDs drift.
@@ -7702,7 +7711,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end)
             else
                 -- CD/utility bars use ShowSpellPicker.
-                local sdAdd = EnsureAssignedSpells(bd.key)
+                local sdAdd = ns.CDMO_EnsureAssignedSpells(bd.key)
                 local excl = {}
                 local _FindOvr = C_SpellBook and C_SpellBook.FindSpellOverrideByID
                 if sdAdd and sdAdd.assignedSpells then
@@ -7716,7 +7725,7 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
                 end
-                ShowSpellPicker(self, bd.key, nil, excl, function(newSpellID, isExtra)
+                ns.CDMO_ShowSpellPicker(self, bd.key, nil, excl, function(newSpellID, isExtra)
                     ns.AddTrackedSpell(bd.key, newSpellID, isExtra)
                     FinalizeAdd()
                 end)
@@ -7762,7 +7771,7 @@ initFrame:SetScript("OnEvent", function(self)
             if not bd then return end
             -- CD/utility bars only (defensive: the button is hidden elsewhere).
             if ns.IsBarBuffFamily(bd) or bd.barType == "custom_buff" then return end
-            ShowBuffToCDPicker(self, bd.key, function()
+            ns.CDMO_ShowBuffToCDPicker(self, bd.key, function()
                 if ns.CollectAndReanchor then ns.CollectAndReanchor() end
                 -- The buff-mirror walk (10Hz) binds to the freshly-created icon on
                 -- its own next tick; no re-arm needed.
@@ -7841,7 +7850,7 @@ initFrame:SetScript("OnEvent", function(self)
                 for i = 1, #finalKeys do snap[i] = finalKeys[i] end
                 pf._buffTrackedOrder = snap
             else
-                local sdUpd = EnsureAssignedSpells(bd.key)
+                local sdUpd = ns.CDMO_EnsureAssignedSpells(bd.key)
                 local raw = sdUpd and sdUpd.assignedSpells or {}
                 if isBuffBar then
                     -- Collapse legacy duplicate buff ids in the PREVIEW only (stored data is left
