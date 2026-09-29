@@ -6755,7 +6755,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- whole management UI). Sourced from the settings catalog
         -- (ns.EnumerateCDMSettingsCatalog), which respects the user's Blizzard arrangement:
         -- spells moved to Not Displayed never materialize, and each inserts after its
-        -- nearest catalog predecessor already in the list. Guards, all load-bearing:
+        -- nearest catalog predecessor already in the list. Guards, all load-bearing:  -- eui-style: allow comment-budget
         --   * default cooldowns/utility bars only (custom bars get spells via the picker)
         --   * LEARNED spells are the live-icon pass's job above (except one its
         --     Talent Conditions hide: no live icon, so it materializes here too)
@@ -7817,16 +7817,14 @@ initFrame:SetScript("OnEvent", function(self)
         menu:Show()
     end
 
-    -- Buff picker targeting a CD/UTILITY bar. A buff placed here is modelled as a
-    -- custom injected spell (always-shown icon) whose Active State is aura-driven:
-    -- ns.AddBuffToCDUtilBar wires the injection + the gold aura overlay together.
-    -- Lists the class's CDM-trackable buffs plus a Custom Spell ID entry. No
-    -- durations (aura-driven, never cast-timed) and no item/preset rows (those are
-    -- cast-timer / CD-utility concepts that do not belong on an aura tracker).
+    -- Buff picker targeting a CD/UTILITY bar. A buff placed here is a custom injected
+    -- spell (always-shown icon) with an aura-driven Active State; ns.AddBuffToCDUtilBar
+    -- wires the injection and the gold aura overlay together. Lists the class's
+    -- CDM-trackable buffs plus a Custom Spell ID entry; no durations, item or preset rows.
     -- onPicked(spellID, collidedCdID) = selection mode ("Replace with Buff"): every
-    -- catalog buff is listed, a "None" row clears, one click picks and closes;
-    -- nothing is hosted and no Custom Spell ID row (a replacement needs a
-    -- Blizzard viewer frame to route). Absent = the hosting picker below.
+    -- catalog buff is listed, a "None" row clears, one click picks and closes, nothing is
+    -- hosted and there is no Custom Spell ID row (a replacement needs a Blizzard viewer
+    -- frame). Absent = the hosting picker below.
     local function ShowBuffToCDPicker(anchorFrame, targetBarKey, onChanged, onPicked)
         if _spellPickerMenu and _spellPickerMenu:IsShown() then
             _spellPickerMenu:Hide()
@@ -10227,17 +10225,14 @@ initFrame:SetScript("OnEvent", function(self)
                                         local strip = menu._applyStrip
                                         if strip and strip:IsShown() and strip._updateActive then strip._updateActive() end
                                     end
-                                    -- When the BAR drives this setting and the spell hasn't already broken
-                                    -- out with its own value: clicking the value the bar already applies
-                                    -- changes nothing -> flash the scope holding it (no-op cue); clicking a
-                                    -- different value (or a "+" toggle) breaks THIS spell+spec out into its
-                                    -- own value -- no popup, only this spell changes, the bar apply stays for
-                                    -- every other spell (doWrite flips a toggle OFF, the break-out for a
-                                    -- bar-applied-ON toggle). Once the spell owns a value it reports editable and writes straight through (the excluded state).
-                                    -- canApply: hosted-buff rows (and rows with no apply
-                                    -- write) never enter the break-out flow -- it flashes
-                                    -- an Apply strip those rows suppress -- they just
-                                    -- write their own value below.
+                                    -- When the BAR drives this setting and the spell has no own value yet: clicking the
+                                    -- value the bar already applies changes nothing -> flash the scope holding it (no-op
+                                    -- cue); clicking a different value (or a "+" toggle) breaks THIS spell+spec out into
+                                    -- its own value, no popup, the bar apply stays for every other spell (doWrite flips a
+                                    -- toggle OFF, the break-out for a bar-applied-ON toggle). Once the spell owns a value
+                                    -- it reports editable and writes straight through (the excluded state).
+                                    -- canApply: hosted-buff rows (and rows with no apply write) skip the break-out flow,
+                                    -- which flashes an Apply strip those rows suppress; they just write their value below.
                                     if canApply and AB.KeysBarApplied(applyKeys) and not AB.SpellHasOwn(applyKeys) then
                                         if not (isChargeToggle or isActiveBorder or isFnToggle) then
                                             local cv = getVal()
