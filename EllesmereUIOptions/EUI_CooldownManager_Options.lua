@@ -6337,6 +6337,10 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  CDM Bars page
     ---------------------------------------------------------------------------
+    -- Mutable state shared with the pickers and page builders under
+    -- CooldownManager_Options\. A table instead of locals so every file reads
+    -- and writes the live value.
+    local optState = {}
     local growValues = EllesmereUI.GROW_DIR_VALUES_BASE
     local growOrder  = { "RIGHT", "LEFT", "DOWN", "UP" } -- this dropdown's own sequence (DOWN before UP)
     local durationPositionValues = {
@@ -6349,7 +6353,7 @@ initFrame:SetScript("OnEvent", function(self)
     local durationPositionOrder = { "center", "top", "bottom", "left", "right" }
 
     -- Track which bar is selected in the CDM Bars tab
-    local selectedCDMBarIndex = 1
+    optState.selectedCDMBarIndex = 1
 
     -- Deep-link helper: select a CDM bar by key or barType (used by the What's
     -- New "Always Show Buffs" card preSelect -- that per-bar toggle only renders
@@ -6361,33 +6365,32 @@ initFrame:SetScript("OnEvent", function(self)
         if not bars then return end
         for bi, bb in ipairs(bars) do
             if bb.key == keyOrType or bb.barType == keyOrType then
-                selectedCDMBarIndex = bi
+                optState.selectedCDMBarIndex = bi
                 return
             end
         end
     end
 
-    -- CDM Bars preview state
-    local _cdmPreview          -- reference to the preview frame
-    local _cdmHeaderFixedH = 0
-    local _cdmHeaderBuilder    -- forward ref for content header builder
+    -- CDM Bars preview state, nil until built: optState._cdmPreview is the
+    -- preview frame, optState._cdmHeaderBuilder the content header builder
+    optState._cdmHeaderFixedH = 0
 
     local function UpdateCDMPreview()
-        if not _cdmPreview and EllesmereUI._contentHeaderPreview then
-            _cdmPreview = EllesmereUI._contentHeaderPreview
+        if not optState._cdmPreview and EllesmereUI._contentHeaderPreview then
+            optState._cdmPreview = EllesmereUI._contentHeaderPreview
         end
-        if _cdmPreview and _cdmPreview.Update then
-            _cdmPreview:Update()
+        if optState._cdmPreview and optState._cdmPreview.Update then
+            optState._cdmPreview:Update()
         end
     end
 
     local function UpdateCDMPreviewAndResize()
         UpdateCDMPreview()
-        if _cdmPreview and _cdmHeaderFixedH > 0 then
+        if optState._cdmPreview and optState._cdmHeaderFixedH > 0 then
             -- Wrapper height is already capped by the Update function's resize logic
-            local wrapperH = _cdmPreview._wrapper and _cdmPreview._wrapper:GetHeight()
-                             or math.min(_cdmPreview:GetHeight() * (_cdmPreview:GetScale() or 1), 200)
-            EllesmereUI:UpdateContentHeaderHeight(_cdmHeaderFixedH + wrapperH)
+            local wrapperH = optState._cdmPreview._wrapper and optState._cdmPreview._wrapper:GetHeight()
+                             or math.min(optState._cdmPreview:GetHeight() * (optState._cdmPreview:GetScale() or 1), 200)
+            EllesmereUI:UpdateContentHeaderHeight(optState._cdmHeaderFixedH + wrapperH)
         end
     end
 
@@ -6410,9 +6413,9 @@ initFrame:SetScript("OnEvent", function(self)
         local p = DB()
         if not p or not p.cdmBars or not p.cdmBars.bars then return nil end
         local bars = p.cdmBars.bars
-        if selectedCDMBarIndex < 1 then selectedCDMBarIndex = 1 end
-        if selectedCDMBarIndex > #bars then selectedCDMBarIndex = #bars end
-        return bars[selectedCDMBarIndex]
+        if optState.selectedCDMBarIndex < 1 then optState.selectedCDMBarIndex = 1 end
+        if optState.selectedCDMBarIndex > #bars then optState.selectedCDMBarIndex = #bars end
+        return bars[optState.selectedCDMBarIndex]
     end
 
     -- Active state preview on first icon
@@ -6425,8 +6428,8 @@ initFrame:SetScript("OnEvent", function(self)
             ns.StopNativeGlow(_cdmActivePreviewOverlay)
         end
         -- Stop fake cooldown on preview slot
-        if _cdmPreview and _cdmPreview._previewSlots then
-            local slot = _cdmPreview._previewSlots[1]
+        if optState._cdmPreview and optState._cdmPreview._previewSlots then
+            local slot = optState._cdmPreview._previewSlots[1]
             if slot and slot._previewCD then
                 slot._previewCD:Clear()
                 slot._previewCD:Hide()
@@ -6441,8 +6444,8 @@ initFrame:SetScript("OnEvent", function(self)
         local bd = SelectedCDMBar()
         if not bd then return end
         local anim = bd.activeStateAnim or "blizzard"
-        if not _cdmPreview or not _cdmPreview._previewSlots then return end
-        local slot = _cdmPreview._previewSlots[1]
+        if not optState._cdmPreview or not optState._cdmPreview._previewSlots then return end
+        local slot = optState._cdmPreview._previewSlots[1]
         if not slot or not slot:IsShown() then return end
 
         -- Ensure cooldown widget exists on preview slot
@@ -6541,9 +6544,6 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  Spell picker dropdown (right-click on icon or click "+" button)
     ---------------------------------------------------------------------------
-    -- Mutable state shared with the pickers under CooldownManager_Options\. A
-    -- table instead of a local so every file reads and writes the live value.
-    local optState = {}
     -- Close the spell picker when the main EUI options panel closes
     EllesmereUI:RegisterOnHide(function()
         if optState._spellPickerMenu and optState._spellPickerMenu:IsShown() then optState._spellPickerMenu:Hide() end
@@ -8505,7 +8505,7 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         pf._previewSlots = previewSlots
-        _cdmPreview = pf
+        optState._cdmPreview = pf
         pf:Update()
         EllesmereUI._contentHeaderPreview = pf
         -- Start active state preview if toggled on
@@ -8644,10 +8644,10 @@ initFrame:SetScript("OnEvent", function(self)
 
 
         -- Clamp selection
-        if selectedCDMBarIndex < 1 then selectedCDMBarIndex = 1 end
-        if selectedCDMBarIndex > #bars then selectedCDMBarIndex = #bars end
+        if optState.selectedCDMBarIndex < 1 then optState.selectedCDMBarIndex = 1 end
+        if optState.selectedCDMBarIndex > #bars then optState.selectedCDMBarIndex = #bars end
 
-        local barData = bars[selectedCDMBarIndex]
+        local barData = bars[optState.selectedCDMBarIndex]
         if not barData then return math.abs(yOffset) end
 
         -- Tag every option registered by this build with the selected bar, so a global-search
@@ -8930,8 +8930,8 @@ initFrame:SetScript("OnEvent", function(self)
                             ns.RepopulateFromBlizzard()
                         end
                         C_Timer.After(0.15, function()
-                            if _cdmPreview and _cdmPreview.Update then
-                                _cdmPreview:Update()
+                            if optState._cdmPreview and optState._cdmPreview.Update then
+                                optState._cdmPreview:Update()
                             end
                             UpdateCDMPreviewAndResize()
                         end)
@@ -8969,9 +8969,9 @@ initFrame:SetScript("OnEvent", function(self)
         --  CONTENT HEADER  (dropdown + live preview)
         -------------------------------------------------------------------
         EllesmereUI:ClearContentHeader()
-        _cdmPreview = nil
+        optState._cdmPreview = nil
 
-        _cdmHeaderBuilder = function(hdr, hdrW)
+        optState._cdmHeaderBuilder = function(hdr, hdrW)
             local PAD = EllesmereUI.CONTENT_PAD or 10
             local PV_PAD = 10
             local fy = -20
@@ -9018,7 +9018,7 @@ initFrame:SetScript("OnEvent", function(self)
             ddLbl:SetPoint("RIGHT", arrow, "LEFT", -5, 0)
 
             local function UpdateDDLabel()
-                local bd = bars[selectedCDMBarIndex]
+                local bd = bars[optState.selectedCDMBarIndex]
                 local label = bd and EllesmereUI.L(bd.name or bd.key) or ""
                 ddLbl:SetText(label)
             end
@@ -9163,7 +9163,7 @@ initFrame:SetScript("OnEvent", function(self)
 
                     local iHl = item:CreateTexture(nil, "ARTWORK")
                     iHl:SetAllPoints(); iHl:SetColorTexture(1, 1, 1, 1)
-                    iHl:SetAlpha(idx == selectedCDMBarIndex and selA or 0)
+                    iHl:SetAlpha(idx == optState.selectedCDMBarIndex and selA or 0)
 
                     -- Delete + Rename buttons for custom bars
                     local delBtn, editBtn
@@ -9305,7 +9305,7 @@ initFrame:SetScript("OnEvent", function(self)
                             end
                             delBtn:SetAlpha(0.75); editBtn:SetAlpha(0.75)
                             iLbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
-                            iHl:SetAlpha(idx == selectedCDMBarIndex and selA or 0)
+                            iHl:SetAlpha(idx == optState.selectedCDMBarIndex and selA or 0)
                         end
 
                         delBtn:SetScript("OnEnter", function(self)
@@ -9336,13 +9336,13 @@ initFrame:SetScript("OnEvent", function(self)
                                 onConfirm = function()
                                     ns.RemoveCDMBar(delKey)
                                     -- Select the cooldowns bar after deletion
-                                    selectedCDMBarIndex = 1
+                                    optState.selectedCDMBarIndex = 1
                                     for bi, bb in ipairs(bars) do
-                                        if bb.key == "cooldowns" then selectedCDMBarIndex = bi; break end
+                                        if bb.key == "cooldowns" then optState.selectedCDMBarIndex = bi; break end
                                     end
                                     Refresh()
                                     EllesmereUI:InvalidateContentHeaderCache()
-                                    EllesmereUI:SetContentHeader(_cdmHeaderBuilder)
+                                    EllesmereUI:SetContentHeader(optState._cdmHeaderBuilder)
                                     EllesmereUI:RefreshPage(true)
                                 end,
                             })
@@ -9361,7 +9361,7 @@ initFrame:SetScript("OnEvent", function(self)
                                     if newName == "" or newName == oldName then return end
                                     b.name = newName
                                     EllesmereUI:InvalidateContentHeaderCache()
-                                    EllesmereUI:SetContentHeader(_cdmHeaderBuilder)
+                                    EllesmereUI:SetContentHeader(optState._cdmHeaderBuilder)
                                     EllesmereUI:RefreshPage(true)
                                     if ns.RegisterCDMUnlockElements then
                                         ns.RegisterCDMUnlockElements()
@@ -9381,15 +9381,15 @@ initFrame:SetScript("OnEvent", function(self)
                         if delBtn and delBtn:IsMouseOver() then return end
                         if editBtn and editBtn:IsMouseOver() then return end
                         iLbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
-                        iHl:SetAlpha(idx == selectedCDMBarIndex and selA or 0)
+                        iHl:SetAlpha(idx == optState.selectedCDMBarIndex and selA or 0)
                         if delBtn then delBtn:SetAlpha(0.75) end
                         if editBtn then editBtn:SetAlpha(0.75) end
                     end)
                     item:SetScript("OnClick", function()
                         menu:Hide()
-                        selectedCDMBarIndex = idx
+                        optState.selectedCDMBarIndex = idx
                         EllesmereUI:InvalidateContentHeaderCache()
-                        EllesmereUI:SetContentHeader(_cdmHeaderBuilder)
+                        EllesmereUI:SetContentHeader(optState._cdmHeaderBuilder)
                         EllesmereUI:RefreshPage(true)
                     end)
 
@@ -9443,10 +9443,10 @@ initFrame:SetScript("OnEvent", function(self)
                         addItem:SetScript("OnClick", function()
                             menu:Hide()
                             ns.AddCDMBar(bType)
-                            selectedCDMBarIndex = #p.cdmBars.bars
+                            optState.selectedCDMBarIndex = #p.cdmBars.bars
                             Refresh()
                             EllesmereUI:InvalidateContentHeaderCache()
-                            EllesmereUI:SetContentHeader(_cdmHeaderBuilder)
+                            EllesmereUI:SetContentHeader(optState._cdmHeaderBuilder)
                             EllesmereUI:RefreshPage(true)
                         end)
                     end
@@ -9492,11 +9492,11 @@ initFrame:SetScript("OnEvent", function(self)
             local previewH = BuildCDMLivePreview(hdr, fy)
             fy = fy - previewH - PV_PAD
 
-            _cdmHeaderFixedH = 20 + DD_H + PV_PAD + PV_PAD
+            optState._cdmHeaderFixedH = 20 + DD_H + PV_PAD + PV_PAD
 
             return math.abs(fy)
         end
-        EllesmereUI:SetContentHeader(_cdmHeaderBuilder)
+        EllesmereUI:SetContentHeader(optState._cdmHeaderBuilder)
 
         -- Refresh preview icons on mount/dismount (skyriding swaps action bar icons). Skipped
         -- during a hidden search pre-build for the same reason as the pageListener in BuildBarGlowsPage: OnHide cleanup may never fire for a never-visible wrapper, leaking the listener all session.
@@ -12554,7 +12554,7 @@ initFrame:SetScript("OnEvent", function(self)
         end,
         getHeaderBuilder = function(pageName)
             if pageName == PAGE_CDM_BARS then
-                return _cdmHeaderBuilder
+                return optState._cdmHeaderBuilder
             elseif pageName == PAGE_BAR_GLOWS then
                 return _glowHeaderBuilder
             end
@@ -12583,9 +12583,9 @@ initFrame:SetScript("OnEvent", function(self)
                     keys[#keys + 1] = b.key
                 end
             end
-            if selectedCDMBarIndex < 1 then selectedCDMBarIndex = 1 end
-            if selectedCDMBarIndex > #bars then selectedCDMBarIndex = #bars end
-            local currentBar = bars[selectedCDMBarIndex]
+            if optState.selectedCDMBarIndex < 1 then optState.selectedCDMBarIndex = 1 end
+            if optState.selectedCDMBarIndex > #bars then optState.selectedCDMBarIndex = #bars end
+            local currentBar = bars[optState.selectedCDMBarIndex]
             return {
                 setter = EllesmereUI._setCDMBar,
                 keys = keys,
@@ -12618,11 +12618,11 @@ initFrame:SetScript("OnEvent", function(self)
                 -- The undismissed tip returns with the Bars page
                 QueueCDMButtonTip()
                 -- Re-sync _cdmPreview after cache restore and refresh the preview
-                if not _cdmPreview and EllesmereUI._contentHeaderPreview then
-                    _cdmPreview = EllesmereUI._contentHeaderPreview
+                if not optState._cdmPreview and EllesmereUI._contentHeaderPreview then
+                    optState._cdmPreview = EllesmereUI._contentHeaderPreview
                 end
-                if _cdmPreview and _cdmPreview.Update then
-                    _cdmPreview:Update()
+                if optState._cdmPreview and optState._cdmPreview.Update then
+                    optState._cdmPreview:Update()
                 end
             end
         end,
