@@ -4297,7 +4297,8 @@ local function DecorateFrame(frame, barData)
                         if fd.glowOverlay and not fd._cdStateGlowOn
                             and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse, ss2)
-                            ns.StartNativeGlow(fd.glowOverlay, style, ns.CdReadyGlowColor(style, ss2))
+                            local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
+                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
@@ -4358,7 +4359,8 @@ local function DecorateFrame(frame, barData)
                                 if fd.glowOverlay and not fd._cdStateGlowOn
                                     and not fd.procGlowActive then
                                     local style = ns.CdReadyGlowStyle(self.cse, self.ss2)
-                                    ns.StartNativeGlow(fd.glowOverlay, style, ns.CdReadyGlowColor(style, self.ss2))
+                                    local cr, cg, cb = ns.CdReadyGlowColor(style, self.ss2)
+                                    ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(self.ss2) })
                                     fd._cdStateGlowOn = true
                                 end
                             elseif fd._cdStateGlowOn then
@@ -4371,6 +4373,33 @@ local function DecorateFrame(frame, barData)
                     pending.sid = liveSid
                     pending.ss2 = ss2
                     pending:Show()
+                elseif cse == "glowOnCD" then
+                    -- Glow (On CD): mirror of the plain Ready branch above, condition
+                    -- inverted -- glows for the whole cooldown instead of at readiness.
+                    if (frame._isRacialFrame or frame._isTrinketFrame or frame._isPresetFrame
+                        or frame._isItemPresetFrame or frame._isCustomSpellFrame)
+                        and ns.CDGlowWatch then
+                        ns.CDGlowWatch(frame)
+                    end
+                    if fd._cdGlowBoundSid ~= sid2 then
+                        fd._cdGlowBoundSid = sid2
+                        if fd._cdStateGlowOn then
+                            ns.StopNativeGlow(fd.glowOverlay)
+                            fd._cdStateGlowOn = false
+                        end
+                    end
+                    if onCD then
+                        if fd.glowOverlay and not fd._cdStateGlowOn
+                            and not fd.procGlowActive then
+                            local style = ns.CdReadyGlowStyle(cse, ss2)
+                            local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
+                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            fd._cdStateGlowOn = true
+                        end
+                    elseif fd._cdStateGlowOn then
+                        if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                        fd._cdStateGlowOn = false
+                    end
                 end
             end)
         end
@@ -4978,7 +5007,8 @@ do
                 local cse2 = ns.GetSpellCdStateEffect(frame, ss2)
                 local plainGlow = cse2 == "pixelGlowReady" or cse2 == "buttonGlowReady"
                 local usableGlow = cse2 == "pixelGlowReadyUsable" or cse2 == "buttonGlowReadyUsable"
-                if plainGlow or usableGlow then
+                local onCdGlow = cse2 == "glowOnCD"
+                if plainGlow or usableGlow or onCdGlow then
                     keep = true
                     -- Pool reassignment: glow state inherited from a previous
                     -- spell on this frame belongs to that spell -- reset now.
@@ -4996,7 +5026,10 @@ do
                     local ci = C_Spell.GetSpellCooldown(liveSid)
                     local onCD = ci and ci.isActive and not ci.isOnGCD
                     local shouldGlow
-                    if onCD then
+                    if onCdGlow then
+                        -- Glow (On CD): mirror of the ready-glow safety net below, inverted.
+                        shouldGlow = onCD and true or false
+                    elseif onCD then
                         -- On cooldown always stops the glow -- a safety net
                         -- independent of the SetDesaturated hook, in case that
                         -- hook doesn't fire for a given transition (it never does
@@ -5016,7 +5049,8 @@ do
                         -- this flush again once the proc ends.
                         if not fd._cdStateGlowOn and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse2, ss2)
-                            ns.StartNativeGlow(fd.glowOverlay, style, ns.CdReadyGlowColor(style, ss2))
+                            local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
+                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
