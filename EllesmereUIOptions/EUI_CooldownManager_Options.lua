@@ -6642,7 +6642,7 @@ initFrame:SetScript("OnEvent", function(self)
         local MAX_PREVIEW_ICONS = 30
         local previewSlots = {}
 
-        -- Display-only dedupe for buff bars. assignedSpells can hold a LEGACY
+        -- Display-only dedupe for buff bars. assignedSpells can hold a LEGACY  -- eui-style: allow comment-budget
         -- duplicate: the SAME tracked buff stored under two different spell ids (e.g.
         -- its spellID and one of its linkedSpellIDs). They are NOT base/override
         -- variants -- the link is that both ids resolve to the same Blizzard
@@ -10300,15 +10300,14 @@ initFrame:SetScript("OnEvent", function(self)
                     spellValues["__none"] = "(no spells on bar)"
                     spellOrder[#spellOrder + 1] = "__none"
                 end
-                -- The stored selection can outlive its spell: removing the kick empties
-                -- assignedSpells while focusKickInterruptSpellID keeps pointing at it,
-                -- and with no label the dropdown renders the raw key (a bare spell id).
-                -- Give it a NAME but deliberately do NOT add it to spellOrder -- it
-                -- must not be selectable on a bar that no longer holds it. Label it
-                -- ONLY when this character can actually cast it: the id is
-                -- profile-level but the spellbook is per-spec, so a spec sharing the
-                -- profile can inherit a pick it can never use; unlabelled is what makes
-                -- getValue below fall back to the bar's own contents.
+                -- The stored selection can outlive its spell (removing the kick empties
+                -- assignedSpells, focusKickInterruptSpellID keeps pointing at it) and the
+                -- dropdown would render the raw spell id. Give it a NAME but do NOT add it
+                -- to spellOrder: it must not be selectable on a bar that no longer holds it.
+                -- Label it ONLY when this character can cast it: the id is profile-level but
+                -- the spellbook is per-spec, so a spec sharing the profile can inherit a pick
+                -- it can never use; unlabelled makes getValue below fall back to the bar's
+                -- own contents.
                 local selSid = BD and BD() and BD().focusKickInterruptSpellID
                 if selSid and (not ns.ResolveCastableInterrupt
                     or ns.ResolveCastableInterrupt(selSid)) then
@@ -11012,17 +11011,13 @@ initFrame:SetScript("OnEvent", function(self)
         end -- isBuffBar else
 
         -- Inline cog on Icon Scale: Minimum Bar Size (growth-axis icon-slot
-        -- reservation; lives here rather than as its own Bar Layout row,
-        -- user-directed). Placed AFTER the isBuffGlowBar branch because each
-        -- side builds its own scaleAnimRow -- and Icon Scale sits in a
-        -- different slot on each: buff-family rows put Always Show Buffs on the
-        -- left and Icon Scale on the right, every other bar type has Icon Scale
-        -- on the left (Icon Spacing on the right).
-        -- The popup slider stays always-editable -- the runtime skips the
-        -- reservation while the growth axis is width/height matched, so no
-        -- MatchGuard lock is needed and an existing value can always be lowered
-        -- or cleared. Orientation resolves at build time; the page rebuilds on
-        -- orientation flips. FocusKick is excluded: it is nameplate-anchored, so nothing matches or anchors to its edges.
+        -- reservation, user-directed to live here, not as a Bar Layout row). Placed
+        -- AFTER the isBuffGlowBar branch: each side builds its own scaleAnimRow with
+        -- Icon Scale in a different slot (right on buff-family rows, left elsewhere).
+        -- The slider stays editable: the runtime skips the reservation while the
+        -- growth axis is width/height matched, so no MatchGuard lock is needed.
+        -- Orientation resolves at build time; the page rebuilds on flips. FocusKick is
+        -- excluded: it is nameplate-anchored, nothing matches or anchors to its edges.
         if not isFocusKick then
             local minVert = BD().verticalOrientation == true
             local rgn = isBuffGlowBar and scaleAnimRow._rightRegion or scaleAnimRow._leftRegion
@@ -12223,8 +12218,7 @@ initFrame:SetScript("OnEvent", function(self)
         --  unlock-anchored). Unlock mode always shows the BASE position (the
         --  bar's mover gets a distinct tint + tooltip while an offset is set);
         --  the offset re-applies on exit. 0/0 = the feature is fully inert.
-        --  FocusKick is nameplate-pinned (no free position, no mover), so the
-        --  section would be dead controls there.
+        --  FocusKick is nameplate-pinned (no free position, no mover): dead controls there.
         -----------------------------------------------------------------
         if not isFocusKick then
         _, h = W:SectionHeader(parent, "ADDITIONAL BAR OFFSET", y);  y = y - h
@@ -12232,15 +12226,13 @@ initFrame:SetScript("OnEvent", function(self)
             local function SetAddOffset(axisKey, v)
                 local b = BD(); if not b then return end
                 b[axisKey] = (v ~= 0) and v or nil
-                -- The anchor extra-offset registry getter is registered for
-                -- every eligible bar by the unlock registration pass below and
-                -- reads the live value, so no per-edit set/clear is needed.
-                -- Re-register unlock elements so the mover's offset marker
-                -- (tint + tooltip) reflects the new state at the next unlock
-                -- entry, then re-apply positions: the build covers saved and
-                -- module-anchored placement, the cascade covers an
-                -- unlock-anchored bar (the build deliberately leaves those
-                -- positions to the anchor system).
+                -- The anchor extra-offset registry getter (registered for every eligible bar
+                -- by the unlock registration pass below) reads the live value, so no per-edit
+                -- set/clear is needed. Re-register unlock elements so the mover's offset
+                -- marker (tint + tooltip) reflects the new state at the next unlock entry,
+                -- then re-apply positions: the build covers saved and module-anchored
+                -- placement, the cascade covers an unlock-anchored bar (the build leaves
+                -- those positions to the anchor system).
                 if ns.RegisterCDMUnlockElements then ns.RegisterCDMUnlockElements() end
                 ns.BuildAllCDMBars()
                 if EllesmereUI.IsUnlockAnchored and EllesmereUI.IsUnlockAnchored("CDM_" .. b.key)
