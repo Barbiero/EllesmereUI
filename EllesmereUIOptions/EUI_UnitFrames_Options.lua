@@ -1820,7 +1820,7 @@ initFrame:SetScript("OnEvent", function(self)
             portraitTex:SetPoint("BOTTOMRIGHT", portraitFrame, "BOTTOMRIGHT", 0, 0)
             portraitTex:SetTexCoord(0.15, 0.85, 0.15, 0.85)
 
-            -- 3D model for preview (lazy-created only when mode is "3d")
+            -- Lazy model for 3D preview or enabled 2D mirror eligibility checks.
             local portraitModel = nil
 
             local function EnsurePreviewModel()
@@ -1923,6 +1923,7 @@ initFrame:SetScript("OnEvent", function(self)
                     if portraitModel then portraitModel:Hide() end
                     portraitTex:Show()
                     SetPortraitTexture(portraitTex, "player")
+                    mirror = mirror and ns.UF_CanMirrorPortrait2D(EnsurePreviewModel(), "player")
                     if mirror then
                         portraitTex:SetTexCoord(0.85, 0.15, 0.15, 0.85)
                     else
@@ -7541,7 +7542,7 @@ initFrame:SetScript("OnEvent", function(self)
                       set=function(v) SSet("portraitClassZoom", v); UpdatePreview() end },
                     -- The stock styles keep their full art.
                     { type="toggle", label="Mirror Portrait",
-                      tooltip="Flips 2D and class art horizontally. Changes the orientation of 3D models for a mirrored appearance.",
+                      tooltip="Mirrors playable-race portraits in 2D and 3D. Always flips class art horizontally.",
                       disabled=function()
                           return EllesmereUI.BlizzStyle.Get("unitframes")
                       end,

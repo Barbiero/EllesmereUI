@@ -4125,43 +4125,54 @@ end
 -- Non-playable NPC models are excluded.
 -- Unlisted/missing/restricted IDs stay normal; never infer facing from unit type.
 do
-    local mirrorAngles -- Built only when a 3D portrait is first mirrored.
-    function ns.UF_ApplyPortraitRotation(model, mirror)
-        local angle
-        if mirror then
-            if not mirrorAngles then
-                mirrorAngles = {
-                    -- Playable-race model IDs.
-                    [118355] = 291, [118135] = 291, [1838560] = 291, [1838562] = 291, [878772] = 291,
-                    [950080] = 291, [116921] = 291, [1100258] = 291, [1839709] = 291, [117170] = 291,
-                    [1100087] = 291, [1853408] = 291, [1890763] = 291, [1892825] = 291, [1890765] = 291,
-                    [1892543] = 291, [117437] = 291, [1022598] = 291, [1822372] = 291, [117721] = 291,
-                    [1005887] = 291, [1839253] = 291, [119063] = 291, [940356] = 291, [1838564] = 291,
-                    [119159] = 291, [900914] = 291, [1838566] = 291, [119369] = 291, [1838568] = 291,
-                    [119376] = 291, [1838570] = 291, [1630402] = 291, [1859379] = 291, [1630218] = 291,
-                    [1858265] = 291, [119563] = 291, [1000764] = 291, [1838572] = 291, [1842700] = 291,
-                    [119940] = 291, [1011653] = 291, [1838385] = 291, [1886724] = 291, [1721003] = 291,
-                    [1593999] = 291, [1825438] = 291, [1620605] = 291, [1839042] = 291, [2564806] = 291,
-                    [2622502] = 291, [1810676] = 291, [1858099] = 291, [1814471] = 291, [1857801] = 291,
-                    [120590] = 291, [921844] = 291, [1838574] = 291, [120791] = 291, [974343] = 291,
-                    [1838576] = 291, [121087] = 291, [949470] = 291, [1838580] = 291, [121287] = 291,
-                    [917116] = 291, [1838578] = 291, [1968587] = 291, [1968838] = 291, [1087591] = 291,
-                    [1088030] = 291, [589715] = 291, [1853610] = 291, [535052] = 291, [1853956] = 291,
-                    [121608] = 291, [997378] = 291, [1838582] = 291, [121768] = 291, [959310] = 291,
-                    [1838584] = 291, [121961] = 291, [986648] = 291, [1839008] = 291, [122055] = 291,
-                    [968705] = 291, [1838586] = 291, [122414] = 291, [1018060] = 291, [1838588] = 291,
-                    [122560] = 291, [1022938] = 291, [1838590] = 291, [1733758] = 291, [1859345] = 291,
-                    [1734034] = 291, [1858367] = 291, [1890759] = 291, [1890761] = 291, [307453] = 291,
-                    [1838201] = 291, [307454] = 291, [1838592] = 291, [1662187] = 291, [1894572] = 291,
-                    [1630447] = 291, [1900779] = 291, [4395382] = 291, [4207724] = 291, [4220448] = 291,
-                    [7478494] = 291, [7478487] = 291,
-                }
-            end
-            local id = model:GetModelFileID()
-            if not issecretvalue(id) and type(id) == "number" and id > 0 then
-                angle = mirrorAngles[id]
-            end
+    local mirrorAngles -- Built only when portrait mirroring first needs a model ID.
+    local function GetMirrorAngle(id)
+        if issecretvalue(id) or type(id) ~= "number" or id <= 0 then return end
+        if not mirrorAngles then
+            mirrorAngles = {
+                -- Playable-race model IDs.
+                [118355] = 291, [118135] = 291, [1838560] = 291, [1838562] = 291, [878772] = 291,
+                [950080] = 291, [116921] = 291, [1100258] = 291, [1839709] = 291, [117170] = 291,
+                [1100087] = 291, [1853408] = 291, [1890763] = 291, [1892825] = 291, [1890765] = 291,
+                [1892543] = 291, [117437] = 291, [1022598] = 291, [1822372] = 291, [117721] = 291,
+                [1005887] = 291, [1839253] = 291, [119063] = 291, [940356] = 291, [1838564] = 291,
+                [119159] = 291, [900914] = 291, [1838566] = 291, [119369] = 291, [1838568] = 291,
+                [119376] = 291, [1838570] = 291, [1630402] = 291, [1859379] = 291, [1630218] = 291,
+                [1858265] = 291, [119563] = 291, [1000764] = 291, [1838572] = 291, [1842700] = 291,
+                [119940] = 291, [1011653] = 291, [1838385] = 291, [1886724] = 291, [1721003] = 291,
+                [1593999] = 291, [1825438] = 291, [1620605] = 291, [1839042] = 291, [2564806] = 291,
+                [2622502] = 291, [1810676] = 291, [1858099] = 291, [1814471] = 291, [1857801] = 291,
+                [120590] = 291, [921844] = 291, [1838574] = 291, [120791] = 291, [974343] = 291,
+                [1838576] = 291, [121087] = 291, [949470] = 291, [1838580] = 291, [121287] = 291,
+                [917116] = 291, [1838578] = 291, [1968587] = 291, [1968838] = 291, [1087591] = 291,
+                [1088030] = 291, [589715] = 291, [1853610] = 291, [535052] = 291, [1853956] = 291,
+                [121608] = 291, [997378] = 291, [1838582] = 291, [121768] = 291, [959310] = 291,
+                [1838584] = 291, [121961] = 291, [986648] = 291, [1839008] = 291, [122055] = 291,
+                [968705] = 291, [1838586] = 291, [122414] = 291, [1018060] = 291, [1838588] = 291,
+                [122560] = 291, [1022938] = 291, [1838590] = 291, [1733758] = 291, [1859345] = 291,
+                [1734034] = 291, [1858367] = 291, [1890759] = 291, [1890761] = 291, [307453] = 291,
+                [1838201] = 291, [307454] = 291, [1838592] = 291, [1662187] = 291, [1894572] = 291,
+                [1630447] = 291, [1900779] = 291, [4395382] = 291, [4207724] = 291, [4220448] = 291,
+                [7478494] = 291, [7478487] = 291,
+            }
         end
+        return mirrorAngles[id]
+    end
+
+    -- 2D textures have no model ID. Reuse their hidden, lazy 3D frame for the
+    -- lookup, then release the model. Missing IDs retry on portrait art events.
+    function ns.UF_CanMirrorPortrait2D(model, unit)
+        model:SetKeepModelOnHide(true)
+        model:ClearModel()
+        model:SetUnit(unit)
+        local angle = GetMirrorAngle(model:GetModelFileID())
+        model:ClearModel()
+        model:SetKeepModelOnHide(false)
+        return angle ~= nil
+    end
+
+    function ns.UF_ApplyPortraitRotation(model, mirror)
+        local angle = mirror and GetMirrorAngle(model:GetModelFileID())
         if not angle then
             -- Clear the previous target's transform when switching to a creature,
             -- losing the model ID, showing a question mark, or disabling mirroring.
@@ -4212,9 +4223,9 @@ function PortraitOverride(self, event, evtUnit, fallback)
     local hasStateChanged = changed
         or element.state ~= isAvailable
         or event == "UNIT_PORTRAIT_UPDATE"
-        -- Model changes only matter to a 3D PlayerModel portrait (its SetUnit
-        -- must reload). 2D art follows UNIT_PORTRAIT_UPDATE / PORTRAITS_UPDATED,
-        -- the only portrait events Blizzard's own unit frames listen to.
+        -- 3D portraits must reload on model changes. The opted-in 2D mirror
+        -- eligibility check below also uses this event; ordinary 2D art uses
+        -- UNIT_PORTRAIT_UPDATE / PORTRAITS_UPDATED.
         or (event == "UNIT_MODEL_CHANGED" and isModel)
         or event == "ForceUpdate"
         -- Unit swaps (vehicle enter/exit) always repaint: the swap moment can
@@ -4241,6 +4252,13 @@ function PortraitOverride(self, event, evtUnit, fallback)
         -- with guid and availability both reading unchanged, field-traced).
         -- Models only: 2D textures survive Hide/Show.
         or (event == "Show" and isModel)
+    -- A changed model can also change 2D mirror eligibility, including class
+    -- mode's NPC fallback. Reuse the existing appearance event only when opted in.
+    if not hasStateChanged and event == "UNIT_MODEL_CHANGED" then
+        local uk = UnitToSettingsKey(self._euiBaseUnit or u)
+        local us = uk and db.profile[uk]
+        hasStateChanged = us and us.portraitMirror and not ns.UF_Blizz()
+    end
     -- Blank-model recovery is only needed when no other change requires a paint.
     -- Show can run before assets stream in; PORTRAITS_UPDATED retries a still-
     -- blank model without reloading one that is already populated.
@@ -7962,7 +7980,7 @@ local function CreatePortrait(frame, side, frameHeight, unit)
     end
 
     -- 2D and class theme textures are eager; the 3D PlayerModel is deferred until
-    -- mode == "3d" to avoid its GPU/memory cost when unused.
+    -- 3D display or an enabled 2D mirror lookup needs it.
     local model3D = nil
 
     local function EnsureModel3D()
@@ -8052,12 +8070,12 @@ local function CreatePortrait(frame, side, frameHeight, unit)
     -- SetPortraitTexture resets snapping and anchor points, so re-disable pixel
     -- snap and re-anchor after every portrait repaint (PortraitOverride). hasStateChanged
     -- is set only by the 2D lane's call (the class lane's NPC paint passes none).
-    tex2D.PostUpdate = function(self, _, hasStateChanged)
+    tex2D.PostUpdate = function(self, u, hasStateChanged)
         UnsnapTex(self)
         self:ClearAllPoints()
         -- When detached, ApplyDetachedPortraitShape uses expanded offsets for mask
         -- fill; re-apply those instead of resetting to default.
-        local uKey2 = UnitToSettingsKey(unit)
+        local uKey2 = UnitToSettingsKey(frame._euiBaseUnit or u)
         local uS2 = uKey2 and db.profile[uKey2]
         local isDetNow = ((uS2 and uS2.portraitStyle) or db.profile.portraitStyle or "attached") == "detached"
         if isDetNow and backdrop then
@@ -8083,7 +8101,8 @@ local function CreatePortrait(frame, side, frameHeight, unit)
         -- creation crop). Never under a stock style (its full-art coords
         -- stand), and the unavailable question mark always reads unflipped.
         local mir = (uS2 and uS2.portraitMirror and not ns.UF_Blizz()
-            and not (hasStateChanged and self.state == false)) and true or false
+            and not (hasStateChanged and self.state == false)
+            and ns.UF_CanMirrorPortrait2D(EnsureModel3D(), u)) and true or false
         if mir ~= (self._mirrored or false) then
             self._mirrored = mir
             if mir then
