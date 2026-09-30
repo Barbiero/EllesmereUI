@@ -56,6 +56,77 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
     AddFormBarBtn(healthEnableRow._leftRegion, cfg, RebuildHealth)
     end
 
+    -- Absorb / heal absorb / max health reduction overlays (EUI_ResourceBars_HealthIndicators.lua),
+    -- each off by default: a toggle apiece, its texture and colour listed while it is on.
+    if not EllesmereUI._prebuilding then
+        -- Texture lists: the shared absorb styles (copied: the SharedMedia tail is appended
+        -- into the copies) without "None", since every overlay has its own toggle.
+        local styleNames = CopyTable(EllesmereUI.ABSORB_STYLE_NAMES)
+        local styleOrder, healStyleOrder = {}, {}
+        for _, k in ipairs(EllesmereUI.ABSORB_STYLE_ORDER) do
+            if k ~= "none" then styleOrder[#styleOrder + 1] = k end
+        end
+        for _, k in ipairs(EllesmereUI.HEAL_ABSORB_STYLE_ORDER) do
+            if k ~= "none" then healStyleOrder[#healStyleOrder + 1] = k end
+        end
+        local smNames, smSep = _G._ERB_BarTextureNames or {}, false
+        for _, k in ipairs(_G._ERB_BarTextureOrder or {}) do
+            if type(k) == "string" and k:find("^sm:") then
+                if not smSep then
+                    smSep = true
+                    styleOrder[#styleOrder + 1] = "---"
+                    healStyleOrder[#healStyleOrder + 1] = "---"
+                end
+                styleNames[k] = smNames[k] or k
+                styleOrder[#styleOrder + 1] = k
+                healStyleOrder[#healStyleOrder + 1] = k
+            end
+        end
+        -- Preview swatch behind each menu row, resolved exactly like the overlay.
+        styleNames._menuOpts = { itemHeight = 28, background = function(k)
+            if k and k ~= "---" then return ns.HealthIndicatorTex(k) end
+        end }
+        local LABELS = {
+            absorb        = { "Damage Absorbs", "Absorb Texture", "Absorb Color" },
+            healAbsorb    = { "Heal Absorbs", "Heal Absorb Texture", "Heal Absorb Color" },
+            maxHealthLoss = { "Max Health Reduction", "Reduction Texture", "Reduction Color" },
+        }
+        local rows = {}
+        for _, ind in ipairs(ns.HEALTH_INDICATORS) do
+            local k, lbl = ind, LABELS[ind.key]
+            local function indOff() local c = cfg(); return not (c and c[k.show] == true) end
+            rows[#rows + 1] = { type = "toggle", label = lbl[1],
+                get = function() local c = cfg(); return c and c[k.show] == true end,
+                set = function(v)
+                    local c = cfg(); if not c then return end
+                    c[k.show] = v or nil; RefreshHealth()
+                end }
+            rows[#rows + 1] = { type = "dropdown", label = lbl[2], hidden = indOff,
+                values = styleNames, order = (k.key == "healAbsorb") and healStyleOrder or styleOrder,
+                get = function() local c = cfg(); return c and c[k.style] or "striped" end,
+                set = function(v)
+                    local c = cfg(); if not c then return end
+                    c[k.style] = v; RefreshHealth()
+                end }
+            rows[#rows + 1] = { type = "colorpicker", label = lbl[3], hasAlpha = true, hidden = indOff,
+                get = function()
+                    local c = cfg(); local col = c and c[k.color]
+                    if col then return col.r or k.r, col.g or k.g, col.b or k.b, col.a or k.a end
+                    return k.r, k.g, k.b, k.a
+                end,
+                set = function(r, g, b, a)
+                    local c = cfg(); if not c then return end
+                    c[k.color] = { r = r, g = g, b = b, a = a }; RefreshHealth()
+                end }
+        end
+        EllesmereUI.BuildInlineCog(healthEnableRow._leftRegion, {
+            title = "Health Indicators",
+            disabled = healthOff,
+            disabledTooltip = "Health Bar",
+            rows = rows,
+        })
+    end
+
     -- Per-spec health enables live in Spec Overrides: "Show Health Bar" is captured while editing as a group.
 
     -- Everything below Row 1 is hidden entirely while the bar is off.
