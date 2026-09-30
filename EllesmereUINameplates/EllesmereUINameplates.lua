@@ -452,6 +452,9 @@ local defaults = {
     -- same gold on the ABG halo). Keep the two in step.
     dispelGlowColor = { r = 1.0, g = 0.788, b = 0.137 },
     dispelGlowUseTypeColor = false,
+    -- Enemy Buff Filter ("important" | "dispellable" | "showall"): unset reads
+    -- as Important; WoW Forever shows every enemy buff by default.
+    npEnemyBuffFilter = (EllesmereUI.IS_FOREVER == true) and "showall" or nil,
     castScale = 100,
     focusCastHeight = 100,
     questMobColorEnabled = false,

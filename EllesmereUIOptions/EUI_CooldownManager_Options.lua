@@ -518,7 +518,8 @@ initFrame:SetScript("OnEvent", function(self)
                     if type(v) == "number" and v > 0 then return true end
                 end
                 local cse = rawget(e, "cdStateEffect")
-                return type(cse) == "string" and cse:find("GlowReady", 1, true) ~= nil
+                return type(cse) == "string"
+                    and (cse == "glowOnCD" or cse:find("GlowReady", 1, true) ~= nil)
             end
             local function CountPerIconGlows()
                 local n = 0
@@ -1570,7 +1571,10 @@ initFrame:SetScript("OnEvent", function(self)
                             cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                         end
                         ns.StopNativeGlow(ov)
-                        ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
+                        -- Blackout reads its fill opacity from the extras; every other
+                        -- style takes the shared panel extras.
+                        ns.StartNativeGlow(ov, style, cr, cg, cb,
+                            style == 8 and { panel = true, alpha = entry.glowAlpha } or EllesmereUI.Glows.PANEL_EXTRA)
                     end
 
                     -- At Stacks (toggle) + gear (Comparison / Stack Count), paired with
@@ -1680,7 +1684,8 @@ initFrame:SetScript("OnEvent", function(self)
                                     elseif entry.colorMode == "custom" and entry.glowColor then
                                         cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                                     end
-                                    ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
+                                    ns.StartNativeGlow(ov, style, cr, cg, cb,
+                                        style == 8 and { panel = true, alpha = entry.glowAlpha } or EllesmereUI.Glows.PANEL_EXTRA)
                                     _bgPreviewGlowActive[pvKey] = true
                                     -- Hide accent border so glow is visible
                                     if previewBtn._accentBrd then previewBtn._accentBrd:Hide() end
@@ -1689,25 +1694,46 @@ initFrame:SetScript("OnEvent", function(self)
                             end)
                             eyeBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
                             eyeBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+
+                            -- Blackout fill opacity, in a cog chained left of the eye. Locked
+                            -- unless the entry renders Blackout (custom-shaped bars always
+                            -- draw Shape Glow); the Glow Type setter's page refresh re-checks it.
+                            leftRgn._lastInline = eyeBtn
+                            EllesmereUI.BuildInlineCog(leftRgn, {
+                                title = "Blackout",
+                                disabled = function()
+                                    return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8
+                                end,
+                                disabledTooltip = "This option requires the Blackout glow type.",
+                                rawTooltip = true,
+                                frameStrata = "FULLSCREEN_DIALOG", frameLevel = 350,
+                                rows = {
+                                    { type = "slider", label = "Opacity", min = 1, max = 100, step = 1,
+                                      get = function() return math.floor((entry.glowAlpha or 1) * 100 + 0.5) end,
+                                      set = function(v)
+                                          entry.glowAlpha = v / 100
+                                          Refresh()
+                                          RefreshPreviewGlow()
+                                      end },
+                                },
+                            })
                         end
                     end
 
-                    -- Row: Glow Color (swatches) | Blackout Opacity. Always present (like
-                    -- At Stacks) rather than only while Blackout is selected, so the layout
-                    -- never leaves a gap; the slider just locks with a tooltip otherwise.
+                    -- Row: Glow Color (swatches) | Remove Glow
                     local colorRow
                     colorRow, h = W:DualRow(parent, y,
                         { type = "label", text = "Glow Color" },
-                        { type = "slider", text = "Blackout Opacity",
-                          min = 0, max = 100, step = 1,
-                          disabled = function() return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8 end,
-                          disabledTooltip = "Only available when Glow Type is set to Blackout",
-                          getValue = function() return math.floor((entry.glowAlpha or 1.0) * 100 + 0.5) end,
-                          setValue = function(v)
-                              entry.glowAlpha = v / 100
+                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
+                          onClick = function()
+                              table.remove(buffList, removeAIdx)
+                              if #buffList == 0 then
+                                  bg.assignments[assignKey] = nil
+                              end
                               Refresh()
-                              RefreshPreviewGlow()
-                          end }
+                              EllesmereUI:RefreshPage(true)
+                          end,
+                        }
                     );  y = y - h
 
                     -- Inline color swatch for glow color (on left region)
@@ -1736,29 +1762,13 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
-                    -- Row: Remove Glow, bottom of the left column.
-                    local removeRow
-                    removeRow, h = W:DualRow(parent, y,
-                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
-                          onClick = function()
-                              table.remove(buffList, removeAIdx)
-                              if #buffList == 0 then
-                                  bg.assignments[assignKey] = nil
-                              end
-                              Refresh()
-                              EllesmereUI:RefreshPage(true)
-                          end,
-                        },
-                        { type = "label", text = "" }
-                    );  y = y - h
-
                     -- Buff icon to the LEFT of the Remove button
                     do
-                        local leftRgn = removeRow._leftRegion
-                        if leftRgn and leftRgn._control then
-                            local btn = leftRgn._control
+                        local rightRgn = colorRow._rightRegion
+                        if rightRgn and rightRgn._control then
+                            local btn = rightRgn._control
                             local btnH = btn:GetHeight()
-                            local ico = leftRgn:CreateTexture(nil, "ARTWORK")
+                            local ico = rightRgn:CreateTexture(nil, "ARTWORK")
                             ico:SetSize(btnH, btnH)
                             PP.Point(ico, "RIGHT", btn, "LEFT", -8, 0)
                             ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -8180,10 +8190,12 @@ initFrame:SetScript("OnEvent", function(self)
         popup._durBox:HighlightText()
     end
 
-    -- Numeric popup for the "Lower Alpha (On CD)" cooldown-state effect: the user
-    -- enters an opacity percent (1-100) that the icon uses while on cooldown.
-    -- Mirrors ShowDurationPopup's look; onConfirm receives the integer percent.
-    local function ShowAlphaPopup(currentPct, onConfirm)
+    -- Numeric popup for an opacity percent (1-100). Titled for the "Lower Alpha
+    -- (On CD)" cooldown-state effect unless the caller passes its own title and
+    -- hint (already localized), e.g. the Blackout glow opacity. Both texts are
+    -- set on every show. Mirrors ShowDurationPopup's look; onConfirm receives
+    -- the integer percent.
+    local function ShowAlphaPopup(currentPct, onConfirm, title, hint)
         local popupName = "EUI_CDM_AlphaPopup"
         local popup = _G[popupName]
         if not popup then
@@ -8207,21 +8219,21 @@ initFrame:SetScript("OnEvent", function(self)
             EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15, EllesmereUI.PP)
             popup._dimmer = dimmer
 
-            local title = popup:CreateFontString(nil, "OVERLAY")
-            title:SetFont(FONT_PATH, 14, GetCDMOptOutline())
-            title:SetPoint("TOP", popup, "TOP", 0, -18)
-            title:SetTextColor(1, 1, 1, 1)
-            title:SetText(EllesmereUI.L("Lower Alpha"))
+            local titleFS = popup:CreateFontString(nil, "OVERLAY")
+            titleFS:SetFont(FONT_PATH, 14, GetCDMOptOutline())
+            titleFS:SetPoint("TOP", popup, "TOP", 0, -18)
+            titleFS:SetTextColor(1, 1, 1, 1)
+            popup._title = titleFS
 
-            local hint = popup:CreateFontString(nil, "OVERLAY")
-            hint:SetFont(FONT_PATH, 11, GetCDMOptOutline())
-            hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
-            hint:SetTextColor(0.7, 0.7, 0.7, 0.85)
-            hint:SetText(EllesmereUI.L("Icon opacity while on cooldown (1-100%)"))
+            local hintFS = popup:CreateFontString(nil, "OVERLAY")
+            hintFS:SetFont(FONT_PATH, 11, GetCDMOptOutline())
+            hintFS:SetPoint("TOP", titleFS, "BOTTOM", 0, -6)
+            hintFS:SetTextColor(0.7, 0.7, 0.7, 0.85)
+            popup._hint = hintFS
 
             local box = CreateFrame("EditBox", nil, popup)
             box:SetSize(180, 28)
-            box:SetPoint("TOP", hint, "BOTTOM", 0, -12)
+            box:SetPoint("TOP", hintFS, "BOTTOM", 0, -12)
             box:SetAutoFocus(true)
             box:SetNumeric(true)
             box:SetMaxLetters(3)
@@ -8274,107 +8286,8 @@ initFrame:SetScript("OnEvent", function(self)
             box:SetScript("OnEscapePressed", function() dimmer:Hide() end)
         end
         popup._onConfirm = onConfirm
-        popup._box:SetText(currentPct and tostring(currentPct) or "")
-        ns.PadPopupOpen(popup._dimmer, popup, popup._cancelBtn)  -- controller cursor
-        popup._dimmer:Show()
-        popup._box:SetFocus()
-        popup._box:HighlightText()
-    end
-
-    -- Numeric popup for the Blackout glow style: the user enters an opacity
-    -- percent (1-100) for the solid fill. Mirrors ShowAlphaPopup's look;
-    -- onConfirm receives the integer percent.
-    local function ShowGlowOpacityPopup(currentPct, onConfirm)
-        local popupName = "EUI_CDM_GlowOpacityPopup"
-        local popup = _G[popupName]
-        if not popup then
-            local dimmer = CreateFrame("Frame", popupName .. "Dimmer", UIParent)
-            dimmer:SetFrameStrata("FULLSCREEN_DIALOG")
-            dimmer:SetAllPoints(UIParent)
-            dimmer:EnableMouse(true)
-            dimmer:Hide()
-            local dimTex = dimmer:CreateTexture(nil, "BACKGROUND")
-            dimTex:SetAllPoints(); dimTex:SetColorTexture(0, 0, 0, 0.25)
-            dimmer:SetScript("OnMouseDown", function(self) self:Hide() end)
-
-            popup = CreateFrame("Frame", popupName, dimmer)
-            popup:SetSize(300, 150)
-            popup:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
-            popup:SetFrameStrata("FULLSCREEN_DIALOG")
-            popup:SetFrameLevel(dimmer:GetFrameLevel() + 10)
-            popup:EnableMouse(true)
-            local popBg = popup:CreateTexture(nil, "BACKGROUND")
-            popBg:SetAllPoints(); popBg:SetColorTexture(0.06, 0.08, 0.10, 1)
-            EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15, EllesmereUI.PP)
-            popup._dimmer = dimmer
-
-            local title = popup:CreateFontString(nil, "OVERLAY")
-            title:SetFont(FONT_PATH, 14, GetCDMOptOutline())
-            title:SetPoint("TOP", popup, "TOP", 0, -18)
-            title:SetTextColor(1, 1, 1, 1)
-            title:SetText(EllesmereUI.L("Glow Opacity"))
-
-            local hint = popup:CreateFontString(nil, "OVERLAY")
-            hint:SetFont(FONT_PATH, 11, GetCDMOptOutline())
-            hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
-            hint:SetTextColor(0.7, 0.7, 0.7, 0.85)
-            hint:SetText(EllesmereUI.L("Blackout glow opacity (1-100%)"))
-
-            local box = CreateFrame("EditBox", nil, popup)
-            box:SetSize(180, 28)
-            box:SetPoint("TOP", hint, "BOTTOM", 0, -12)
-            box:SetAutoFocus(true)
-            box:SetNumeric(true)
-            box:SetMaxLetters(3)
-            box:SetFont(FONT_PATH, 13, GetCDMOptOutline())
-            box:SetTextColor(1, 1, 1, 0.9)
-            box:SetJustifyH("CENTER")
-            local boxBg = box:CreateTexture(nil, "BACKGROUND")
-            boxBg:SetAllPoints(); boxBg:SetColorTexture(0.04, 0.06, 0.08, 1)
-            EllesmereUI.MakeBorder(box, 1, 1, 1, 0.12, EllesmereUI.PP)
-            popup._box = box
-
-            local ar, ag, ab = EllesmereUI.GetAccentColor()
-            local okBtn = CreateFrame("Button", nil, popup)
-            okBtn:SetSize(80, 28)
-            okBtn:SetPoint("BOTTOMRIGHT", popup, "BOTTOM", -4, 16)
-            local okBg = okBtn:CreateTexture(nil, "BACKGROUND")
-            okBg:SetAllPoints(); okBg:SetColorTexture(ar, ag, ab, 0.15)
-            EllesmereUI.MakeBorder(okBtn, ar, ag, ab, 0.3, EllesmereUI.PP)
-            local okLbl = okBtn:CreateFontString(nil, "OVERLAY")
-            okLbl:SetFont(FONT_PATH, 12, GetCDMOptOutline())
-            okLbl:SetPoint("CENTER"); okLbl:SetText(EllesmereUI.L("Save"))
-            okLbl:SetTextColor(ar, ag, ab, 0.9)
-            okBtn:SetScript("OnEnter", function() okLbl:SetTextColor(1, 1, 1, 1) end)
-            okBtn:SetScript("OnLeave", function() okLbl:SetTextColor(ar, ag, ab, 0.9) end)
-
-            local cancelBtn = CreateFrame("Button", nil, popup)
-            cancelBtn:SetSize(80, 28)
-            cancelBtn:SetPoint("BOTTOMLEFT", popup, "BOTTOM", 4, 16)
-            local cBg = cancelBtn:CreateTexture(nil, "BACKGROUND")
-            cBg:SetAllPoints(); cBg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
-            EllesmereUI.MakeBorder(cancelBtn, 1, 1, 1, 0.10, EllesmereUI.PP)
-            local cLbl = cancelBtn:CreateFontString(nil, "OVERLAY")
-            cLbl:SetFont(FONT_PATH, 12, GetCDMOptOutline())
-            cLbl:SetPoint("CENTER"); cLbl:SetText(EllesmereUI.L("Cancel"))
-            cLbl:SetTextColor(0.7, 0.7, 0.7, 0.8)
-            cancelBtn:SetScript("OnEnter", function() cLbl:SetTextColor(1, 1, 1, 1) end)
-            cancelBtn:SetScript("OnLeave", function() cLbl:SetTextColor(0.7, 0.7, 0.7, 0.8) end)
-            cancelBtn:SetScript("OnClick", function() dimmer:Hide() end)
-            popup._cancelBtn = cancelBtn
-
-            local function Commit()
-                local v = tonumber(box:GetText())
-                if v and v >= 1 and v <= 100 then
-                    dimmer:Hide()
-                    if popup._onConfirm then popup._onConfirm(math.floor(v)) end
-                end
-            end
-            okBtn:SetScript("OnClick", Commit)
-            box:SetScript("OnEnterPressed", Commit)
-            box:SetScript("OnEscapePressed", function() dimmer:Hide() end)
-        end
-        popup._onConfirm = onConfirm
+        popup._title:SetText(title or EllesmereUI.L("Lower Alpha"))
+        popup._hint:SetText(hint or EllesmereUI.L("Icon opacity while on cooldown (1-100%)"))
         popup._box:SetText(currentPct and tostring(currentPct) or "")
         ns.PadPopupOpen(popup._dimmer, popup, popup._cancelBtn)  -- controller cursor
         popup._dimmer:Show()
@@ -11401,12 +11314,12 @@ initFrame:SetScript("OnEvent", function(self)
                                     si:SetScript("OnClick", function()
                                         local cur = math.floor((((cas and cas.cdStateGlowAlpha) or 1) * 100) + 0.5)
                                         menu:Hide()
-                                        ShowGlowOpacityPopup(cur, function(pct)
+                                        ShowAlphaPopup(cur, function(pct)
                                             local c = EnsureCAS()
                                             c.cdStateGlowAlpha = pct / 100
                                             c.cdStateGlowStyle = 8
                                             if ns.FakeActive_Rearm then ns.FakeActive_Rearm() end
-                                        end)
+                                        end, EllesmereUI.L("Glow Opacity"), EllesmereUI.L("Blackout glow opacity (1-100%)"))
                                     end)
                                 end
                             end,
@@ -11732,14 +11645,14 @@ initFrame:SetScript("OnEvent", function(self)
                         function(v) EnsureSS(); SetOwn("procGlow", v) end,
                         function() return ss.procGlow == nil end,
                         function(si, item)
+                            -- Glow choices lock while the Cooldown State Effect is any glow
+                            -- (CD Ready or On CD): the reverse of that row's Proc Glow gate.
                             local isGlow = item.val and item.val > 0
-                            local cse = ss.cdStateEffect
-                            if isGlow and (cse == "pixelGlowReady" or cse == "buttonGlowReady"
-                               or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable") then
+                            if isGlow and CD_GLOW_EFFECT[ss.cdStateEffect] then
                                 si:SetAlpha(0.35)
                                 si:SetScript("OnClick", function() end)
                                 si:SetScript("OnEnter", function()
-                                    EllesmereUI.ShowWidgetTooltip(si, "Disable CD Ready glow first")
+                                    EllesmereUI.ShowWidgetTooltip(si, "Disable the Cooldown State glow first")
                                 end)
                                 si:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
                             end
@@ -12097,12 +12010,12 @@ initFrame:SetScript("OnEvent", function(self)
                                     si:SetScript("OnClick", function()
                                         local cur = math.floor(((ss.cdStateGlowAlpha or 1) * 100) + 0.5)
                                         menu:Hide()
-                                        ShowGlowOpacityPopup(cur, function(pct)
+                                        ShowAlphaPopup(cur, function(pct)
                                             EnsureSS()
                                             ss.cdStateGlowAlpha = pct / 100
                                             SetOwn("cdStateGlowStyle", 8)
                                             if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end
-                                        end)
+                                        end, EllesmereUI.L("Glow Opacity"), EllesmereUI.L("Blackout glow opacity (1-100%)"))
                                     end)
                                 end
                             end,

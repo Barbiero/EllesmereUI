@@ -1210,7 +1210,8 @@ ApplyCdState = function(frame, fc, cas, eff, onCD, ready)
         if ns.SetCdStateShiftHidden then ns.SetCdStateShiftHidden(fc, false) end
         return
     end
-    -- Glow modes: glow while the ability is READY (off cooldown). Not a hide.
+    -- Glow modes: glow while the ability is READY (off cooldown), or while it is
+    -- ON cooldown for Glow (On CD). Not a hide.
     -- Restore the alpha as well as the flag, exactly as the appearance refresh
     -- does on this transition: once a bar has settled nothing else re-asserts a
     -- preset frame's alpha, so clearing the flag alone leaves a hide from an
@@ -1219,8 +1220,8 @@ ApplyCdState = function(frame, fc, cas, eff, onCD, ready)
     fc._cdStateHidden = false
     if ns.SetCdStateShiftHidden then ns.SetCdStateShiftHidden(fc, false) end
     if not fd then return end
-    -- Glow modes want the OPPOSITE cooldown state for "On CD" vs the Ready
-    -- variants (mirrors CdReadyGlowStyle's cse handling in CdmHooks.lua).
+    -- Glow (On CD) wants the OPPOSITE cooldown state from the Ready variants
+    -- (as the glowOnCD branch of the SetDesaturated hook in CdmHooks.lua).
     local isOnCdGlow = (eff == "glowOnCD")
     local wantsGlow = isOnCdGlow and onCD or (not isOnCdGlow and not onCD)
     if wantsGlow then
@@ -1236,7 +1237,7 @@ ApplyCdState = function(frame, fc, cas, eff, onCD, ready)
         -- owner's.
         if not fd._presetCdGlowOn or not (ov and ov._glowActive) then
             local cr, cg, cb = ns.CdReadyGlowColor(style, cas)
-            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(cas) })
+            ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(cas))
             fd._presetCdGlowOn = true
         end
     elseif fd._presetCdGlowOn then

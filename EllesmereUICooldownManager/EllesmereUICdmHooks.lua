@@ -4318,7 +4318,7 @@ local function DecorateFrame(frame, barData)
                             and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss2))
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
@@ -4380,7 +4380,7 @@ local function DecorateFrame(frame, barData)
                                     and not fd.procGlowActive then
                                     local style = ns.CdReadyGlowStyle(self.cse, self.ss2)
                                     local cr, cg, cb = ns.CdReadyGlowColor(style, self.ss2)
-                                    ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(self.ss2) })
+                                    ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(self.ss2))
                                     fd._cdStateGlowOn = true
                                 end
                             elseif fd._cdStateGlowOn then
@@ -4413,7 +4413,7 @@ local function DecorateFrame(frame, barData)
                             and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss2))
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
@@ -5070,7 +5070,7 @@ do
                         if not fd._cdStateGlowOn and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse2, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss2))
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then

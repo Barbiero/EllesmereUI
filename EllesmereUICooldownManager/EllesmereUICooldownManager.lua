@@ -2622,8 +2622,11 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
     elseif entry.autocast then
         _G_Glows.StartAutoCastShine(overlay, pW, cr, cg, cb, 1.0, pH)
     elseif entry.solidFill then
+        -- Clip to the shape mask only while a custom shape is applied, decided as
+        -- in the Shape branch above: a removed shape leaves its mask object on the
+        -- icon (emptied and hidden), which must not clip the fill.
         local ifc2 = _ecmeFC[parent]
-        local shapeMask = ifc2 and ifc2.shapeMask
+        local shapeMask = (ifc2 and ifc2.shapeApplied and ifc2.shapeName) and ifc2.shapeMask or nil
         _G_Glows.StartSolidFill(overlay, noColor and 0 or cr, noColor and 0 or cg, noColor and 0 or cb,
             { alpha = opts and opts.alpha, shapeMask = shapeMask })
     else
@@ -2674,13 +2677,16 @@ ns.StopNativeGlow = StopNativeGlow
 -- countdown text stay visible on top of the fill; every other style keeps
 -- using the shared overlay. Picks the overlay from the resolved style and
 -- stops whichever one is NOT used, so a style change (e.g. Blackout -> Pixel)
--- never leaves the other overlay lit.
-function ns.StartCdGlow(fd, style, cr, cg, cb, opts)
+-- never leaves the other overlay lit. alpha is the Blackout fill opacity
+-- (nil = opaque); the other styles take no opts at all.
+function ns.StartCdGlow(fd, style, cr, cg, cb, alpha)
     if not fd then return end
     local e = ns.GLOW_STYLES[style]
-    local overlay, other
+    local overlay, other, opts
     if e and e.solidFill then
-        overlay, other = fd.blackoutOverlay, fd.glowOverlay
+        -- A fresh table per start: StartNativeGlow keeps opts by reference in
+        -- its Show Glows Only in Combat record, which the replay restarts from.
+        overlay, other, opts = fd.blackoutOverlay, fd.glowOverlay, { alpha = alpha }
     else
         overlay, other = fd.glowOverlay, fd.blackoutOverlay
     end
@@ -2985,8 +2991,17 @@ local function ShowProcGlow(icon, cr, cg, cb)
     -- restart ("already on"), so a consumed proc kills the Resource Aware glow until
     -- usability flips off and on again (e.g. Shadowburn + Fiendish Cruelty). Proc
     -- priority is enforced by the procGlowActive gates on the start sites.
+    -- A Blackout CD-state glow sits on its own overlay (fd.blackoutOverlay), which
+    -- the proc glow does not replace, so it goes out with the memo: every CD-state
+    -- stop site is memo-gated and would never reach it again. Only the memo's own
+    -- glow is stopped. A Blackout lit by the Fake-Active engine belongs to that
+    -- engine's memo; stopping it here would only make its re-assert restart it
+    -- through ns.StartCdGlow, which stops the shared overlay: the proc glow.
     if glow._glowActive then StopNativeGlow(glow) end
-    if fd then fd._cdStateGlowOn = false end
+    if fd then
+        if fd._cdStateGlowOn and fd.blackoutOverlay then StopNativeGlow(fd.blackoutOverlay) end
+        fd._cdStateGlowOn = false
+    end
     StartNativeGlow(glow, style, cr, cg, cb)
     if fd then fd.procGlowActive = true end
 end
@@ -5226,10 +5241,12 @@ local function ApplyCDMTooltipState(barKey)
             for i = 1, #icons do
                 local ic = icons[i]
                 if ic and ic.EnableMouseMotion then
-                    -- Invisible placeholders are excluded even with tooltips on: an
-                    -- alpha-0 slot has no art to hover, so capturing here would only
-                    -- take mouseover away from whatever the bar sits over.
-                    ic:EnableMouseMotion(wantHover and not IsPlaceholderRenderHidden(ic, bd))
+                    -- Invisible placeholders and Empty Slots are excluded even with
+                    -- tooltips on: a slot with no art has nothing to hover, so
+                    -- capturing here would only take mouseover away from whatever
+                    -- the bar sits over.
+                    ic:EnableMouseMotion(wantHover and not ic._isEmptySlotFrame
+                        and not IsPlaceholderRenderHidden(ic, bd))
                 end
             end
         end
@@ -6203,7 +6220,7 @@ local function RefreshCDMIconAppearance(barKey)
                         if isUsable == true then
                             local style = ns.CdReadyGlowStyle(cse, ss)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss)
-                            ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss) })
+                            ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss))
                             ifd._cdStateGlowOn = true
                         end
                     end
@@ -6301,7 +6318,7 @@ local function RefreshCDMIconAppearance(barKey)
                             if isUsable == true then
                                 local style = ns.CdReadyGlowStyle(cse, csSs)
                                 local cr, cg, cb = ns.CdReadyGlowColor(style, csSs)
-                                ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(csSs) })
+                                ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(csSs))
                                 if ifd then ifd._cdStateGlowOn = true end
                             end
                         end

@@ -928,7 +928,7 @@ end
 --    .maskPath, .borderPath, .shapeMask — shape glow textures
 --    .untinted    -- a nil color stays nil on the FlipBook path (the atlas's
 --                   own untinted look) instead of desaturated white
---    .alpha       — Blackout fill opacity (0-1, default 1 = opaque)
+--    .alpha       -- Blackout fill opacity (0-1, default 1 = opaque)
 -------------------------------------------------------------------------------
 local function StartGlow(wrapper, styleIdx, szOrW, cr, cg, cb, opts, szH)
     if not wrapper then return end
