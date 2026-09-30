@@ -817,7 +817,7 @@ initFrame:SetScript("OnEvent", function(self)
         local textOverlays = {}  -- collect text overlays for size refresh
         if optState.activePreview then
             local pv = optState.activePreview
-            -- Icon overlays need to be above the icon frames (which are at health:GetFrameLevel() + 8)
+            -- Icon overlays need to be above the icon frames (health:GetFrameLevel() + 9, or + 13 with Raise Strata)
             local iconLevel = (pv._health and pv._health:GetFrameLevel() or 20) + 15
             -- Text overlays on icons need to be above the icon overlays
             local textOnIconLevel = iconLevel + 10

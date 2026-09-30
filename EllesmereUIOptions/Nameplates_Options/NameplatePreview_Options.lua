@@ -304,12 +304,12 @@ local function BuildNameplatePreview(parent, parentW)
     -- Text overlay frame: renders above health bar fill and borders (same as real addon)
     local healthTextFrame = CreateFrame("Frame", nil, health)
     healthTextFrame:SetAllPoints(health)
-    healthTextFrame:SetFrameLevel(health:GetFrameLevel() + 7)
+    healthTextFrame:SetFrameLevel(health:GetFrameLevel() + 11)
 
     -- Top text overlay: renders above health bar + borders so top-slot text is never hidden
     local topTextFrame = CreateFrame("Frame", nil, pf)
     topTextFrame:SetAllPoints(health)
-    topTextFrame:SetFrameLevel(health:GetFrameLevel() + 6)
+    topTextFrame:SetFrameLevel(health:GetFrameLevel() + 10)
 
     -- Name text (anchored BOTTOM to health TOP, +4px gap, width 113)
     local nameFS = pf:CreateFontString(nil, "OVERLAY")
@@ -321,7 +321,7 @@ local function BuildNameplatePreview(parent, parentW)
     nameFS:SetTextColor(1, 1, 1, 1)
 
     local nameRaidFrame = CreateFrame("Frame", nil, pf)
-    nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 8)
+    nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 12)
     nameRaidFrame:Hide()
     local nameRaidIcon = nameRaidFrame:CreateTexture(nil, "ARTWORK")
     nameRaidIcon:SetAllPoints()
@@ -372,8 +372,8 @@ local function BuildNameplatePreview(parent, parentW)
     -- Raid marker: custom marker.png image, position/size from settings
     local MARKER_PATH = "Interface\\AddOns\\EllesmereUI\\media\\marker.png"
     local raidFrame = CreateFrame("Frame", nil, health)
-    -- +8 keeps the marker above name/health text (healthTextFrame is health+7), matching the live plate.
-    raidFrame:SetFrameLevel(health:GetFrameLevel() + 8)
+    -- +12 keeps the marker above name/health text (healthTextFrame is health+11), matching the live plate.
+    raidFrame:SetFrameLevel(health:GetFrameLevel() + 12)
     local raidIcon = raidFrame:CreateTexture(nil, "ARTWORK")
     raidIcon:SetAllPoints()
     raidIcon:SetTexture(MARKER_PATH)
@@ -444,7 +444,7 @@ local function BuildNameplatePreview(parent, parentW)
     -- Cast text frame: dedicated child ABOVE the cast border so name/target/timer render in front (mirrors the live castTextFrame); the PP border is cast+1 and would otherwise draw over text on cast's own OVERLAY layer.
     castParts.textFrame = CreateFrame("Frame", nil, cast)
     castParts.textFrame:SetAllPoints(cast)
-    castParts.textFrame:SetFrameLevel(cast:GetFrameLevel() + 5)
+    castParts.textFrame:SetFrameLevel(cast:GetFrameLevel() + 10)
 
     -- Cast name (left, width 70)
     castParts.nameFS = castParts.textFrame:CreateFontString(nil, "OVERLAY")
@@ -723,7 +723,7 @@ local function BuildNameplatePreview(parent, parentW)
         local d = CreateFrame("Frame", nil, pf)
         d:SetSize(26, 26)
         d:SetPoint("BOTTOM", nameFS, "TOP", (i - (PV_CONST.DEBUFF_COUNT + 1) / 2) * 30, 2)
-        d:SetFrameLevel(health:GetFrameLevel() + 8)
+        d:SetFrameLevel(health:GetFrameLevel() + 9)
         AddBorder(d)
 
         d.icon = d:CreateTexture(nil, "ARTWORK")
@@ -769,7 +769,7 @@ local function BuildNameplatePreview(parent, parentW)
     for i = 1, PV_CONST.BUFF_COUNT do
         local bf = CreateFrame("Frame", nil, pf)
         bf:SetSize(24, 24)
-        bf:SetFrameLevel(health:GetFrameLevel() + 8)
+        bf:SetFrameLevel(health:GetFrameLevel() + 9)
         AddBorder(bf)
         bf.icon = bf:CreateTexture(nil, "ARTWORK")
         UnsnapTex(bf.icon)
@@ -797,7 +797,7 @@ local function BuildNameplatePreview(parent, parentW)
     for i = 1, PV_CONST.CC_COUNT do
         local cf = CreateFrame("Frame", nil, pf)
         cf:SetSize(24, 24)
-        cf:SetFrameLevel(health:GetFrameLevel() + 8)
+        cf:SetFrameLevel(health:GetFrameLevel() + 9)
         AddBorder(cf)
         cf.icon = cf:CreateTexture(nil, "ARTWORK")
         UnsnapTex(cf.icon)
@@ -1125,6 +1125,25 @@ local function BuildNameplatePreview(parent, parentW)
         local debuffSz = (debuffSlotVal ~= "none") and (DBVal(debuffSlotVal .. "SlotSize") or defaults[debuffSlotVal .. "SlotSize"] or 26) or 26
         local buffSz   = (buffSlotVal ~= "none") and (DBVal(buffSlotVal .. "SlotSize") or defaults[buffSlotVal .. "SlotSize"] or 24) or 24
         local ccSz     = (ccSlotVal ~= "none") and (DBVal(ccSlotVal .. "SlotSize") or defaults[ccSlotVal .. "SlotSize"] or 24) or 24
+
+        -- Aura tier as on the live plate: auras (800) sit below the text tier (900),
+        -- unless the slot's Raise Strata lifts them to HIGH, above everything else.
+        -- Here: text health+10/+11, auras +9, raised auras +13 (hit overlays +15).
+        do
+            local hl = health:GetFrameLevel()
+            for k = 1, 3 do
+                local list = (k == 1 and debuffs) or (k == 2 and buffs) or ccs
+                local slotVal = (k == 1 and debuffSlotVal) or (k == 2 and buffSlotVal) or ccSlotVal
+                local lvl = hl + ((slotVal ~= "none" and DBVal(slotVal .. "SlotRaiseStrata")) and 13 or 9)
+                for i = 1, #list do
+                    local f = list[i]
+                    if f:GetFrameLevel() ~= lvl then
+                        f:SetFrameLevel(lvl)
+                        f.durationText:GetParent():SetFrameLevel(lvl + 2)
+                    end
+                end
+            end
+        end
 
         -- Per-element gap between icons (user setting), then compute per-type center-to-center spacing
         local debuffGap = DBVal("debuffSpacing") or defaults.debuffSpacing
@@ -1507,7 +1526,7 @@ local function BuildNameplatePreview(parent, parentW)
                 return
             end
             nameRaidFrame:SetParent((pvNameSlotKey == "textSlotTop") and topTextFrame or healthTextFrame)
-            nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 8)
+            nameRaidFrame:SetFrameLevel(health:GetFrameLevel() + 12)
             nameRaidFrame:SetSize(pvNameMarkerSize, pvNameMarkerSize)
             nameRaidFrame:ClearAllPoints()
             nameRaidFrame:SetPoint("RIGHT", nameFS, "LEFT", -NAME_RAID_MARKER_GAP, 0)
