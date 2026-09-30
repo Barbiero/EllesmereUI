@@ -1131,6 +1131,12 @@ local DEFAULTS = {
         useClassicStyleBars = false,
         health = {
             enabled     = false,
+            showAbsorbs = true,
+            showHealAbsorbs = true,
+            showMaxHealthLoss = true,
+            absorbColor = { r = 0.3, g = 0.75, b = 1, a = 0.65 },
+            healAbsorbColor = { r = 0.85, g = 0.15, b = 0.2, a = 0.75 },
+            maxHealthLossColor = { r = 0.35, g = 0.25, b = 0.4, a = 0.9 },
             smoothBars  = false,
             width       = 214,
             height      = 16,
@@ -4397,9 +4403,11 @@ local function UpdateHealthBar()
 
     local cur = UnitHealth("player")
     local mx = UnitHealthMax("player")
-    if not cur or not mx or mx <= 0 then return end
+    if not cur or not mx then return end
+    if not (issecretvalue and issecretvalue(mx)) and mx <= 0 then return end
 
     healthBar:SetMinMaxValues(0, mx)
+    ns.UpdateHealthIndicators(healthBar, hp, mx)
 
     local curTainted = issecretvalue and issecretvalue(cur)
     -- Percent for text display. UnitHealthPercent may return a secret, but
@@ -11618,10 +11626,13 @@ local function OnEvent(self, event, ...)
             UpdateSecondaryResource()
         end
     elseif event == "UNIT_ABSORB_AMOUNT_CHANGED" then
-        -- Drives the Prot Ignore Pain bar; no-op for everyone else.
+        UpdateHealthBar()
+        -- Also drives the Prot Ignore Pain resource bar.
         if cachedSecondary and cachedSecondary.power == "IGNOREPAIN_BAR" then
             UpdateSecondaryResource()
         end
+    elseif event == "UNIT_HEAL_ABSORB_AMOUNT_CHANGED" then
+        UpdateHealthBar()
     elseif event == "UNIT_MAXPOWER" then
         -- Re-check secondary resource in case max changed (e.g. talent-based pip count)
         local newSec = GetSecondaryResource()
@@ -12023,6 +12034,7 @@ function ERB:OnEnable()
     eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
     eventFrame:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+    eventFrame:RegisterUnitEvent("UNIT_HEAL_ABSORB_AMOUNT_CHANGED", "player")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
     eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_DELAYED", "player")
