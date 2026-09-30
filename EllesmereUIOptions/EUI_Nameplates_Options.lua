@@ -312,7 +312,7 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  Display page  (preview in content header + settings in scroll area)
     ---------------------------------------------------------------------------
-    local LazyColorPreviewBar -- forward declaration; defined after MakeColorPreviewBar
+    local LazyColorPreviewBar -- forward declaration; defined with the Colors page helpers below
 
     local function BuildDisplayPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
@@ -325,7 +325,7 @@ initFrame:SetScript("OnEvent", function(self)
             local PRESET_HEADER_H = 0
             local PREVIEW_TOP_PAD = 10
             local PREVIEW_BOTTOM_PAD = 5
-            local previewH = BuildNameplatePreview(headerParent, headerW)
+            local previewH = ns.NPO_BuildNameplatePreview(headerParent, headerW)
             -- Position the preview at the top of the header area. pf's SetScale matches the UIParent/panel ratio, so SetPoint offsets (in that scaled space) must divide by the same ratio for the correct visual offset.
             if optState.activePreview then
                 optState.activePreview:ClearAllPoints()
@@ -617,6 +617,29 @@ initFrame:SetScript("OnEvent", function(self)
 
         local atFallback = DBVal("auraTextPosition") or defaults.auraTextPosition
         local asFallback = DBVal("auraStackTextPosition") or defaults.auraStackTextPosition
+
+        -- The sections live in Nameplates_Options\DisplayLayout_Options.lua and
+        -- DisplayBars_Options.lua; they return the rows the click navigation
+        -- below maps to.
+        local ctx = {
+            W = W, GetElementAtPosition = GetElementAtPosition, RefreshAllSlots = RefreshAllSlots,
+            SetElementAtPosition = SetElementAtPosition,
+            SetTextElementAtSlot = SetTextElementAtSlot, asFallback = asFallback,
+            atFallback = atFallback, AuraDurationVal = AuraDurationVal,
+            LiveApplyStackPos = LiveApplyStackPos, LiveApplyTimerPos = LiveApplyTimerPos,
+            timerPosOrder = timerPosOrder, timerPosValues = timerPosValues,
+        }
+        local styleHeader, coreHeader, coreRow1, coreRow2, coreRow3, coreTextHeader, textRow1
+        local textRow2, textRow3
+        y, styleHeader, coreHeader, coreRow1, coreRow2, coreRow3, coreTextHeader, textRow1, textRow2,
+            textRow3, ctx.ShowCogPopup, ctx.CogPopupOpen,
+            ctx.RefreshAllTextures = ns.NPO_BuildDisplayLayout(parent, y, ctx)
+        local healthBarHeader, healthBarHeightRow, castBarHeightRow, showCastIconRow, castTimerRow
+        local tfxHeader, targetGlowRow, classResourceHeader, classResourceSection, generalTextHeader
+        local auraDurPosRow, auraTimerStackRow, spellNameRow
+        y, healthBarHeader, healthBarHeightRow, castBarHeightRow, showCastIconRow, castTimerRow,
+            tfxHeader, targetGlowRow, classResourceHeader, classResourceSection, generalTextHeader,
+            auraDurPosRow, auraTimerStackRow, spellNameRow = ns.NPO_BuildDisplayBars(parent, y, ctx)
 
         -----------------------------------------------------------------------
         --  CLICK NAVIGATION: glow, scroll, mapping, hit overlays
@@ -1078,7 +1101,7 @@ initFrame:SetScript("OnEvent", function(self)
         local _colorOverrideFn = nil
         local function EnsureBuilt()
             if real then return real end
-            real = MakeColorPreviewBar(parentRow, colorType, colorKey, anchorFrame)
+            real = ns.NPO_MakeColorPreviewBar(parentRow, colorType, colorKey, anchorFrame)
             if _disabled and real._health then real._health:SetAlpha(0.3) end
             return real
         end
@@ -1136,6 +1159,27 @@ initFrame:SetScript("OnEvent", function(self)
         return proxy
     end
 
+    -- Shared with the page builders under Nameplates_Options\ (read in their
+    -- prologs). Every field is final here: optState holds the mutable state.
+    ns._NPO_OptEnv = {
+        _colorPagePreviews = _colorPagePreviews, ADDON_NAME = ADDON_NAME, BAR_W = BAR_W, DB = DB,
+        DBColor = DBColor, DBVal = DBVal, defaults = defaults, displayCastIcons = displayCastIcons,
+        FOCUS_LETTER_ANCHOR_ORDER = FOCUS_LETTER_ANCHOR_ORDER,
+        FOCUS_LETTER_ANCHORS = FOCUS_LETTER_ANCHORS, GetFocusLetterAnchor = GetFocusLetterAnchor,
+        GetNPOptOutline = GetNPOptOutline, hbtOrder = hbtOrder, hbtValues = hbtValues,
+        LazyColorPreviewBar = LazyColorPreviewBar, NAME_RAID_MARKER_GAP = NAME_RAID_MARKER_GAP,
+        NextCastFill = NextCastFill, NextCastIcon = NextCastIcon,
+        npDispelGlowDesc = npDispelGlowDesc, npImpCastGlowDesc = npImpCastGlowDesc,
+        optState = optState, pairs = pairs, pcall = pcall, plates = plates, PP = PP,
+        RandomizePreviewValues = RandomizePreviewValues, RefreshAllAuras = RefreshAllAuras,
+        RefreshAllPlates = RefreshAllPlates, SECTION_AURA = SECTION_AURA,
+        SECTION_CASTBAR = SECTION_CASTBAR, SECTION_ENEMY = SECTION_ENEMY,
+        SECTION_ENEMY_NP = SECTION_ENEMY_NP, SECTION_FRIENDLY = SECTION_FRIENDLY,
+        SECTION_MISC = SECTION_MISC, SECTION_THREAT = SECTION_THREAT, SetFSFont = SetFSFont,
+        SetPVFont = SetPVFont, THREAT_PCT_POSITION_ORDER = THREAT_PCT_POSITION_ORDER,
+        THREAT_PCT_POSITIONS = THREAT_PCT_POSITIONS, UpdatePreview = UpdatePreview,
+    }
+
     ---------------------------------------------------------------------------
     --  Register the module
     ---------------------------------------------------------------------------
@@ -1159,11 +1203,11 @@ initFrame:SetScript("OnEvent", function(self)
         pages       = { PAGE_DISPLAY, PAGE_COLORS, PAGE_GENERAL },
         buildPage   = function(pageName, parent, yOffset)
             if pageName == PAGE_GENERAL then
-                return BuildGeneralPage(pageName, parent, yOffset)
+                return ns.NPO_BuildGeneralPage(pageName, parent, yOffset)
             elseif pageName == PAGE_DISPLAY then
                 return BuildDisplayPage(pageName, parent, yOffset)
             elseif pageName == PAGE_COLORS then
-                return BuildColorsPage(pageName, parent, yOffset)
+                return ns.NPO_BuildColorsPage(pageName, parent, yOffset)
             end
         end,
         getHeaderBuilder = function(pageName)

@@ -1,5 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  Nameplates_Options\ColorsPage_Options.lua
+--  Nameplates options: the Colors page (BuildColorsPage) and the mini preview
+--  bars of its color rows (MakeColorPreviewBar, built lazily through
+--  LazyColorPreviewBar in EUI_Nameplates_Options.lua). Definitions only; the
+--  shared helpers come from ns._NPO_OptEnv.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUINameplates"]
+if not ns then return end  -- module disabled: no options page
+
 -- Mini preview bar builder for color swatches. type: "health"/"cast"/"castLocked". colorKey: DB key for the bar color (read live). parentRow: frame to attach to. anchorFrame: optional override anchor (e.g. DualRow half-region).
 local function MakeColorPreviewBar(parentRow, colorType, colorKey, anchorFrame)
+    local env = ns._NPO_OptEnv
+    local DB, DBVal, defaults, GetFocusLetterAnchor = env.DB, env.DBVal, env.defaults, env.GetFocusLetterAnchor
+    local GetNPOptOutline, NextCastFill, NextCastIcon, PP = env.GetNPOptOutline, env.NextCastFill, env.NextCastIcon, env.PP
+    local SetPVFont = env.SetPVFont
     local MEDIA = "Interface\\AddOns\\EllesmereUINameplates\\Media\\"
     local isHalf = anchorFrame and true or false
     local BAR_W = isHalf and 161 or 180
@@ -419,6 +434,11 @@ local function MakeColorPreviewBar(parentRow, colorType, colorKey, anchorFrame)
 end
 
 local function BuildColorsPage(pageName, parent, yOffset)
+    local env = ns._NPO_OptEnv
+    local _colorPagePreviews, DB, DBColor, DBVal = env._colorPagePreviews, env.DB, env.DBColor, env.DBVal
+    local defaults, optState, pairs, PP = env.defaults, env.optState, env.pairs, env.PP
+    local RefreshAllPlates, SECTION_ENEMY, SECTION_THREAT, THREAT_PCT_POSITION_ORDER = env.RefreshAllPlates, env.SECTION_ENEMY, env.SECTION_THREAT, env.THREAT_PCT_POSITION_ORDER
+    local THREAT_PCT_POSITIONS = env.THREAT_PCT_POSITIONS
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h
@@ -1192,3 +1212,7 @@ local function BuildColorsPage(pageName, parent, yOffset)
 
     return math.abs(y)
 end
+
+-- Used by EUI_Nameplates_Options.lua
+ns.NPO_MakeColorPreviewBar = MakeColorPreviewBar
+ns.NPO_BuildColorsPage = BuildColorsPage

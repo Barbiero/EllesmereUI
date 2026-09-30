@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  Nameplates_Options\DisplayLayout_Options.lua
+--  Nameplates options: the Style, Core Positions and Core Text Positions
+--  sections of the Display page. Called by BuildDisplayPage; returns y, the
+--  rows its click navigation maps to, and the cog popup and texture helpers
+--  DisplayBars_Options.lua uses. Shared helpers come from ns._NPO_OptEnv, the
+--  per-build slot helpers from ctx.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUINameplates"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildDisplayLayout(parent, y, ctx)
+    local env = ns._NPO_OptEnv
+    local DB, DBVal, defaults, GetNPOptOutline = env.DB, env.DBVal, env.defaults, env.GetNPOptOutline
+    local hbtOrder, hbtValues, optState, pairs = env.hbtOrder, env.hbtValues, env.optState, env.pairs
+    local plates, PP, UpdatePreview = env.plates, env.PP, env.UpdatePreview
+    local GetElementAtPosition, RefreshAllSlots, SetElementAtPosition, SetTextElementAtSlot = ctx.GetElementAtPosition, ctx.RefreshAllSlots, ctx.SetElementAtPosition, ctx.SetTextElementAtSlot
+    local W = ctx.W
+    local _, h
+
     -----------------------------------------------------------------------
     --  STYLE
     -----------------------------------------------------------------------
@@ -2324,3 +2345,10 @@
     end
 
     _, h = W:Spacer(parent, y, 20);  y = y - h
+
+    return y, styleHeader, coreHeader, coreRow1, coreRow2, coreRow3, coreTextHeader, textRow1,
+        textRow2, textRow3, ShowCogPopup, CogPopupOpen, RefreshAllTextures
+end
+
+-- Used by EUI_Nameplates_Options.lua
+ns.NPO_BuildDisplayLayout = BuildDisplayLayout

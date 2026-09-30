@@ -1,3 +1,28 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  Nameplates_Options\DisplayBars_Options.lua
+--  Nameplates options: the Health and Cast Bar, Cast Colors and Effects,
+--  Target/Focus/Hover Effects, Class Resource and General Text sections of the
+--  Display page. Called by BuildDisplayPage after DisplayLayout_Options.lua;
+--  returns y and the rows its click navigation maps to. Shared helpers come
+--  from ns._NPO_OptEnv, the per-build helpers from ctx.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUINameplates"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildDisplayBars(parent, y, ctx)
+    local env = ns._NPO_OptEnv
+    local BAR_W, DB, DBColor, DBVal = env.BAR_W, env.DB, env.DBColor, env.DBVal
+    local defaults, displayCastIcons, hbtOrder, hbtValues = env.defaults, env.displayCastIcons, env.hbtOrder, env.hbtValues
+    local LazyColorPreviewBar, npImpCastGlowDesc, optState, pairs = env.LazyColorPreviewBar, env.npImpCastGlowDesc, env.optState, env.pairs
+    local plates, PP, RefreshAllPlates, SECTION_CASTBAR = env.plates, env.PP, env.RefreshAllPlates, env.SECTION_CASTBAR
+    local SetFSFont, UpdatePreview = env.SetFSFont, env.UpdatePreview
+    local asFallback, atFallback, AuraDurationVal, CogPopupOpen = ctx.asFallback, ctx.atFallback, ctx.AuraDurationVal, ctx.CogPopupOpen
+    local LiveApplyStackPos, LiveApplyTimerPos, RefreshAllTextures, ShowCogPopup = ctx.LiveApplyStackPos, ctx.LiveApplyTimerPos, ctx.RefreshAllTextures, ctx.ShowCogPopup
+    local timerPosOrder, timerPosValues = ctx.timerPosOrder, ctx.timerPosValues
+    local W = ctx.W
+    local _, h
+
     -----------------------------------------------------------------------
     --  HEALTH BAR
     -----------------------------------------------------------------------
@@ -2070,3 +2095,11 @@
         })
     end
     y = y - h
+
+    return y, healthBarHeader, healthBarHeightRow, castBarHeightRow, showCastIconRow, castTimerRow,
+        tfxHeader, targetGlowRow, classResourceHeader, classResourceSection, generalTextHeader,
+        auraDurPosRow, auraTimerStackRow, spellNameRow
+end
+
+-- Used by EUI_Nameplates_Options.lua
+ns.NPO_BuildDisplayBars = BuildDisplayBars

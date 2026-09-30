@@ -1,7 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  Nameplates_Options\GeneralPage_Options.lua
+--  Nameplates options: the General page (BuildGeneralPage). Definitions only;
+--  the shared helpers come from ns._NPO_OptEnv (filled by
+--  EUI_Nameplates_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUINameplates"]
+if not ns then return end  -- module disabled: no options page
+
 ---------------------------------------------------------------------------
 --  General page (Friendly settings, Spacing, Show All Debuffs); two-column DualRow layout where possible
 ---------------------------------------------------------------------------
 local function BuildGeneralPage(pageName, parent, yOffset)
+    local env = ns._NPO_OptEnv
+    local DB, DBVal, defaults, FOCUS_LETTER_ANCHOR_ORDER = env.DB, env.DBVal, env.defaults, env.FOCUS_LETTER_ANCHOR_ORDER
+    local FOCUS_LETTER_ANCHORS, GetFocusLetterAnchor, GetNPOptOutline, npDispelGlowDesc = env.FOCUS_LETTER_ANCHORS, env.GetFocusLetterAnchor, env.GetNPOptOutline, env.npDispelGlowDesc
+    local pairs, pcall, plates, PP = env.pairs, env.pcall, env.plates, env.PP
+    local RefreshAllAuras, RefreshAllPlates, SECTION_AURA, SECTION_ENEMY_NP = env.RefreshAllAuras, env.RefreshAllPlates, env.SECTION_AURA, env.SECTION_ENEMY_NP
+    local SECTION_FRIENDLY, SECTION_MISC, UpdatePreview = env.SECTION_FRIENDLY, env.SECTION_MISC, env.UpdatePreview
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h
@@ -1206,3 +1222,6 @@ local function BuildGeneralPage(pageName, parent, yOffset)
 
     return math.abs(y)
 end
+
+-- Used by EUI_Nameplates_Options.lua
+ns.NPO_BuildGeneralPage = BuildGeneralPage

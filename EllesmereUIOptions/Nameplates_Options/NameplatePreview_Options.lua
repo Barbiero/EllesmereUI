@@ -1,3 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  Nameplates_Options\NameplatePreview_Options.lua
+--  Nameplates options: the enemy nameplate preview in the content header of
+--  the Display page (BuildNameplatePreview). Definitions only; the shared
+--  helpers come from ns._NPO_OptEnv (filled by EUI_Nameplates_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUINameplates"]
+if not ns then return end  -- module disabled: no options page
+
 --- Build the nameplate preview in the content header area: an exact 1:1
 --- replica of a real enemy nameplate (same pixel sizes, anchors, fonts,
 --- borders; no glow, no added effects).
@@ -5,6 +15,11 @@
 --- @param parentW number  available width
 --- @return number height consumed
 local function BuildNameplatePreview(parent, parentW)
+    local env = ns._NPO_OptEnv
+    local ADDON_NAME, BAR_W, DB, DBVal = env.ADDON_NAME, env.BAR_W, env.DB, env.DBVal
+    local defaults, displayCastIcons, GetNPOptOutline, NAME_RAID_MARKER_GAP = env.defaults, env.displayCastIcons, env.GetNPOptOutline, env.NAME_RAID_MARKER_GAP
+    local optState, pcall, PP, RandomizePreviewValues = env.optState, env.pcall, env.PP, env.RandomizePreviewValues
+    local SetPVFont = env.SetPVFont
     local FONT_PATH = (EllesmereUI.GetFontPath("nameplates")) or DBVal("font")
 
     -- Constants matching the real addon exactly
@@ -2443,3 +2458,6 @@ local function BuildNameplatePreview(parent, parentW)
     -- Return visual height in parent-scale pixels (pf:GetHeight() is local, scale it)
     return pf:GetHeight() * previewScale
 end
+
+-- Used by EUI_Nameplates_Options.lua
+ns.NPO_BuildNameplatePreview = BuildNameplatePreview
