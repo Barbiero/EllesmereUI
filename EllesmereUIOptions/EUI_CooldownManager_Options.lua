@@ -1704,15 +1704,19 @@ initFrame:SetScript("OnEvent", function(self)
                                 disabled = function()
                                     return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8
                                 end,
-                                disabledTooltip = "This option requires the Blackout glow type.",
-                                rawTooltip = true,
+                                disabledTooltip = function()
+                                    return BarHasCustomShape(curBar) and "This option is not available for custom shaped icons"
+                                        or "This option requires the Blackout glow type"
+                                end,
                                 frameStrata = "FULLSCREEN_DIALOG", frameLevel = 350,
                                 rows = {
                                     { type = "slider", label = "Opacity", min = 1, max = 100, step = 1,
                                       get = function() return math.floor((entry.glowAlpha or 1) * 100 + 0.5) end,
                                       set = function(v)
                                           entry.glowAlpha = v / 100
-                                          Refresh()
+                                          -- Restarts the lit Bar Glows with the new opacity (fires
+                                          -- per drag step, so no full CDM rebuild here).
+                                          if ns.RequestBarGlowUpdate then ns.RequestBarGlowUpdate() end
                                           RefreshPreviewGlow()
                                       end },
                                 },
@@ -8945,6 +8949,7 @@ initFrame:SetScript("OnEvent", function(self)
                         activeGlow = true, glowColor = true,
                         glowColorR = true, glowColorG = true, glowColorB = true,
                         cdStateEffect = true, cdStateLowerAlpha = true, cdStateGlowStyle = true,
+                        cdStateGlowAlpha = true,
                         reverseSwipe = true, hideCDSwipe = true,
                         thresholdSeconds = true, thresholdDecimals = true,
                         thresholdColorEnabled = true, thresholdColorR = true,
@@ -10137,9 +10142,11 @@ initFrame:SetScript("OnEvent", function(self)
                                             scalarApply = item.scalarApply,
                                             isToggle = isChargeToggle or isActiveBorder or isFnToggle,
                                             -- Item whose val is only a discriminator while the real value
-                                            -- carries a per-spell colour payload (an R/G/B triple in applyKeys).
-                                            -- For those, equality must be judged by valuesMatch, not the identifier, or the rejoin/toggle-off shortcuts discard the colour (see the two branches in the apply handler above).
-                                            payloadValue = hasColourPayload(applyKeys),
+                                            -- carries a per-spell colour payload (an R/G/B triple in applyKeys),
+                                            -- or an item the row flags as carrying another payload (apply.payload(item): the Blackout opacity).
+                                            -- For those, equality must be judged by valuesMatch, not the identifier, or the rejoin/toggle-off shortcuts discard the payload (see the two branches in the apply handler above).
+                                            payloadValue = hasColourPayload(applyKeys)
+                                                or (rowApply and rowApply.payload and rowApply.payload(item)) or false,
                                             -- Toggles: "Apply to Bar" ENABLES the feature (apply true);
                                             -- disabling is the toggle-off press (ctx.isToggle un-applies when
                                             -- the scope already holds the value). Never key this off isSelected: that flips an already-ON toggle OFF when switching scopes (e.g. All Specs -> Apply to Bar). Value items apply their value.
@@ -10294,7 +10301,12 @@ initFrame:SetScript("OnEvent", function(self)
                                     doWrite()
                                 end)
 
-                                if onItemCreated then onItemCreated(si, item, sub) end
+                                if onItemCreated then
+                                    onItemCreated(si, item, sub)
+                                    -- The hook may attach a dynamic caption (the Blackout
+                                    -- percent): show it from the first open.
+                                    if item.dynamicLabel then sLbl:SetText(item.dynamicLabel()) end
+                                end
                                 flyoutEntries[#flyoutEntries + 1] = {
                                     frame = si, label = sLbl, name = item.label,
                                     itemVal = item.val,
@@ -11279,10 +11291,18 @@ initFrame:SetScript("OnEvent", function(self)
                             end,
                             { apply = { keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle", "cdStateGlowAlpha" },
                                         write = function(t, v)
+                                            -- Glow style resolved for the APPLIED effect, as a direct
+                                            -- pick would (see the regular-spell row); the current
+                                            -- effect is read before t is written.
+                                            local cur = cas and cas.cdStateEffect
                                             t.cdStateEffect = v or false
-                                            t.cdStateGlowStyle = CD_GLOW_EFFECT[v]
-                                                and ns.CdReadyGlowStyle(cas and cas.cdStateEffect, cas) or nil
-                                            t.cdStateGlowAlpha = (t.cdStateGlowStyle == 8) and cas and cas.cdStateGlowAlpha or nil
+                                            local st
+                                            if CD_GLOW_EFFECT[v] then
+                                                local keepBtn = cur == "buttonGlowReady" or cur == "buttonGlowReadyUsable"
+                                                st = ns.CdReadyGlowStyle(keepBtn and cur or v, cas)
+                                            end
+                                            t.cdStateGlowStyle = st
+                                            t.cdStateGlowAlpha = (st == 8) and cas and cas.cdStateGlowAlpha or nil
                                             if v == "lowerAlphaOnCD" then
                                                 -- Push this icon's current percent (no popup).
                                                 t.cdStateLowerAlpha = (cas and cas.cdStateLowerAlpha) or 0.5
@@ -11291,7 +11311,7 @@ initFrame:SetScript("OnEvent", function(self)
                                             end
                                         end } })
 
-                        -- CD Ready Glow Style (preset/custom): mirror of the regular-spell row.
+                        -- Glow Style (preset/custom): mirror of the regular-spell row.
                         MakeSubnavRow("Glow Style", CD_READY_STYLE_ITEMS,
                             function() return ns.CdReadyGlowStyle(cas.cdStateEffect, cas) end,
                             function(v)
@@ -11963,12 +11983,23 @@ initFrame:SetScript("OnEvent", function(self)
                         { apply = { confirmRA = true,
                                     keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle", "cdStateGlowAlpha" },
                                     write = function(t, v)
+                                        -- The glow style resolves for the APPLIED effect, as a
+                                        -- direct pick would: the spell's own Glow Style wins, a
+                                        -- stored button* value keeps its Action Button Glow look
+                                        -- (KeepCdGlowStyle), else the effect's default. The
+                                        -- current effect is read before t (ss for Apply to This
+                                        -- Spell) is written.
+                                        local cur = ss.cdStateEffect
                                         -- "None" applied bar-wide = explicitly no effect
                                         -- (false blocks the all-specs tier below).
                                         t.cdStateEffect = v or false
-                                        t.cdStateGlowStyle = CD_GLOW_EFFECT[v]
-                                            and ns.CdReadyGlowStyle(ss.cdStateEffect, ss) or nil
-                                        t.cdStateGlowAlpha = (t.cdStateGlowStyle == 8) and ss.cdStateGlowAlpha or nil
+                                        local st
+                                        if CD_GLOW_EFFECT[v] then
+                                            local keepBtn = cur == "buttonGlowReady" or cur == "buttonGlowReadyUsable"
+                                            st = ns.CdReadyGlowStyle(keepBtn and cur or v, ss)
+                                        end
+                                        t.cdStateGlowStyle = st
+                                        t.cdStateGlowAlpha = (st == 8) and ss.cdStateGlowAlpha or nil
                                         if v == "lowerAlphaOnCD" then
                                             -- Push this spell's current percent (no popup).
                                             t.cdStateLowerAlpha = ss.cdStateLowerAlpha or 0.5
@@ -11986,7 +12017,7 @@ initFrame:SetScript("OnEvent", function(self)
                         end)
                     end
 
-                    -- 4b. CD Ready Glow Style: the style both CD Ready glows use.
+                    -- 4b. Glow Style: the style the CD Ready and On CD glows use.
                     if not isCustomInjected then
                         MakeSubnavRow("Glow Style", CD_READY_STYLE_ITEMS,
                             function() return ns.CdReadyGlowStyle(ss.cdStateEffect, ss) end,
@@ -12021,6 +12052,10 @@ initFrame:SetScript("OnEvent", function(self)
                             end,
                             { disabled = function() return not CD_GLOW_EFFECT[ss.cdStateEffect] end,
                               apply = { keys = { "cdStateGlowStyle", "cdStateGlowAlpha" },
+                                        -- The Blackout opacity rides along with the Blackout value
+                                        -- only: a spell that set its own opacity pushes it to the bar
+                                        -- instead of rejoining the bar's (see payloadValue).
+                                        payload = function(item) return item.val == 8 end,
                                         write = function(t, v)
                                             t.cdStateGlowStyle = v
                                             t.cdStateGlowAlpha = (v == 8) and ss.cdStateGlowAlpha or nil

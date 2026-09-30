@@ -117,6 +117,7 @@ function ns._appendDisplayPresetKeys(t)
         "buffTextSize", "buffTextColor", "ccTextSize", "ccTextColor",
         "raidMarkerPos", "classificationSlot", "classificationShowInInstances",
         "factionSlot", "classificationIncludeFaction",
+        "classificationHideRare", "classificationHideQuest",
         "castNameSize", "castNameColor", "castCombineNameTarget",
         "castTargetSize", "castTargetClassColor", "castTargetColor",
         "showCastTimer", "castTimerSize", "castTimerColor", "targetScale",
@@ -364,6 +365,10 @@ local defaults = {
     factionSlot = "none",
     factionStyle = "pvp",  -- Icon Style: a key of EllesmereUI.FACTION_ART
     classificationIncludeFaction = false,  -- "Rare/Quest + Faction": the badge shares the classification slot
+    -- The classification element's two halves, each switchable in Core Positions:
+    -- the Rare Indicator (elite and rare marks) and the Quest Indicator.
+    classificationHideRare = false,
+    classificationHideQuest = false,
     factionOppositeOnly = false,
     factionPlayersOnly = false,
     factionPvP = "dim",  -- "dim" greys unflagged units, "only" hides them, "ignore" draws both alike
@@ -9090,7 +9095,8 @@ function NameplateFrame:UpdateClassification()
     end
     -- Quest mob indicator takes priority over elite/rare. With "Replace Quest Icon with
     -- Objective" on and a clean remaining count cached, draw that number instead of the icon.
-    if ns.IsQuestMob and ns.IsQuestMob(self.unit) then
+    -- Quest Indicator off: no quest scan, a quest mob shows its elite/rare mark instead.
+    if not (p and p.classificationHideQuest) and ns.IsQuestMob and ns.IsQuestMob(self.unit) then
         local objText = (p and p.replaceQuestIconWithObjective == true)
             and ns.GetQuestObjectiveText and ns.GetQuestObjectiveText(self.unit) or nil
         if objText then
@@ -9119,6 +9125,12 @@ function NameplateFrame:UpdateClassification()
         -- WoW Forever shows no elite or rare mark on its plates (the quest
         -- marks above stay).
         if ns._npForever then
+            self.classFrame:Hide()
+            self:UpdateNameWidth()
+            return
+        end
+        -- Rare Indicator off: no elite or rare marks.
+        if p and p.classificationHideRare then
             self.classFrame:Hide()
             self:UpdateNameWidth()
             return

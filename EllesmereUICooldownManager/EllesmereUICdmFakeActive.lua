@@ -1227,18 +1227,20 @@ ApplyCdState = function(frame, fc, cas, eff, onCD, ready)
     if wantsGlow then
         local style = ns.CdReadyGlowStyle(eff, cas)
         local styleEntry = ns.GLOW_STYLES[style]
-        local ov = (styleEntry and styleEntry.solidFill) and fd.blackoutOverlay or fd.glowOverlay
+        -- A branch, not `and/or`: the Blackout frame does not exist before
+        -- its first start, and the shared overlay must not stand in for it.
+        local ov
+        if styleEntry and styleEntry.solidFill then ov = fd.blackoutOverlay else ov = fd.glowOverlay end
         -- Re-assert against the overlay's REAL state (overlay._glowActive), not
         -- our flag alone. The overlay is shared with the proc-glow and
         -- appearance passes, and twelve of the thirteen sites that stop it never
         -- tell this engine -- so the flag said "lit" while the overlay was dark
-        -- and a ready preset stayed unglowed until the next re-arm. Only ever
-        -- starts a glow when nothing is running, so it cannot stomp another
-        -- owner's.
+        -- and a ready preset stayed unglowed until the next re-arm. A live
+        -- proc or active-state glow keeps the shared overlay (ns.StartCdGlow
+        -- returns nil), and the memo stays off until a later pass lights it.
         if not fd._presetCdGlowOn or not (ov and ov._glowActive) then
             local cr, cg, cb = ns.CdReadyGlowColor(style, cas)
-            ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(cas))
-            fd._presetCdGlowOn = true
+            fd._presetCdGlowOn = ns.StartCdGlow(fd, style, cr, cg, cb, ns.CdReadyGlowAlpha(cas)) ~= nil
         end
     elseif fd._presetCdGlowOn then
         ns.StopCdGlow(fd)
@@ -1299,10 +1301,13 @@ end
 -- GCD confusion, and it fires under combat secrecy (the engine animates
 -- durations Lua cannot read) and at alpha 0 (cd-state hides never Hide()).
 local function WireCdStateFrame(f)
-    if f._cdsWired then return end
+    -- The wired mark lives in the frame's decoration data, never on the frame:
+    -- a natively tracked racial's icon is Blizzard's own pooled viewer frame.
+    local wfd = ns._hookFrameData and ns._hookFrameData[f]
+    if not wfd or wfd._cdsWired then return end
     local cd = f.cd or f.Cooldown
     if not cd then return end
-    f._cdsWired = true
+    wfd._cdsWired = true
     cd:HookScript("OnCooldownDone", function()
         QueueCdStateEval()
     end)

@@ -5531,7 +5531,7 @@ local function HookRCScrollBox(box, isCurrency)
 end
 
 local function Skin_RepCurrency()
-    -- Stock character sheet styles (Style page) keep Blizzard's whole sheet,
+    -- The character sheet's Blizz Default keeps Blizzard's whole sheet,
     -- these tabs included.
     if ns.CharSheetStock and ns.CharSheetStock() then return end
     local rep = _G.ReputationFrame

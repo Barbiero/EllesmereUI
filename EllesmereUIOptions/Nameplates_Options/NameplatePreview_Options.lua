@@ -1293,6 +1293,14 @@ local function BuildNameplatePreview(parent, parentW)
             elseif clPos == "bottom" then
                 classIcon:SetPoint("TOP", cast, "BOTTOM", clXOff, -2 + clYOff)
             end
+            -- The quest mark while the Rare Indicator is off (or under the WoW
+            -- Forever look, whose plates show no elite or rare marks).
+            if DBVal("classificationHideRare") or EllesmereUI.BlizzStyle.Forever("nameplates") then
+                classIcon:SetAtlas("Crosshair_Quest_64")
+            else
+                classIcon:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\elite-rare-indicator.png")
+                classIcon:SetTexCoord(0, 1, 0, 1)
+            end
             classIcon:Show()
             if pf._classOverlay then pf._classOverlay:Show() end
         end

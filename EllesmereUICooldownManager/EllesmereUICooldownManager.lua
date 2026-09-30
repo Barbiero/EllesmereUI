@@ -2258,8 +2258,7 @@ ns.CDM_BAR_ROOTS = {
 -------------------------------------------------------------------------------
 local _G_Glows = EllesmereUI.Glows
 -- CDM saved glow numbering (1 Pixel, 2 Shape, 3 Action Button, 4 Auto-Cast,
--- 5 GCD, 6 Modern, 7 Classic, 8 Blackout) as a view over the shared style
--- table. 
+-- 5 GCD, 6 Modern, 7 Classic, 8 Blackout) as a view over the shared style table.
 ns.GLOW_VIEW = _G_Glows.MakeView({ 1, 4, 2, 3, 5, 6, 7, 8 })
 local GLOW_STYLES = ns.GLOW_VIEW.list
 ns.GLOW_STYLES = GLOW_STYLES
@@ -2676,30 +2675,52 @@ ns.StopNativeGlow = StopNativeGlow
 -- shared fd.glowOverlay (icon+16, ABOVE the cooldown widget), so the swipe and
 -- countdown text stay visible on top of the fill; every other style keeps
 -- using the shared overlay. Picks the overlay from the resolved style and
--- stops whichever one is NOT used, so a style change (e.g. Blackout -> Pixel)
--- never leaves the other overlay lit. alpha is the Blackout fill opacity
--- (nil = opaque); the other styles take no opts at all.
+-- stops a glow still held by the other one, so a style change (Blackout to
+-- Pixel or back) never leaves both lit. The active-state and proc glows own
+-- the shared overlay while they run: a Blackout shows alongside them, any
+-- other style starts nothing and returns nil, so the caller's memo stays off
+-- and a later pass lights it. Returns the overlay lit. alpha is the Blackout
+-- fill opacity (nil = opaque); the other styles take no opts at all.
 function ns.StartCdGlow(fd, style, cr, cg, cb, alpha)
     if not fd then return end
     local e = ns.GLOW_STYLES[style]
+    local busy = fd._activeGlowOn or fd.procGlowActive
     local overlay, other, opts
     if e and e.solidFill then
+        -- The Blackout frame is made on the icon's first Blackout start (most
+        -- icons never use one), on the icon the shared overlay sits on;
+        -- DecorateFrame keeps its level through re-layouts.
+        local bo = fd.blackoutOverlay
+        if not bo and fd.glowOverlay then
+            local icon = fd.glowOverlay:GetParent()
+            bo = CreateFrame("Frame", nil, icon)
+            bo:SetAllPoints(icon)
+            bo:SetAlpha(0)
+            bo:EnableMouse(false)
+            bo:SetFrameLevel(icon:GetFrameLevel() + 12)
+            fd.blackoutOverlay = bo
+        end
         -- A fresh table per start: StartNativeGlow keeps opts by reference in
         -- its Show Glows Only in Combat record, which the replay restarts from.
-        overlay, other, opts = fd.blackoutOverlay, fd.glowOverlay, { alpha = alpha }
+        overlay, opts = bo, { alpha = alpha }
+        if not busy then other = fd.glowOverlay end
     else
         overlay, other = fd.glowOverlay, fd.blackoutOverlay
+        if busy then overlay = nil end
     end
-    if other then StopNativeGlow(other) end
+    if other and other._glowActive then StopNativeGlow(other) end
     if overlay then StartNativeGlow(overlay, style, cr, cg, cb, opts) end
     return overlay
 end
 
--- Stops the CD-state glow regardless of which overlay it landed on.
+-- Stops the CD-state glow regardless of which overlay it landed on. The
+-- Blackout overlay is only stopped while it holds a glow: most icons never
+-- use it.
 function ns.StopCdGlow(fd)
     if not fd then return end
     if fd.glowOverlay then StopNativeGlow(fd.glowOverlay) end
-    if fd.blackoutOverlay then StopNativeGlow(fd.blackoutOverlay) end
+    local bo = fd.blackoutOverlay
+    if bo and bo._glowActive then StopNativeGlow(bo) end
 end
 
 -- Combat edges for Show Glows Only in Combat. Entering combat replays what was
@@ -2993,13 +3014,13 @@ local function ShowProcGlow(icon, cr, cg, cb)
     -- priority is enforced by the procGlowActive gates on the start sites.
     -- A Blackout CD-state glow sits on its own overlay (fd.blackoutOverlay), which
     -- the proc glow does not replace, so it goes out with the memo: every CD-state
-    -- stop site is memo-gated and would never reach it again. Only the memo's own
-    -- glow is stopped. A Blackout lit by the Fake-Active engine belongs to that
-    -- engine's memo; stopping it here would only make its re-assert restart it
-    -- through ns.StartCdGlow, which stops the shared overlay: the proc glow.
+    -- stop site is memo-gated and would never reach it again, and the start sites
+    -- wait for the proc to end. A Blackout lit by the Fake-Active engine belongs
+    -- to that engine's memo and stays lit beside the proc.
     if glow._glowActive then StopNativeGlow(glow) end
     if fd then
-        if fd._cdStateGlowOn and fd.blackoutOverlay then StopNativeGlow(fd.blackoutOverlay) end
+        local bo = fd.blackoutOverlay
+        if fd._cdStateGlowOn and bo and bo._glowActive then StopNativeGlow(bo) end
         fd._cdStateGlowOn = false
     end
     StartNativeGlow(glow, style, cr, cg, cb)
@@ -6175,6 +6196,14 @@ local function RefreshCDMIconAppearance(barKey)
             ShowProcGlow(icon)
         elseif hadActiveGlow then
             -- Don't touch: active glow is managed by the SetSwipeColor hook. Stopping it here causes a visible blink.
+            -- A Blackout CD-state glow has its own overlay: take only that one down,
+            -- so the pass below restarts it with the updated settings (or leaves it
+            -- off when the effect is gone).
+            local bo = ifd.blackoutOverlay
+            if ifd._cdStateGlowOn and bo and bo._glowActive then
+                StopNativeGlow(bo)
+                ifd._cdStateGlowOn = false
+            end
         elseif ifd and ifd._cdStateGlowOn then
             -- cdState glow active: stop it so the desat hook restarts with the updated style. Also re-evaluate immediately for off-CD spells (desat hook won't fire for those).
             ns.StopCdGlow(ifd)
@@ -6220,8 +6249,7 @@ local function RefreshCDMIconAppearance(barKey)
                         if isUsable == true then
                             local style = ns.CdReadyGlowStyle(cse, ss)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss)
-                            ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss))
-                            ifd._cdStateGlowOn = true
+                            ifd._cdStateGlowOn = ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(ss)) ~= nil
                         end
                     end
                     -- Event-driven re-evaluation: Resource Aware glows always, plus plain/on-CD
@@ -6300,7 +6328,9 @@ local function RefreshCDMIconAppearance(barKey)
                     if fc and ns.SetCdStateShiftHidden then
                         ns.SetCdStateShiftHidden(fc, false)
                     end
-                    if not ifd or not ifd._cdStateGlowOn then
+                    -- procGlowActive: the proc glow has priority, as at every other
+                    -- CD-state start site.
+                    if not ifd or (not ifd._cdStateGlowOn and not ifd.procGlowActive) then
                         local isReadyGlow = (cse == "pixelGlowReady" or cse == "buttonGlowReady"
                             or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable")
                         local isOnCdGlow = cse == "glowOnCD"
@@ -6315,11 +6345,10 @@ local function RefreshCDMIconAppearance(barKey)
                                     isUsable = C_Spell.IsSpellUsable and C_Spell.IsSpellUsable(csLive)
                                 end
                             end
-                            if isUsable == true then
+                            if isUsable == true and ifd then
                                 local style = ns.CdReadyGlowStyle(cse, csSs)
                                 local cr, cg, cb = ns.CdReadyGlowColor(style, csSs)
-                                ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(csSs))
-                                if ifd then ifd._cdStateGlowOn = true end
+                                ifd._cdStateGlowOn = ns.StartCdGlow(ifd, style, cr, cg, cb, ns.CdReadyGlowAlpha(csSs)) ~= nil
                             end
                         end
                     end
