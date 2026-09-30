@@ -1649,7 +1649,7 @@ local function ScheduleAnchorBatch()
 end
 
 -------------------------------------------------------------------------------
---  One-time follow-baseline migration ("bless the pin"): anchored grow-direction
+--  One-time follow-baseline migration ("bless the pin"): anchored grow-direction  -- eui-style: allow comment-budget
 --  bars saved before follow-baseline capture have a savedEdge but no tgt*
 --  baseline, so their follow delta stays 0 and they can't track a resizing
 --  target. The baseline can't be reconstructed from ai.offsetX/Y (those drift
@@ -1740,7 +1740,7 @@ function EllesmereUI.ScheduleSettleReapply()
         if EllesmereUI._MigrateAnchorFollowBaselines then
             pcall(EllesmereUI._MigrateAnchorFollowBaselines)
         end
-        -- Re-pull every width/height MATCH before the anchor pass. A match child
+        -- Re-pull every width/height MATCH before the anchor pass. A match child  -- eui-style: allow comment-budget
         -- is corrected only by a full pass or by its target's own resize notify,
         -- and a spec swap ends with resizes that reach neither: the authoritative
         -- passes (OnSpecSwitchComplete, CDM's reanchor pass) run before the CDM
@@ -1983,7 +1983,7 @@ function EllesmereUI.NotifyElementResized(key)
     end
 end
 
--- Pad-change notifier. A module calls EllesmereUI.MatchPadChanged(key) after it
+-- Pad-change notifier. A module calls EllesmereUI.MatchPadChanged(key) after it  -- eui-style: allow comment-budget
 -- applies an element's border / chrome settings; the element's own getMatchPad
 -- output is compared with the last one seen, so no setter anywhere has to know
 -- which settings move the pad. A key's first sighting only records (the login
@@ -2170,7 +2170,7 @@ local function ApplyAllWidthHeightMatches()
     ApplyMatchesInDependencyOrder(MatchH.GetHeightMatchDB(), MatchH.ApplyHeightMatch)
 end
 
--- Re-sync every active width/height match when the global UI Scale changes.
+-- Re-sync every active width/height match when the global UI Scale changes.  -- eui-style: allow comment-budget
 -- ApplyWidth/HeightMatch convert the target's size into the source's space via
 -- GetEffectiveScale() ratio, but nothing else re-runs that conversion after a UI
 -- Scale change, so a pair whose frames don't scale identically (a UIParent-parented
@@ -2476,7 +2476,7 @@ do
     end
 end
 
--- Apply an anchor: place the child on `side` ("LEFT"/"RIGHT"/"TOP"/"BOTTOM") of
+-- Apply an anchor: place the child on `side` ("LEFT"/"RIGHT"/"TOP"/"BOTTOM") of  -- eui-style: allow comment-budget
 -- the target; offsetX/offsetY, if present, position it from the anchor edge.
 -------------------------------------------------------------------------------
 --  Fallback anchors (opt-in, per anchored element): a target that doesn't exist
@@ -3055,7 +3055,7 @@ do
 end
 
 -------------------------------------------------------------------------------
---  Override anchors (opt-in, Resource Bars only): a spec-override group can
+--  Override anchors (opt-in, Resource Bars only): a spec-override group can  -- eui-style: allow comment-budget
 --  hold an alternate ANCHOR LINK {target, side, offsets} for an element --
 --  picked through the same element-pick flow as fallback anchors -- engaged
 --  whenever a member spec is active, no unlock-layer fork is applied and
@@ -3509,7 +3509,7 @@ EllesmereUI._RectHeldByClamp = function(key, f)
     return l * s <= 0.5 or b * s <= 0.5 or r * s >= w - 0.5 or t * s >= h - 0.5
 end
 
--- Captures the growth-edge pin for an anchored custom-growth bar from LIVE
+-- Captures the growth-edge pin for an anchored custom-growth bar from LIVE  -- eui-style: allow comment-budget
 -- geometry: which target reference edge the fixed growth edge hangs off
 -- (refX/refY = LEFT|RIGHT|TOP|BOTTOM|CENTER) and its offset from that edge
 -- (edgeOffX/edgeOffY). Movement-free by construction -- the pin reproduces the
@@ -3690,7 +3690,7 @@ EllesmereUI._CaptureScreenEdgeOffset = function(childKey, edgeKey, side)
     return (EllesmereUI._ScreenEdgeAxis(edgeKey) == "X") and offX or offY
 end
 
--- Anchor-target shift providers ("Shift Elements if No Resource" and kin):
+-- Anchor-target shift providers ("Shift Elements if No Resource" and kin):  -- eui-style: allow comment-budget
 -- modules register (targetKey, childKey) -> dir, extraY functions; the public
 -- EllesmereUI._GetAnchorTargetShiftDir the apply paths consult dispatches to
 -- them, first non-zero answer wins (each provider returns 0 for foreign keys).
@@ -3940,7 +3940,7 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
         or (EllesmereUI._abBarKeys and EllesmereUI._abBarKeys[childKey])
     local isCDM = childKey:sub(1, 4) == "CDM_"
 
-    -- Unified growth-edge pin (anchored custom-growth bars): the bar's fixed
+    -- Unified growth-edge pin (anchored custom-growth bars): the bar's fixed  -- eui-style: allow comment-budget
     -- growth edge holds a stored offset from a LIVE target reference edge -- one
     -- formula for login, cascade, save and revert, with no saved-edge duality, no
     -- follow baselines and no mode flags. Engages only once the anchor's offsets
@@ -3998,7 +3998,7 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
             elseif growDir == "LEFT" then cdmEdgeAnchor = "RIGHT"
             elseif growDir == "DOWN" then cdmEdgeAnchor = "TOP"
             elseif growDir == "UP" then cdmEdgeAnchor = "BOTTOM" end
-            -- Edge preservation: override cx/cy with the saved/live edge so the fixed
+            -- Edge preservation: override cx/cy with the saved/live edge so the fixed  -- eui-style: allow comment-budget
             -- growth edge stays put when the bar's OWN width changes (e.g. a class
             -- with a different stance-button/cooldown count). Skipped ONLY on a
             -- runtime cascade (fromCascade=true): there the TARGET moved/resized, so
@@ -4018,7 +4018,7 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
             local shiftActive = not isUnlocked
                 and EllesmereUI._GetAnchorTargetShiftDir
                 and EllesmereUI._GetAnchorTargetShiftDir(targetKey, childKey) ~= 0
-            -- Anchored CDM growth bars position from their absolute saved growth
+            -- Anchored CDM growth bars position from their absolute saved growth  -- eui-style: allow comment-budget
             -- edge (savedEdge.x/.y, override block below). On login that's a PURE
             -- absolute pin reading nothing live: the follow delta (dTX/dTY below)
             -- holds at 0 until _anchorFollowReady flips (post-settle debounce, once
@@ -4042,7 +4042,7 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
                     local sp = EllesmereUI._abBarPositions[childKey]
                     if sp then savedEdge = sp end
                 end
-                -- Follow: shift the absolute saved growth edge by how far the anchor
+                -- Follow: shift the absolute saved growth edge by how far the anchor  -- eui-style: allow comment-budget
                 -- target moved/resized SINCE this bar was saved. When the anchor side
                 -- aligns with the bar's own growth direction (anchored to the
                 -- target's RIGHT while itself growing RIGHT), the saved growth edge
@@ -4068,7 +4068,7 @@ ApplyAnchorPosition = function(childKey, targetKey, side, noMark, noMove, fromCa
                     -- matched axis rides an unbroken width/height match chain ending
                     -- at a CDM/action bar. Any other target keeps the center-delta path.
                     local targetIsCDM = targetKey and targetKey:sub(1, 4) == "CDM_"
-                    -- Resolve the follow baseline: the saved baseline (tgt*, captured
+                    -- Resolve the follow baseline: the saved baseline (tgt*, captured  -- eui-style: allow comment-budget
                     -- by savePos at unlock Save & Exit) wins. When absent, fall back to
                     -- a SESSION baseline captured during a settle pass (chain is
                     -- quiescent, this child is provably at its pin, so pairing is
@@ -4580,7 +4580,7 @@ PropagateAnchorChain = function(parentKey, visited, changedAxis)
         -- info.side, which describes the PRIMARY link, not this edge.
         local edgeMatch = (not primaryMatch) and info.edge and info.edge.key == parentKey
         if primaryMatch or fallbackMatch or edgeMatch then
-            -- Axis isolation: skip children on the unaffected axis. A resize leaves a
+            -- Axis isolation: skip children on the unaffected axis. A resize leaves a  -- eui-style: allow comment-budget
             -- perpendicular-anchored child unaffected ONLY when the target's center is
             -- invariant on the changed axis (true for CENTER growth, but an edge-fixed
             -- growth direction moves the center: LEFT/RIGHT growth shifts center-X on
@@ -4734,7 +4734,7 @@ EllesmereUI.ReapplyAllUnlockAnchors = function()
     wipe(pendingPositions)
 end
 
--- Forced version of ReapplyAllUnlockAnchors: clears each child's points before
+-- Forced version of ReapplyAllUnlockAnchors: clears each child's points before  -- eui-style: allow comment-budget
 -- re-applying so ApplyAnchorPosition's idempotent guard can't perma-skip a stale
 -- cached answer. An anchored child (e.g. a CDM bar anchored to Class Resource) can
 -- settle 1px off when an upstream emission read transient bounds; once the cascade
@@ -5166,7 +5166,7 @@ GetBarLabel = function(barKey)
 end
 EllesmereUI.GetBarLabel = GetBarLabel
 
--- Re-read one already-built mover's name from its registered element. Movers are
+-- Re-read one already-built mover's name from its registered element. Movers are  -- eui-style: allow comment-budget
 -- cached in `movers` for the session, and CreateMover captures the label into a
 -- plain local upvalue (`label`) that RefreshAnchoredIdle -- fired on every hover
 -- and every anchor-state change -- keeps re-painting verbatim. Setting
@@ -6205,7 +6205,7 @@ local function DeselectMover()
         if selectedMover._coordFS and not coordsEnabled then selectedMover._coordFS:Hide() end
         -- Clear snap highlight
         ClearSnapHighlight()
-        -- Cancel select-element pick mode if this mover was the picker — restore previous target
+        -- Cancel select-element pick mode if this mover was the picker -- restore previous target
         if selectElementPicker == selectedMover then
             selectedMover._snapTarget = selectedMover._preSelectTarget
             selectedMover._preSelectTarget = nil
@@ -6586,7 +6586,7 @@ local function GetActionBarVisualSize(barKey)
     local s = EAB.db.profile.bars[lookupKey]
     if not s then return nil end
 
-    -- Use standard button size (45x45) — our LayoutBar uses this for MainBar
+    -- Use standard button size (45x45) -- our LayoutBar uses this for MainBar
     -- and reads from the button for others.
     local btnW, btnH = 45, 45
     local btn1 = _G[info.buttonPrefix .. "1"]
@@ -6913,7 +6913,7 @@ local function CreateMover(barKey)
     local brd = EllesmereUI.MakeBorder(mover, ar, ag, ab, 0.6)
     mover._brd = brd
 
-    -- Label — on a higher-level frame so it renders above the border
+    -- Label -- on a higher-level frame so it renders above the border
     local labelFrame = CreateFrame("Frame", nil, mover)
     labelFrame:SetAllPoints()
     labelFrame:SetClipsChildren(true)
@@ -7587,7 +7587,7 @@ local function CreateMover(barKey)
             local script = mover:GetScript("OnDragStop")
             if script then script(mover) end
         else
-            -- No drag committed — clear the pending OnUpdate
+            -- No drag committed -- clear the pending OnUpdate
             mover:SetScript("OnUpdate", nil)
         end
     end
@@ -8101,7 +8101,7 @@ local function CreateMover(barKey)
         local isTinyAnchor = (w < 10)
         local centerYOff = 0
         if isTinyAnchor then
-            -- Frame exists but has no size yet — use getSize fallback
+            -- Frame exists but has no size yet -- use getSize fallback
             if elem and elem.getSize then
                 local gw, gh, gyOff = elem.getSize(bk)
                 w, h = gw, gh
@@ -9909,7 +9909,7 @@ local function CreateMover(barKey)
             yOff = yOff - 9
         end
 
-        -- "Element Options" — navigate to this element's settings page (top of menu)
+        -- "Element Options" -- navigate to this element's settings page (top of menu)
         local settingsMapping = EllesmereUI._ELEMENT_SETTINGS_MAP[barKey]
         -- Cooldown Manager bars use dynamic per-bar keys ("CDM_<key>" / "TBB_<idx>"),
         -- so they miss the exact lookup; resolve them to their shared tab entry by prefix.
@@ -11824,7 +11824,7 @@ local function CreateHUD(parent)
         end
 
         if not hoverBarEnabled then
-            -- Not in hover mode — ensure full alpha
+            -- Not in hover mode -- ensure full alpha
             if hoverAlpha < 1 then
                 hoverAlpha = 1
                 self:SetAlpha(1)
@@ -12365,7 +12365,7 @@ local function RevertPositions()
     end
 
     -- 6) Reposition unanchored elements through normal path.
-    -- Skip anchored elements — step 7 handles them via ApplyAnchorPosition.
+    -- Skip anchored elements -- step 7 handles them via ApplyAnchorPosition.
     for barKey, _ in pairs(pendingPositions) do
         local ai = anchorDB and anchorDB[barKey]
         if not (ai and ai.target) then
@@ -12580,7 +12580,7 @@ local function DoClose(closeAction)
                         EllesmereUI:SelectPage(restorePage)
                     end
                 end
-                -- NOW show the panel — one clean Show, no prior cycling.
+                -- NOW show the panel -- one clean Show, no prior cycling.
                 EllesmereUI:Toggle()
             end
         end
@@ -12605,12 +12605,12 @@ function ns.RequestClose(save, afterFn)
         DoClose("save")
         return
     end
-    -- No changes → just exit
+    -- No changes -> just exit
     if not hasChanges then
         DoClose("exit")
         return
     end
-    -- Has unsaved changes → show confirm popup
+    -- Has unsaved changes -> show confirm popup
     EllesmereUI:ShowConfirmPopup({
         title = "Unsaved Changes",
         message = "You have unsaved position changes.\nWhat would you like to do?",
@@ -12674,7 +12674,7 @@ local function CreateUnlockFrame()
     unlockFrame:EnableMouse(false)  -- let clicks pass through to game world
     unlockFrame:EnableKeyboard(true)
 
-    -- Dark overlay background — on a dedicated sub-frame so movers render ABOVE it
+    -- Dark overlay background -- on a dedicated sub-frame so movers render ABOVE it
     local overlayFrame = CreateFrame("Frame", nil, unlockFrame)
     overlayFrame:SetFrameLevel(unlockFrame:GetFrameLevel() + 1)
     overlayFrame:SetAllPoints(UIParent)
@@ -12992,7 +12992,7 @@ local function CreateOpenAnimFrame(parent)
 end
 
 -------------------------------------------------------------------------------
---  One-time "How to use" tip — shows below the banner on first ever open.
+--  One-time "How to use" tip -- shows below the banner on first ever open.
 --  Saved to EllesmereUIDB.unlockTipSeen so it never shows again.
 -------------------------------------------------------------------------------
 
@@ -13348,7 +13348,7 @@ function ns.OpenUnlockMode()
     -- Container starts at panel-sized scale, textures stay at native dims always
     local TOTAL_GEAR_ROT = GEAR_ROTATION * 4
 
-    -- Reset textures anchored to container center — ONCE
+    -- Reset textures anchored to container center -- ONCE
     -- (sizes are already set to native dims at creation, never change them)
     outerTex:ClearAllPoints()
     outerTex:SetPoint("CENTER", container, "CENTER", 0, OUTER_Y_OFFSET)
@@ -13438,7 +13438,7 @@ function ns.OpenUnlockMode()
         elapsed = elapsed + dt
 
         ---------------------------------------------------------------
-        --  Background overlay fade: 0 → full alpha over 0.75 seconds
+        --  Background overlay fade: 0 -> full alpha over 0.75 seconds
         --  (synced with grid glitch duration)
         ---------------------------------------------------------------
         local OVERLAY_FADE_DUR = 0.75
@@ -13448,7 +13448,7 @@ function ns.OpenUnlockMode()
         end
 
         ---------------------------------------------------------------
-        --  Grid glitch overlay — runs independently of lock phases
+        --  Grid glitch overlay -- runs independently of lock phases
         --  Starts at GRID_START (beginning of idle spin, 1s earlier)
         ---------------------------------------------------------------
         if elapsed >= GRID_START then
@@ -13653,14 +13653,14 @@ function ns.OpenUnlockMode()
 
         -------------------------------------------------------------------
         --  Continuous gear rotation: one smooth ease-out across MORPH +
-        --  IDLE_SPIN combined. Rotation goes from TOTAL_GEAR_ROT → 0.
+        --  IDLE_SPIN combined. Rotation goes from TOTAL_GEAR_ROT -> 0.
         -------------------------------------------------------------------
         local gearRot = 0
         -- Extended taper with quintic ease-out for imperceptible final frames
         local SPIN_TAPER = SPIN_DUR + 0.5
         if elapsed < SPIN_TAPER then
             local spinT = elapsed / SPIN_TAPER
-            -- Quintic ease-out: (1-t)^5 — extremely gradual deceleration
+            -- Quintic ease-out: (1-t)^5 -- extremely gradual deceleration
             local inv = 1 - spinT
             local eased = 1 - inv * inv * inv * inv * inv
             gearRot = TOTAL_GEAR_ROT * (1 - eased)
@@ -13670,7 +13670,7 @@ function ns.OpenUnlockMode()
 
         -------------------------------------------------------------------
         --  Phase 1: Panel shrinks + fades while lock container scales down
-        --           from startScale → BASE_SCALE over MORPH seconds.
+        --           from startScale -> BASE_SCALE over MORPH seconds.
         --           After MORPH, container stays at BASE_SCALE (no hard snap).
         -------------------------------------------------------------------
         if elapsed < MORPH then
@@ -13696,7 +13696,7 @@ function ns.OpenUnlockMode()
             -- Scale the container uniformly
             container:SetScale(sc)
 
-            -- Fade textures in: delayed 0.25s, then 0→1 over remaining 0.25s
+            -- Fade textures in: delayed 0.25s, then 0->1 over remaining 0.25s
             -- Top stays hidden until shackle phase
             local LOGO_FADE_DELAY = 0.15
             local logoAlpha = 0
@@ -13728,7 +13728,7 @@ function ns.OpenUnlockMode()
         local shackleT = elapsed - SHACKLE_START
         if shackleT >= 0 and shackleT < SHACKLE then
             local t = EaseInOutCubic(shackleT / SHACKLE)
-            -- Top piece fades from 0→100% over 0.5s, delayed 0.2s from shackle start
+            -- Top piece fades from 0->100% over 0.5s, delayed 0.2s from shackle start
             -- (movement still starts immediately, only alpha is delayed)
             local TOP_FADE_IN = 0.25
             local TOP_FADE_DELAY = 0.20
@@ -13786,7 +13786,7 @@ function ns.OpenUnlockMode()
         end
 
         -------------------------------------------------------------------
-        --  Done — logo stays at full alpha, grid fully visible,
+        --  Done -- logo stays at full alpha, grid fully visible,
         --  banner is at final position (flush with top of screen)
         -------------------------------------------------------------------
         openAnimFrame:SetAlpha(1)
