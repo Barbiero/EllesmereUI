@@ -5531,7 +5531,7 @@ local function HookRCScrollBox(box, isCurrency)
 end
 
 local function Skin_RepCurrency()
-    -- Stock character sheet styles (Style page) keep Blizzard's whole sheet,
+    -- The character sheet's Blizz Default keeps Blizzard's whole sheet,
     -- these tabs included.
     if ns.CharSheetStock and ns.CharSheetStock() then return end
     local rep = _G.ReputationFrame
@@ -11977,6 +11977,17 @@ function LP.SkinRollFrame(f)
     end
 
     LP.Bar(f.Timer or f.Bar or f.StatusBar)
+
+    -- Bonus Roll: its timer lives on PromptFrame, parked by Blizzard one frame
+    -- level BELOW the window so the window's own art frames it. The shell
+    -- backdrop is drawn on the window, so under it the bar all but vanishes:
+    -- it rides one level above the window instead (the roll buttons' level).
+    local prompt = f.PromptFrame
+    local ptimer = prompt and prompt.Timer
+    if ptimer and not ptimer:IsForbidden() then
+        LP.Bar(ptimer)
+        ptimer:SetFrameLevel(f:GetFrameLevel() + 1)
+    end
 
     -- Name keeps its item-quality color; only the face changes.
     if f.Name then WSkin.Font(f.Name) end

@@ -1554,6 +1554,7 @@ local function BuildCDMLivePreview(parent, yOff)
                 slot._previewCdID = trackedCd and trackedCd[i] or nil
                 slot._previewItemID = nil
                 slot._previewHostedBuff = nil
+                slot._previewIsEmptySlot = nil
                 if id then
                     local tex
                     local cdClaim = ns.CdClaimMarkerToCdID and ns.CdClaimMarkerToCdID(id)
@@ -1605,6 +1606,9 @@ local function BuildCDMLivePreview(parent, yOff)
                         end
                         slot._previewSpellID = hostedSid
                         slot._previewHostedBuff = true
+                    elseif ns.IsEmptySlotMarker(id) then
+                        -- Empty Slot: blank placeholder, no icon/tooltip identity.
+                        slot._previewIsEmptySlot = true
                     elseif id <= -100 then
                         -- On-use bag item: negated itemID
                         tex = C_Item.GetItemIconByID(-id)
@@ -1638,6 +1642,7 @@ local function BuildCDMLivePreview(parent, yOff)
                 slot._previewCdID = nil
                 slot._previewItemID = nil
                 slot._previewHostedBuff = nil
+                slot._previewIsEmptySlot = nil
             end
 
             local bSz = bd.borderSize or 1

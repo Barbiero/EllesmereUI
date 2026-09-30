@@ -1594,10 +1594,12 @@ local function ShowDurationPopup(currentVal, onConfirm)
     popup._durBox:HighlightText()
 end
 
--- Numeric popup for the "Lower Alpha (On CD)" cooldown-state effect: the user
--- enters an opacity percent (1-100) that the icon uses while on cooldown.
--- Mirrors ShowDurationPopup's look; onConfirm receives the integer percent.
-local function ShowAlphaPopup(currentPct, onConfirm)
+-- Numeric popup for an opacity percent (1-100). Titled for the "Lower Alpha
+-- (On CD)" cooldown-state effect unless the caller passes its own title and
+-- hint (already localized), e.g. the Blackout glow opacity. Both texts are
+-- set on every show. Mirrors ShowDurationPopup's look; onConfirm receives
+-- the integer percent.
+local function ShowAlphaPopup(currentPct, onConfirm, title, hint)
     local env = ns._CDMO_OptEnv
     local FONT_PATH, GetCDMOptOutline = env.FONT_PATH, env.GetCDMOptOutline
     local popupName = "EUI_CDM_AlphaPopup"
@@ -1623,21 +1625,21 @@ local function ShowAlphaPopup(currentPct, onConfirm)
         EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15, EllesmereUI.PP)
         popup._dimmer = dimmer
 
-        local title = popup:CreateFontString(nil, "OVERLAY")
-        title:SetFont(FONT_PATH, 14, GetCDMOptOutline())
-        title:SetPoint("TOP", popup, "TOP", 0, -18)
-        title:SetTextColor(1, 1, 1, 1)
-        title:SetText(EllesmereUI.L("Lower Alpha"))
+        local titleFS = popup:CreateFontString(nil, "OVERLAY")
+        titleFS:SetFont(FONT_PATH, 14, GetCDMOptOutline())
+        titleFS:SetPoint("TOP", popup, "TOP", 0, -18)
+        titleFS:SetTextColor(1, 1, 1, 1)
+        popup._title = titleFS
 
-        local hint = popup:CreateFontString(nil, "OVERLAY")
-        hint:SetFont(FONT_PATH, 11, GetCDMOptOutline())
-        hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
-        hint:SetTextColor(0.7, 0.7, 0.7, 0.85)
-        hint:SetText(EllesmereUI.L("Icon opacity while on cooldown (1-100%)"))
+        local hintFS = popup:CreateFontString(nil, "OVERLAY")
+        hintFS:SetFont(FONT_PATH, 11, GetCDMOptOutline())
+        hintFS:SetPoint("TOP", titleFS, "BOTTOM", 0, -6)
+        hintFS:SetTextColor(0.7, 0.7, 0.7, 0.85)
+        popup._hint = hintFS
 
         local box = CreateFrame("EditBox", nil, popup)
         box:SetSize(180, 28)
-        box:SetPoint("TOP", hint, "BOTTOM", 0, -12)
+        box:SetPoint("TOP", hintFS, "BOTTOM", 0, -12)
         box:SetAutoFocus(true)
         box:SetNumeric(true)
         box:SetMaxLetters(3)
@@ -1690,6 +1692,8 @@ local function ShowAlphaPopup(currentPct, onConfirm)
         box:SetScript("OnEscapePressed", function() dimmer:Hide() end)
     end
     popup._onConfirm = onConfirm
+    popup._title:SetText(title or EllesmereUI.L("Lower Alpha"))
+    popup._hint:SetText(hint or EllesmereUI.L("Icon opacity while on cooldown (1-100%)"))
     popup._box:SetText(currentPct and tostring(currentPct) or "")
     ns.PadPopupOpen(popup._dimmer, popup, popup._cancelBtn)  -- controller cursor
     popup._dimmer:Show()
