@@ -257,6 +257,8 @@ local function SetupOverlays()
             overlay:Hide()
         end
         ns._barGlowStackSids = nil
+        ns._bgWantTargetAuras = false
+        if ns.SetBarGlowTargetAuras then ns.SetBarGlowTargetAuras(false) end
         return
     end
 
@@ -314,6 +316,10 @@ local function SetupOverlays()
         end
     end
     ns._barGlowStackSids = stackSids
+    -- Listen to target auras only while some glow is assigned (EllesmereUICdmHooks).
+    local wantTarget = next(activeKeys) ~= nil
+    ns._bgWantTargetAuras = wantTarget
+    if ns.SetBarGlowTargetAuras then ns.SetBarGlowTargetAuras(wantTarget) end
 
     -- Hide overlays that are no longer assigned
     for key, overlay in pairs(overlayFrames) do
