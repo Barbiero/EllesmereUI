@@ -120,7 +120,7 @@ function ns.ERB_BuildCastBarPage(pageName, parent, yOffset)
           end }
     );  y = y - h
 
-    -- Row 3: Show Spell Icon (cog: Icon on Right) | Show Spark
+    -- Row 3: Show Spell Icon (cog: side, divider, size, offsets) | Show Spark
     local iconRow
     iconRow, h = W:DualRow(parent, y,
         { type = "toggle", text = "Show Spell Icon",
@@ -141,9 +141,22 @@ function ns.ERB_BuildCastBarPage(pageName, parent, yOffset)
               p.castBar.showSpark = v; RefreshCast()
           end }
     );  y = y - h
-    -- Inline cog on Show Spell Icon: Icon on Right
+    -- Inline cog on Show Spell Icon
     if not EllesmereUI._prebuilding then
         local rgn = iconRow._leftRegion
+        local FREE_TIP = "This option requires the icon at bar size with no offset."
+        local function IconFree() local p = DB(); return p and ns.ERB_CastIconFree(p.castBar) end
+        local function IconSlider(key, label, lo, hi, tooltip)
+            return { type = "slider", label = label, min = lo, max = hi, step = 1, tooltip = tooltip,
+                disabled = function() return EllesmereUI.BlizzStyle.Get("castbar") end,
+                disabledTooltip = function() return EllesmereUI.BlizzStyle.Label("castbar") end,
+                requireState = "disabled",
+                get = function() local p = DB(); return p and p.castBar[key] or 0 end,
+                set = function(v)
+                    local p = DB(); if not p then return end
+                    p.castBar[key] = v; RefreshCast()
+                end }
+        end
         EllesmereUI.BuildInlineCog(rgn, {
             disabled = function()
                 local p = DB(); return p and (not p.castBar.enabled or p.castBar.showIcon == false)
@@ -162,6 +175,7 @@ function ns.ERB_BuildCastBarPage(pageName, parent, yOffset)
                   end },
                 { type = "toggle", label = "Show Icon Divider",
                   tooltip = "Draw a 1px divider between the spell icon and the cast bar, matching the border color.",
+                  disabled = IconFree, disabledTooltip = FREE_TIP, rawTooltip = true,
                   get = function() local p = DB(); return p and p.castBar.showIconDivider end,
                   set = function(v)
                       local p = DB(); if not p then return end
@@ -195,6 +209,10 @@ function ns.ERB_BuildCastBarPage(pageName, parent, yOffset)
                       local p = DB(); if not p then return end
                       p.castBar.iconDividerArt = v and true or false; RefreshCast()
                   end },
+                IconSlider("iconSize", "Icon Size", 0, 64,
+                    "0 matches the bar height. Any other size or offset detaches the icon from the bar."),
+                IconSlider("iconOffsetX", "Offset X", -100, 100),
+                IconSlider("iconOffsetY", "Offset Y", -100, 100),
             },
         })
     end

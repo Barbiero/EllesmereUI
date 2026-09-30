@@ -1253,6 +1253,175 @@ initFrame:SetScript("OnEvent", function(self)
     --  Menu, Bags & XP Bars page  (dedicated tab)
     ---------------------------------------------------------------------------
 
+    -- An End Caps row: the End Caps checklist (Left Endcap / Right Endcap) and
+    -- its cog (the EllesmereUI style's art, size, offsets), per bar through the
+    -- runtime's own readers (ns.AB_CapsSides / AB_CapsVal: an unset Action Bar
+    -- 1 key reads the profile-wide one, a bar carrying one of bar 1's caps reads
+    -- bar 1's). Horizontal bars only: the art sits at the bar's two ends.
+    --   o.key()          the bar
+    --   o.store()        its settings table
+    --   o.label          the row text
+    --   o.vertical()     true greys the row
+    --   o.write(k, v)    stores cog value v under k (k nil: the checklist has
+    --                    already stored both sides) and repaints
+    --   o.copyApply(key) repaints another bar after an Apply to All copy
+    --   o.syncKeys, o.syncLabels  the Apply to All link's bars (nil = no link)
+    local function EndCapsCtl(o)
+        local C = {}
+        C.stock = EllesmereUI.BlizzStyle.Get("actionbars") and true or false
+        C.forever = C.stock and EllesmereUI.BlizzStyle.Forever("actionbars")
+        C.Vertical = o.vertical
+        -- True while the bar shows a cap at neither end.
+        function C.Off()
+            local l, r = ns.AB_CapsSides(o.key())
+            return not (l or r)
+        end
+        -- The row slot C.Build swaps for the checklist; its label carries the
+        -- tooltip and dims on a vertical bar.
+        function C.Cfg()
+            local classic = EllesmereUI.BlizzStyle.Active("actionbars") == "classic"
+            return { type="dropdown", text=o.label,
+              tooltip=(not C.stock) and "Which ends of the bar show end cap art; the cog picks the art."
+                  or classic and "Which ends of the bar show the gryphons."
+                  or "Which ends of the bar show the gryphons or wyverns.",
+              values={ __placeholder = "..." }, order={ "__placeholder" },
+              disabled=C.Vertical,
+              disabledTooltip="Vertical Orientation", requireState="disabled",
+              getValue=function() return "__placeholder" end,
+              setValue=function() end }
+        end
+        -- A bar's whole end cap setting onto bar `dst`, as this bar resolves
+        -- it (sides, the EllesmereUI style's art, size, offsets).
+        function C.CopyTo(dst)
+            local src = o.key()
+            local d = EAB.db.profile.bars[dst]
+            if dst == src or not d then return end
+            d.endCapLeft, d.endCapRight = ns.AB_CapsSides(src)
+            if not C.stock then d.endCapArt = ns.AB_CapsArt(src) end
+            local _, dx, dy, sc = ns.AB_CapsTweak(src)
+            d.endCapScale, d.endCapOffsetX, d.endCapOffsetY = sc, dx, dy
+            o.copyApply(dst)
+        end
+        function C.Same(key)
+            local src = o.key()
+            local sl, sr = ns.AB_CapsSides(src)
+            local kl, kr = ns.AB_CapsSides(key)
+            if sl ~= kl or sr ~= kr then return false end
+            if not (sl or sr) then return true end
+            if not C.stock and ns.AB_CapsArt(src) ~= ns.AB_CapsArt(key) then return false end
+            local _, sx, sy, ss = ns.AB_CapsTweak(src)
+            local _, kx, ky, ks = ns.AB_CapsTweak(key)
+            return ss == ks and sx == kx and sy == ky
+        end
+        -- The checklist in `rgn` (a DualRow half built from C.Cfg), its cog
+        -- and its Apply to All link.
+        function C.Build(rgn)
+            if EllesmereUI._prebuilding then return end
+            if rgn._control then rgn._control:Hide() end
+            local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                rgn, 170, rgn:GetFrameLevel() + 2,
+                { { key = "L", label = "Left Endcap" }, { key = "R", label = "Right Endcap" } },
+                function(k)
+                    local l, r = ns.AB_CapsSides(o.key())
+                    if k == "L" then return l end
+                    return r
+                end,
+                function(k, v)
+                    -- Both sides are written, the untouched one as the bar
+                    -- shows it now: a written side never reads a default.
+                    local s = o.store()
+                    local l, r = ns.AB_CapsSides(o.key())
+                    if k == "L" then l = v and true or false else r = v and true or false end
+                    s.endCapLeft, s.endCapRight = l, r
+                    o.write()
+                end, nil, nil, nil, nil, nil,
+                -- Spec Overrides see each click as it happens (the slot's capture).
+                { notifyWrites = true })
+            PP.Point(cbDD, "RIGHT", rgn, "RIGHT", -20, 0)
+            rgn._control = cbDD
+            rgn._lastInline = nil
+            EllesmereUI.RegisterWidgetRefresh(cbDDRefresh)
+            -- The checklist has no disabled state of its own: grey it and
+            -- block clicks on a vertical bar (the row label explains).
+            local function ApplyCapsDisabled()
+                local off = C.Vertical()
+                cbDD:SetAlpha(off and 0.3 or 1)
+                cbDD:EnableMouse(not off)
+            end
+            ApplyCapsDisabled()
+            EllesmereUI.RegisterWidgetRefresh(ApplyCapsDisabled)
+
+            local rows = {}
+            if not C.stock then
+                -- WoW Forever's own art exists only on that client.
+                local values = { blizzard="Modern", classic="Classic" }
+                local order = { "blizzard", "classic" }
+                if EllesmereUI.IS_FOREVER then
+                    values.forever = "WoW Forever"
+                    order[#order + 1] = "forever"
+                end
+                rows[#rows + 1] = { type="dropdown", label="Art", values=values, order=order,
+                  tooltip=EllesmereUI.IS_FOREVER
+                      and "Modern shows gryphons or wyverns by faction, Classic the vanilla gryphons, WoW Forever this client's own."
+                      or "Modern shows gryphons or wyverns by faction, Classic the vanilla gryphons.",
+                  get=function() return ns.AB_CapsArt(o.key()) end,
+                  set=function(v) o.write("endCapArt", v) end }
+            end
+            rows[#rows + 1] = { type="slider", label="Size", min=50, max=200, step=5,
+              tooltip="Percent of the end caps' normal size.",
+              get=function() return ns.AB_CapsVal(o.key(), "endCapScale") or 100 end,
+              set=function(v) o.write("endCapScale", v) end }
+            rows[#rows + 1] = { type="slider", label="X Offset", min=-100, max=100, step=1,
+              tooltip="Positive values move both end caps away from the bar.",
+              get=function() return ns.AB_CapsVal(o.key(), "endCapOffsetX") or 0 end,
+              set=function(v) o.write("endCapOffsetX", v) end }
+            rows[#rows + 1] = { type="slider", label="Y Offset", min=-100, max=100, step=1,
+              get=function() return ns.AB_CapsVal(o.key(), "endCapOffsetY") or 5 end,
+              set=function(v) o.write("endCapOffsetY", v) end }
+            EllesmereUI.BuildInlineCog(rgn, {
+                title = "End Cap Settings",
+                icon = C.stock and EllesmereUI.RESIZE_ICON or nil,
+                disabled = function()
+                    return C.Vertical() or C.Off()
+                end,
+                disabledTooltip = function()
+                    if C.Vertical() then return EllesmereUI.DisabledTooltip("Vertical Orientation", "disabled") end
+                    return EllesmereUI.DisabledTooltip("Left Endcap or Right Endcap")
+                end,
+                rawTooltip = true,
+                rows = rows,
+            })
+
+            if o.syncKeys then
+                EllesmereUI.BuildSyncIcon({
+                    region  = rgn,
+                    tooltip = "Apply End Caps to all Bars",
+                    onClick = function()
+                        for _, key in ipairs(o.syncKeys) do C.CopyTo(key) end
+                        EllesmereUI:RefreshPage()
+                    end,
+                    isSynced = function()
+                        for _, key in ipairs(o.syncKeys) do
+                            if not C.Same(key) then return false end
+                        end
+                        return true
+                    end,
+                    flashTargets = function() return { rgn } end,
+                    multiApply = {
+                        elementKeys   = o.syncKeys,
+                        elementLabels = o.syncLabels,
+                        getCurrentKey = function() return o.key() end,
+                        onApply       = function(checkedKeys)
+                            for _, key in ipairs(checkedKeys) do C.CopyTo(key) end
+                            EllesmereUI:RefreshPage()
+                        end,
+                    },
+                })
+            end
+        end
+        return C
+    end
+
     local function BuildMenuBagsXPPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
         local y = yOffset
@@ -1332,6 +1501,29 @@ initFrame:SetScript("OnEvent", function(self)
             local microOpts = VisOpts("MicroBar", "Micro Menu Visibility")
             microOpts.rightVis = VisOpts("BagBar", "Bag Bar Visibility")
             _, h = EllesmereUI.BuildVisibilityRow(W, parent, y, microOpts);  y = y - h
+        end
+        -- Their end caps, as an action bar's (sized from Action Bar 1's
+        -- buttons). No Apply to All link: a first-install span makes the two
+        -- differ on purpose.
+        do
+            local function Ctl(key, label)
+                return EndCapsCtl({
+                    key = function() return key end,
+                    store = function() return EAB.db.profile.bars[key] end,
+                    label = label,
+                    vertical = function() return ns.AB_ExtraCapsVertical(key) end,
+                    write = function(k, v)
+                        if k then EAB.db.profile.bars[key][k] = v end
+                        ns.AB_ExtraCaps(key)
+                        EllesmereUI:RefreshPage()
+                    end,
+                })
+            end
+            local mc, bc = Ctl("MicroBar", "Micro Menu End Caps"), Ctl("BagBar", "Bag Bar End Caps")
+            local capsRow
+            capsRow, h = W:DualRow(parent, y, mc.Cfg(), bc.Cfg());  y = y - h
+            mc.Build(capsRow._leftRegion)
+            bc.Build(capsRow._rightRegion)
         end
 
         _, h = W:Spacer(parent, y, 12);  y = y - h
@@ -1416,12 +1608,32 @@ initFrame:SetScript("OnEvent", function(self)
                   -- bar included where it is not built, so the three bars keep
                   -- one shared value in a profile carried to another client.
                   for _, k in ipairs({"XPBar", "RepBar", "FavorBar"}) do
-                      if EAB.db.profile.bars[k] then
-                          EAB.db.profile.bars[k].orientation = v
+                      local b = EAB.db.profile.bars[k]
+                      if b then
+                          -- Orientation-aware sizing (custom): keep the bar's length and
+                          -- thickness across a flip by swapping the two dimensions, so a 600x18
+                          -- horizontal bar becomes 18x600 vertical rather than 600 wide.
+                          if b.orientation ~= v then b.width, b.height = b.height, b.width end
+                          b.orientation = v
                           if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(k) end
                       end
                   end
+                  -- Rebuild the page so the Width/Height sliders pick up the swapped caps.
+                  EllesmereUI:RefreshPage()
               end });  y = y - h
+
+        -- Reorient toggles: run the XP readout / the divider % labels ALONG a vertical bar.
+        -- Disabled unless Orientation is Vertical (no effect on a horizontal bar).
+        local function XPVert() local b = EAB.db.profile.bars["XPBar"]; return b and b.orientation == "VERTICAL" and true or false end
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Reorient XP Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="toggle", text="Reorient XP% Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientDividerText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientDividerText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end });  y = y - h
 
         _, h = W:Spacer(parent, y, 12);  y = y - h
 
@@ -1575,15 +1787,23 @@ initFrame:SetScript("OnEvent", function(self)
 
             local wDis, wTip, wRaw = EllesmereUI.MatchGuard(barKey, "Width", _blizzDis, BLIZZ_DIS_TIP)
             local hDis, hTip, hRaw = EllesmereUI.MatchGuard(barKey, "Height", _blizzDis, BLIZZ_DIS_TIP)
+            -- Orientation-aware caps (custom): the "length" axis (Width when horizontal, Height
+            -- when vertical) scales up to the screen width; the "thickness" axis stays capped
+            -- small. Sliders rebuild when the Orientation dropdown flips (RefreshPage), and the
+            -- flip swaps the stored width/height so the caps always fit. Replaces the flat 600 cap.
+            local _dbVert = (S().orientation == "VERTICAL")
+            local _dbLenMax = math.floor((UIParent and UIParent:GetWidth()) or 1920)
+            local _dbWMin, _dbWMax = (_dbVert and 4 or 50), (_dbVert and 100 or _dbLenMax)
+            local _dbHMin, _dbHMax = (_dbVert and 50 or 4), (_dbVert and _dbLenMax or 100)
             sizeRow, h = W:DualRow(parent, y,
-                { type="slider", text="Width", min=50, max=600, step=1,
+                { type="slider", text="Width", min=_dbWMin, max=_dbWMax, step=1,
                   disabled=wDis, disabledTooltip=wTip, rawTooltip=wRaw,
                   getValue=function() return S().width or 400 end,
                   setValue=function(v)
                       S().width = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end },
-                { type="slider", text="Height", min=4, max=40, step=1,
+                { type="slider", text="Height", min=_dbHMin, max=_dbHMax, step=1,
                   disabled=hDis, disabledTooltip=hTip, rawTooltip=hRaw,
                   getValue=function() return S().height or 18 end,
                   setValue=function(v)
@@ -1843,6 +2063,11 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUI.BuildInlineCog(rgn, { icon = EllesmereUI.DIRECTIONS_ICON, anchorTo = rgn._control,
                     title = "Bar Text Offsets",
                     rows = {
+                        { type="dropdown", label="Anchor",
+                          values = { top="Top", bottom="Bottom", center="Center", left="Left", right="Right" },
+                          order = { "top", "bottom", "center", "left", "right" },
+                          get=function() return S().textAnchor or "center" end,
+                          set=function(v) S().textAnchor = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end end },
                         { type="slider", label="X Offset", min=-150, max=150, step=1,
                           get=function() return S().textOffsetX or 0 end,
                           set=function(v)
@@ -1879,6 +2104,84 @@ initFrame:SetScript("OnEvent", function(self)
                         set=function(v)
                             EAB.db.profile.bars["XPBar"].showLevel = v
                         end },
+                    -- (Show Dividers + Text Background moved to visible rows below the cog.)
+                    -- (Reorient toggles moved to the XP/REP BAR STYLE section, under Orientation.)
+                    { type="toggle", label="Read Downward",
+                        get=function() return EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"] and EAB.db.profile.bars["XPBar"].textReadDown end,
+                        set=function(v)
+                            EAB.db.profile.bars["XPBar"].textReadDown = v
+                            if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end
+                        end },
+                },
+            })
+        end
+
+        -- XP divider + text controls:
+        --   [ Text Background (toggle + bg colour) | Show Dividers (toggle) ]
+        --   [ Divider Text (toggle + text colour + offset cog) | Divider Colors (5% / 10%) ]
+        -- Divider Text and Divider Colors grey out while Show Dividers is off.
+        local function XPB() return EAB.db.profile.bars["XPBar"] end
+        local function DivOn() local b = XPB(); return b and b.showDividers and true or false end
+        local xpbRowA, xpbRowB
+        xpbRowA, h = W:DualRow(parent, y,
+            { type="toggle", text="Text Background",
+              getValue=function() return XPB() and XPB().showTextBg end,
+              setValue=function(v) XPB().showTextBg = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="toggle", text="Show Dividers",
+              getValue=function() return XPB() and XPB().showDividers end,
+              setValue=function(v) XPB().showDividers = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end; EllesmereUI:RefreshPage() end });  y = y - h
+        xpbRowB, h = W:DualRow(parent, y,
+            { type="toggle", text="Divider Text",
+              disabled=function() return not DivOn() end, disabledTooltip="Requires Show Dividers",
+              getValue=function() return XPB() and XPB().showDividerText end,
+              setValue=function(v) XPB().showDividerText = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="multiSwatch", text="Divider Colors",
+              swatches = {
+                  { tooltip = "5% Tick",
+                    getValue = function() local c = XPB() and XPB().tick5Color; if c then return c.r or 220/255, c.g or 167/255, c.b or 127/255 end return 220/255, 167/255, 127/255 end,
+                    setValue = function(r, g, b) XPB().tick5Color = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                    onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                    refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+                  { tooltip = "10% Tick",
+                    getValue = function() local c = XPB() and XPB().tick10Color; if c then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                    setValue = function(r, g, b) XPB().tick10Color = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                    onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                    refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+              } });  y = y - h
+        if not EllesmereUI._prebuilding then
+            -- Text Background colour on the Text Background toggle.
+            EllesmereUI.BuildInlineSwatches(xpbRowA._leftRegion, {
+                { tooltip = "Text Background Color",
+                  getValue = function() local c = XPB() and XPB().textBgColor; if c then return c.r or 0.06, c.g or 0.06, c.b or 0.08 end return 0.06, 0.06, 0.08 end,
+                  setValue = function(r, g, b) local o = XPB().textBgColor or {}; XPB().textBgColor = { r = r, g = g, b = b, a = o.a or 0.9 }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                  onClick = function(self) if self._eabOrigClick then self._eabOrigClick(self) end end,
+                  refreshAlpha = function() return (XPB() and XPB().showTextBg) and 1 or 0.3 end },
+            }, { size = 20 })
+            -- Divider Text colour + a 4-arrow cog (Text Size / X / Y offset) on Divider Text.
+            EllesmereUI.BuildInlineSwatches(xpbRowB._leftRegion, {
+                { tooltip = "Divider Text Color",
+                  getValue = function() local c = XPB() and XPB().dividerTextColor; if c then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                  setValue = function(r, g, b) XPB().dividerTextColor = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                  onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                  refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+            }, { size = 20 })
+            -- No anchorTo: chains off region._lastInline (the Divider Text colour swatch
+            -- above), so the 4-arrow cog lands to the LEFT of the swatch instead of on it.
+            EllesmereUI.BuildInlineCog(xpbRowB._leftRegion, {
+                icon = EllesmereUI.DIRECTIONS_ICON,
+                title = "Divider Text",
+                disabled = function() return not DivOn() end,
+                disabledTooltip = "Requires Show Dividers",
+                rows = {
+                    { type="slider", label="Text Size", min=6, max=18, step=1,
+                      get=function() return XPB() and XPB().dividerTextSize or 8 end,
+                      set=function(v) XPB().dividerTextSize = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+                    { type="slider", label="X Offset", min=-50, max=50, step=1,
+                      get=function() return XPB() and XPB().dividerTextOffX or 0 end,
+                      set=function(v) XPB().dividerTextOffX = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+                    { type="slider", label="Y Offset", min=-50, max=50, step=1,
+                      get=function() return XPB() and XPB().dividerTextOffY or 0 end,
+                      set=function(v) XPB().dividerTextOffY = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
                 },
             })
         end
@@ -2213,176 +2516,30 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
-        -- The bar's end caps: the End Caps checklist (Left Endcap / Right
-        -- Endcap) and its cog (the EllesmereUI style's art, size, offsets),
-        -- all per bar through the runtime's own readers (ns.AB_CapsSides /
-        -- AB_CapsVal: an unset Action Bar 1 key reads the profile-wide one).
-        -- Under WoW Forever it opens LAYOUT beside Show Bar Background; every
-        -- other look puts it in the Click Through row's free slot. Horizontal
-        -- bars only: the art sits at the bar's two ends.
-        local CAPS = (not visOnly) and {} or nil
-        if CAPS then
-            CAPS.stock = EllesmereUI.BlizzStyle.Get("actionbars") and true or false
-            CAPS.forever = CAPS.stock and EllesmereUI.BlizzStyle.Forever("actionbars")
-            function CAPS.Vertical()
-                return not EAB:GetOrientationForBar(SelectedKey())
-            end
-            -- True while the bar shows a cap at neither end.
-            function CAPS.Off()
-                local l, r = ns.AB_CapsSides(SelectedKey())
-                return not (l or r)
-            end
-            function CAPS.Apply(key)
-                EAB:ApplyPaddingForBar(key or SelectedKey())
-                if not key then SUpdatePreviewAndResize() end
-            end
-            -- The row slot CAPS.Build swaps for the checklist; its label
-            -- carries the tooltip and dims on a vertical bar.
-            function CAPS.Cfg()
-                local classic = EllesmereUI.BlizzStyle.Active("actionbars") == "classic"
-                return { type="dropdown", text="End Caps",
-                  tooltip=(not CAPS.stock) and "Which ends of the bar show end cap art; the cog picks the art."
-                      or classic and "Which ends of the bar show the gryphons."
-                      or "Which ends of the bar show the gryphons or wyverns.",
-                  values={ __placeholder = "..." }, order={ "__placeholder" },
-                  disabled=CAPS.Vertical,
-                  disabledTooltip="Vertical Orientation", requireState="disabled",
-                  getValue=function() return "__placeholder" end,
-                  setValue=function() end }
-            end
-            -- A bar's whole end cap setting onto bar `dst`, as the selected
-            -- bar resolves it (sides, the EllesmereUI style's art, size, offsets).
-            function CAPS.CopyTo(dst)
-                local src = SelectedKey()
-                local d = EAB.db.profile.bars[dst]
-                if dst == src or not d then return end
-                d.endCapLeft, d.endCapRight = ns.AB_CapsSides(src)
-                if not CAPS.stock then d.endCapArt = ns.AB_CapsArt(src) end
-                local _, dx, dy, sc = ns.AB_CapsTweak(src)
-                d.endCapScale, d.endCapOffsetX, d.endCapOffsetY = sc, dx, dy
-                CAPS.Apply(dst)
-            end
-            function CAPS.Same(key)
-                local src = SelectedKey()
-                local sl, sr = ns.AB_CapsSides(src)
-                local kl, kr = ns.AB_CapsSides(key)
-                if sl ~= kl or sr ~= kr then return false end
-                if not (sl or sr) then return true end
-                if not CAPS.stock and ns.AB_CapsArt(src) ~= ns.AB_CapsArt(key) then return false end
-                local _, sx, sy, ss = ns.AB_CapsTweak(src)
-                local _, kx, ky, ks = ns.AB_CapsTweak(key)
-                return ss == ks and sx == kx and sy == ky
-            end
-            -- The checklist in `rgn` (a DualRow half built from CAPS.Cfg), its
-            -- cog and its Apply to All link.
-            function CAPS.Build(rgn)
-                if EllesmereUI._prebuilding then return end
-                if rgn._control then rgn._control:Hide() end
-                local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
-                    rgn, 170, rgn:GetFrameLevel() + 2,
-                    { { key = "L", label = "Left Endcap" }, { key = "R", label = "Right Endcap" } },
-                    function(k)
-                        local l, r = ns.AB_CapsSides(SelectedKey())
-                        if k == "L" then return l end
-                        return r
-                    end,
-                    function(k, v)
-                        -- Both sides are written, the untouched one as the bar
-                        -- shows it now: a written side never reads a default.
-                        local s = SB()
-                        local l, r = ns.AB_CapsSides(SelectedKey())
-                        if k == "L" then l = v and true or false else r = v and true or false end
-                        s.endCapLeft, s.endCapRight = l, r
-                        CAPS.Apply()
-                        EllesmereUI:RefreshPage()
-                    end, nil, nil, nil, nil, nil,
-                    -- Spec Overrides see each click as it happens (the slot's capture).
-                    { notifyWrites = true })
-                PP.Point(cbDD, "RIGHT", rgn, "RIGHT", -20, 0)
-                rgn._control = cbDD
-                rgn._lastInline = nil
-                EllesmereUI.RegisterWidgetRefresh(cbDDRefresh)
-                -- The checklist has no disabled state of its own: grey it and
-                -- block clicks on a vertical bar (the row label explains).
-                local function ApplyCapsDisabled()
-                    local off = CAPS.Vertical()
-                    cbDD:SetAlpha(off and 0.3 or 1)
-                    cbDD:EnableMouse(not off)
-                end
-                ApplyCapsDisabled()
-                EllesmereUI.RegisterWidgetRefresh(ApplyCapsDisabled)
-
-                local function CapsSet(k, v)
+        -- The bar's end caps (EndCapsCtl). Under WoW Forever it opens LAYOUT
+        -- beside Show Bar Background; every other look puts it in the Click
+        -- Through row's free slot. A change to Action Bar 1's caps also
+        -- repaints a bar carrying one of them (the first-install span).
+        local CAPS = (not visOnly) and EndCapsCtl({
+            key = SelectedKey, store = SB, label = "End Caps",
+            vertical = function() return not EAB:GetOrientationForBar(SelectedKey()) end,
+            write = function(k, v)
+                if k then
                     SSet(k, v, function(bk) EAB:ApplyPaddingForBar(bk) end)
                     SUpdatePreviewAndResize()
+                else
+                    EAB:ApplyPaddingForBar(SelectedKey())
+                    SUpdatePreviewAndResize()
+                    EllesmereUI:RefreshPage()
                 end
-                local rows = {}
-                if not CAPS.stock then
-                    -- WoW Forever's own art exists only on that client.
-                    local values = { blizzard="Modern", classic="Classic" }
-                    local order = { "blizzard", "classic" }
-                    if EllesmereUI.IS_FOREVER then
-                        values.forever = "WoW Forever"
-                        order[#order + 1] = "forever"
-                    end
-                    rows[#rows + 1] = { type="dropdown", label="Art", values=values, order=order,
-                      tooltip=EllesmereUI.IS_FOREVER
-                          and "Modern shows gryphons or wyverns by faction, Classic the vanilla gryphons, WoW Forever this client's own."
-                          or "Modern shows gryphons or wyverns by faction, Classic the vanilla gryphons.",
-                      get=function() return ns.AB_CapsArt(SelectedKey()) end,
-                      set=function(v) CapsSet("endCapArt", v) end }
-                end
-                rows[#rows + 1] = { type="slider", label="Size", min=50, max=200, step=5,
-                  tooltip="Percent of the end caps' normal size.",
-                  get=function() return ns.AB_CapsVal(SelectedKey(), "endCapScale") or 100 end,
-                  set=function(v) CapsSet("endCapScale", v) end }
-                rows[#rows + 1] = { type="slider", label="X Offset", min=-100, max=100, step=1,
-                  tooltip="Positive values move both end caps away from the bar.",
-                  get=function() return ns.AB_CapsVal(SelectedKey(), "endCapOffsetX") or 0 end,
-                  set=function(v) CapsSet("endCapOffsetX", v) end }
-                rows[#rows + 1] = { type="slider", label="Y Offset", min=-100, max=100, step=1,
-                  get=function() return ns.AB_CapsVal(SelectedKey(), "endCapOffsetY") or 5 end,
-                  set=function(v) CapsSet("endCapOffsetY", v) end }
-                EllesmereUI.BuildInlineCog(rgn, {
-                    title = "End Cap Settings",
-                    icon = CAPS.stock and EllesmereUI.RESIZE_ICON or nil,
-                    disabled = function()
-                        return CAPS.Vertical() or CAPS.Off()
-                    end,
-                    disabledTooltip = function()
-                        if CAPS.Vertical() then return EllesmereUI.DisabledTooltip("Vertical Orientation", "disabled") end
-                        return EllesmereUI.DisabledTooltip("Left Endcap or Right Endcap")
-                    end,
-                    rawTooltip = true,
-                    rows = rows,
-                })
-
-                EllesmereUI.BuildSyncIcon({
-                    region  = rgn,
-                    tooltip = "Apply End Caps to all Bars",
-                    onClick = function()
-                        for _, key in ipairs(GROUP_BAR_ORDER) do CAPS.CopyTo(key) end
-                        EllesmereUI:RefreshPage()
-                    end,
-                    isSynced = function()
-                        for _, key in ipairs(GROUP_BAR_ORDER) do
-                            if not CAPS.Same(key) then return false end
-                        end
-                        return true
-                    end,
-                    flashTargets = function() return { rgn } end,
-                    multiApply = {
-                        elementKeys   = GROUP_BAR_ORDER,
-                        elementLabels = SHORT_LABELS,
-                        getCurrentKey = function() return SelectedKey() end,
-                        onApply       = function(checkedKeys)
-                            for _, key in ipairs(checkedKeys) do CAPS.CopyTo(key) end
-                            EllesmereUI:RefreshPage()
-                        end,
-                    },
-                })
-            end
-        end
+                if SelectedKey() == "MainBar" then ns.AB_CapsSpanApply() end
+            end,
+            copyApply = function(key)
+                EAB:ApplyPaddingForBar(key)
+                if key == "MainBar" then ns.AB_CapsSpanApply() end
+            end,
+            syncKeys = GROUP_BAR_ORDER, syncLabels = SHORT_LABELS,
+        }) or nil
 
         if not visOnly then
             local ctRow

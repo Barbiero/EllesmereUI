@@ -1378,6 +1378,9 @@ local DEFAULTS = {
             showIcon      = true,
             iconOnRight   = false,  -- attach the spell icon to the right of the bar instead of the left
             showIconDivider = false,  -- draw a 1px divider at the icon/bar seam (interior seam has no border otherwise)
+            iconSize      = 0,  -- 0 = the bar height
+            iconOffsetX   = 0,
+            iconOffsetY   = 0,
             width         = 220,
             height        = 20,
             anchorX       = 0,
@@ -1527,6 +1530,21 @@ local DEFAULTS = {
             unlockPos     = nil,
             enabledClasses = nil,  -- nil = disabled; { SHAMAN = true, ... } = enabled for listed classes
         },
+        -- WoW Forever: Blizzard's call totem bar in the Totem Bar look
+        -- (EUI_ResourceBars_CallTotemBar.lua). Off by default; the table exists
+        -- only on that client, so retail profiles never gain the key.
+        callTotemBar = (EllesmereUI.IS_FOREVER == true) and {
+            enabled       = false,
+            iconSize      = 30,
+            spacing       = 2,
+            showTimer     = true,
+            timerSize     = 11,
+            orientation   = "HORIZONTAL",  -- "HORIZONTAL" or "VERTICAL"
+            borderSize    = 1,
+            borderR       = 0, borderG = 0, borderB = 0, borderA = 1,
+            borderTexture = "solid",
+            unlockPos     = nil,
+        } or nil,
         general = {
             anchorX     = 0,
             anchorY     = -100,
@@ -2782,6 +2800,10 @@ local function RegisterUnlockElements()
     if ns.ST_MakeUnlockElement then
         elements[#elements + 1] = ns.ST_MakeUnlockElement(MK, Rebuild)
     end
+    -- Call Totem Bar (WoW Forever): nil elsewhere.
+    if ns.CT_MakeUnlockElement then
+        elements[#elements + 1] = ns.CT_MakeUnlockElement(MK)
+    end
 
     EllesmereUI:RegisterUnlockElements(elements, "EllesmereUIResourceBars")
 end
@@ -3355,6 +3377,7 @@ local function BuildBars()
                 healthBar:SetPoint(hp.unlockPos.point, UIParent, rp, sx, sy)
             end
             EllesmereUI.SetElementVisibility(healthBar, false)
+            ns.HealthIndicatorsApply(healthBar, nil)
         else
         local healthAnchorKey = NormalizeAnchorKey(hp.anchorTo)
         if EllesmereUI._TryOverrideAnchor and EllesmereUI._TryOverrideAnchor("ERB_Health", healthBar) then
@@ -3462,6 +3485,9 @@ local function BuildBars()
         if IsSpecDisabled(hp) then
             EllesmereUI.SetElementVisibility(healthBar, false)
         end
+        -- Absorb / heal absorb / max health reduction overlays
+        -- (EUI_ResourceBars_HealthIndicators.lua): settings pass only.
+        ns.HealthIndicatorsApply(healthBar, (not IsSpecDisabled(hp)) and hp or nil, hpOri)
         end
     end
 
@@ -4378,7 +4404,8 @@ local function UpdateHealthBar()
 
     local cur = UnitHealth("player")
     local mx = UnitHealthMax("player")
-    if not cur or not mx or mx <= 0 then return end
+    if not cur or not mx then return end
+    if not (issecretvalue and issecretvalue(mx)) and mx <= 0 then return end
 
     healthBar:SetMinMaxValues(0, mx)
 
@@ -8585,12 +8612,42 @@ end
 -- the icon stays a square of the bar height). The frame width, the fill
 -- inset and the unlock sizing all take it from here.
 function ns.ERB_CastIconW(cb)
-    if cb.showIcon == false then return 0 end
+    if cb.showIcon == false or ns.ERB_CastIconFree(cb) then return 0 end
     local h = cb.height
     if ns.ERB_CastStyle() == "blizzard" and cb.showSpellText and ns.ERB_BlizzAtlas("textbox") then
         return h + 13
     end
     return h
+end
+-- Icon Size / Offset: a custom size or any offset takes the icon out of the
+-- frame (ERB_CastIconW is 0) and it floats beside the bar with its own border.
+-- The stock styles keep it inside their frame art.
+function ns.ERB_CastIconFree(cb)
+    if cb.showIcon == false or ns.ERB_CastStyle() ~= "eui" then return false end
+    return (cb.iconSize or 0) > 0 or (cb.iconOffsetX or 0) ~= 0 or (cb.iconOffsetY or 0) ~= 0
+end
+-- Lays out a floating icon (live bar and options preview), or hides its border.
+function ns.ERB_LayoutFreeCastIcon(iconFrame, host, cb, free)
+    local P = EllesmereUI.PP
+    if not free then
+        if P.GetBorders(iconFrame) then P.HideBorder(iconFrame) end
+        return
+    end
+    local size = (cb.iconSize or 0) > 0 and cb.iconSize or cb.height
+    iconFrame:SetSize(size, size)
+    iconFrame:ClearAllPoints()
+    if cb.iconOnRight then
+        iconFrame:SetPoint("LEFT", host, "RIGHT", cb.iconOffsetX or 0, cb.iconOffsetY or 0)
+    else
+        iconFrame:SetPoint("RIGHT", host, "LEFT", cb.iconOffsetX or 0, cb.iconOffsetY or 0)
+    end
+    if (cb.borderSize or 0) > 0 then
+        if not P.GetBorders(iconFrame) then P.CreateBorder(iconFrame, 0, 0, 0, 1, 1) end
+        P.SetBorderColor(iconFrame, cb.borderR or 0, cb.borderG or 0, cb.borderB or 0, cb.borderA or 1)
+        P.ShowBorder(iconFrame)
+    elseif P.GetBorders(iconFrame) then
+        P.HideBorder(iconFrame)
+    end
 end
 -- Fill art for the current cast kind ("cast" | "channel" | "interrupted").
 -- One field test when the style is off; a memo skips repeat atlas swaps.
@@ -8890,7 +8947,11 @@ BuildCastBar = function()
     -- Icon: left or right side (iconOnRight), full height, no inset
     local iconFrame = castBarFrame._iconFrame
     local iconOnRight = hasIcon and cb.iconOnRight
-    if hasIcon then
+    local iconFree = ns.ERB_CastIconFree(cb)
+    ns.ERB_LayoutFreeCastIcon(iconFrame, castBarFrame, cb, iconFree)
+    if iconFree then
+        iconFrame:Show()
+    elseif hasIcon then
         -- A square of the bar height; under the style it also spans the stock
         -- text box under the bar (see ns.ERB_CastIconW), hung from the same
         -- top corner, as the unit frame cast bars do.
@@ -8920,9 +8981,10 @@ BuildCastBar = function()
     local iconDivider = castBarFrame._iconDivider
     -- Border Art Divider: the border style's vertical companion art in place of
     -- the solid line below (ns.ERB_CastDividerArt; inert unless it was ever on).
-    if ns.ERB_CastDividerArt(iconDivider, hasIcon and cb.showIconDivider, iconFrame, iconOnRight, cb, blizz) then
+    local showDivider = hasIcon and not iconFree and cb.showIconDivider
+    if ns.ERB_CastDividerArt(iconDivider, showDivider, iconFrame, iconOnRight, cb, blizz) then
         iconDivider:Show()
-    elseif hasIcon and cb.showIconDivider then
+    elseif showDivider then
         local des = castBarFrame:GetEffectiveScale()
         local onePixel = des > 0 and (PP.perfect / des) or PP.mult
         local dbs = cb.borderSize or 1
@@ -8956,8 +9018,8 @@ BuildCastBar = function()
     -- The icon-adjacent side sits FLUSH against the icon (no inset): that seam is
     -- interior with no border, and insetting it exposes a 1px background column
     -- next to the icon. Outer edges keep the inset so the fill never bleeds out.
-    local clipLeft  = (hasIcon and not iconOnRight) and iconW or bdrInset
-    local clipRight = (hasIcon and iconOnRight) and iconW or bdrInset
+    local clipLeft  = (iconW > 0 and not iconOnRight) and iconW or bdrInset
+    local clipRight = (iconW > 0 and iconOnRight) and iconW or bdrInset
     clipFrame:SetPoint("TOPLEFT", castBarFrame, "TOPLEFT", clipLeft, -bdrInset)
     clipFrame:SetPoint("BOTTOMRIGHT", castBarFrame, "BOTTOMRIGHT", -clipRight, bdrInset)
     clipFrame:SetFrameLevel(castBarFrame:GetFrameLevel() + 1)
@@ -11441,6 +11503,7 @@ function ERB:ApplyAll()
     if ns.MigrateLegacyAnchorTo then ns.MigrateLegacyAnchorTo() end
     if ns.AS_Apply then ns.AS_Apply() end
     if ns.ST_Apply then ns.ST_Apply() end
+    if ns.CT_Apply then ns.CT_Apply() end
 
     -- Vehicle proxy: hide resource bars during full vehicle UI ([vehicleui]
     -- condition). Secure frame creation + RegisterStateDriver both need combat OOC.

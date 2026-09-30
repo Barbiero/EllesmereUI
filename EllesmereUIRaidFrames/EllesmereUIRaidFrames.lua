@@ -324,6 +324,9 @@ ns._COMBAT_CLASS_COORDS = EllesmereUI.CLASS_ICON_SPRITE_COORDS
 -------------------------------------------------------------------------------
 --  Default settings
 -------------------------------------------------------------------------------
+-- Level Text's default position: attached to the name on WoW Forever, None on
+-- retail (the per-client default rule; every fallback below reads it).
+ns.RF_LEVEL_DEFAULT = (EllesmereUI.IS_FOREVER == true) and "name" or "none"
 local defaults = {
     profile = {
         -- Size & layout
@@ -456,6 +459,7 @@ local defaults = {
         topNameBarTextOffsetX   = 0,
         topNameBarTextOffsetY   = 0,
         topNameBarTextAlign     = "center", -- "center", "left", "right"
+        topNameBarBottom        = false,    -- Show on Bottom: the bar takes the frame's bottom edge
 
         -- Text
         nameSize         = 10,
@@ -465,6 +469,12 @@ local defaults = {
         namePosition     = "topleft", -- "topleft", "top", "topright", "left", "center", "right", "bottomleft", "bottom"
         nameOffsetX      = 0,
         nameOffsetY      = 0,
+        -- Level Text: the unit's level in front of the name, or on its own spot in the name's colour
+        -- (Health Text's host). None = nothing built.
+        levelTextSize      = 10,
+        levelTextPosition  = ns.RF_LEVEL_DEFAULT,  -- "name" ("60 Name"), "nameDiv" ("60 | Name"), "none" or a 9-point spot
+        levelTextOffsetX   = 0,
+        levelTextOffsetY   = 0,
         healthTextMode   = "none",   -- "none", "percent", "number"
         healthTextColorMode   = "custom",  -- "class", "accent", "custom"
         healthTextCustomColor = { r = 1, g = 1, b = 1 },
@@ -565,6 +575,16 @@ local defaults = {
         pingMarkerPosition = "center",
         pingMarkerOffsetX  = 0,
         pingMarkerOffsetY  = 0,
+        -- WoW Forever: Missing Buffs (EUI_RaidFrames_ForeverMissingBuffs.lua).
+        -- Forever-only defaults, absent on every other client.
+        showMissingBuffs     = (EllesmereUI.IS_FOREVER == true) and true or nil,
+        missingBuffsSize     = (EllesmereUI.IS_FOREVER == true) and 22 or nil,
+        missingBuffsPosition = (EllesmereUI.IS_FOREVER == true) and "top" or nil,
+        missingBuffsOffsetX  = (EllesmereUI.IS_FOREVER == true) and 0 or nil,
+        missingBuffsOffsetY  = (EllesmereUI.IS_FOREVER == true) and 0 or nil,
+        -- Its icons' glow (shared prefix schema; 2 = Action Button Glow).
+        missingBuffsGlowType      = (EllesmereUI.IS_FOREVER == true) and 2 or nil,
+        missingBuffsGlowColorMode = (EllesmereUI.IS_FOREVER == true) and "default" or nil,
         showReadyCheck   = true,
         showSummonPending = true,
         showIncomingRez  = true,
@@ -1824,6 +1844,18 @@ function ns.CapName(display, s)
     return display
 end
 
+-- WoW Forever Name Format (the Name Text cog, nameFormat): the character name's
+-- first or last word; unset or "full" shows it whole. Nicknames are never
+-- shortened. Defined only on Forever, so elsewhere a name pays one nil test.
+-- On ns (local cap).
+if ns.EllesmereUI.IS_FOREVER then
+    function ns.RF_FormatName(display, s)
+        local mode = s and s.nameFormat
+        if not mode or mode == "full" then return display end
+        return ns.EllesmereUI.ForeverShortName(display, mode)
+    end
+end
+
 -- Fraction of the frame width the NAME text may fill before auto-truncating
 -- (1.0 = full width). Every name-width SetWidth routes through this knob;
 -- health text keeps its own inline budget. On ns (local cap).
@@ -1857,6 +1889,7 @@ local function ResolveDisplayName(unit, applyCap, s)
                 display = dn
             else
                 display = EllesmereUI.WithSurname(name, surname)
+                if ns.RF_FormatName then display = ns.RF_FormatName(display, s) end
             end
         end
     end
@@ -1902,6 +1935,7 @@ local function ResolveDisplayName(unit, applyCap, s)
     if not display then
         if Ambiguate then name = Ambiguate(name, "short") end
         display = EllesmereUI.WithSurname(name, surname)
+        if ns.RF_FormatName then display = ns.RF_FormatName(display, s) end
     end
     -- Cap only the in-frame name (applyCap), not the top name bar banner.
     if applyCap then display = ns.CapName(display, s) end
@@ -1966,21 +2000,58 @@ end
 -- Reserve the Top Name Bar's height from the TOP of a frame and style it. Shared by real buttons
 -- and every preview so they never drift. Layout + appearance only; the caller sets name text +
 -- color. Returns the reserved height (0 when disabled; health re-anchors flush to the top).
-local function LayoutTopNameBar(s, baseH, powerH, healthBar, tnb, tnbBg, tnbText)
+-- Show on Bottom (topNameBarBottom): the bar takes the frame's BOTTOM edge instead. Health starts
+-- flush at the top (same height), and the power bar and the uniform anchor region (health +
+-- power) end on the bar. Those two, and the bar's own edge, are re-anchored only while the option
+-- is or just was on, so the top layout never touches them.
+local function LayoutTopNameBar(s, baseH, powerH, healthBar, tnb, tnbBg, tnbText, powerBar)
     local enabled = s.topNameBarEnabled
     local topBarH = enabled and PixelSnap(s.topNameBarHeight or 20) or 0
+    local bottomY = (enabled and s.topNameBarBottom == true) and topBarH or 0
+    local parent
     if healthBar then
         -- A party portrait's bars' area (EUI_RaidFrames_Portrait.lua), else the frame.
-        local parent = healthBar._euiBarArea or healthBar:GetParent()
+        parent = healthBar._euiBarArea or healthBar:GetParent()
+        local topY = (bottomY > 0) and 0 or -topBarH
         healthBar:ClearAllPoints()
-        healthBar:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -topBarH)
-        healthBar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -topBarH)
+        healthBar:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, topY)
+        healthBar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, topY)
         healthBar:SetHeight(PixelSnap(baseH - ns.RF_HealthPowerInset(s, powerH) - topBarH))
+        if bottomY > 0 or (healthBar._euiTnbBottomY or 0) > 0 then
+            local uref = healthBar._euiUniformRef
+            -- Aura containers protect these once anchored: a combat pass leaves
+            -- them for the next one (the stamp stays unchanged).
+            if not (InCombatLockdown() and ((powerBar and powerBar:IsProtected())
+                or (uref and uref:IsProtected()))) then
+                if uref then
+                    uref:ClearAllPoints()
+                    uref:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+                    uref:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, bottomY)
+                end
+                if powerBar then
+                    powerBar:ClearAllPoints()
+                    powerBar:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, bottomY)
+                    powerBar:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, bottomY)
+                end
+                healthBar._euiTnbBottomY = bottomY
+            end
+        end
     end
     if not tnb then return topBarH end
     if not enabled then
         tnb:Hide()
         return topBarH
+    end
+    if parent and (bottomY > 0 or tnb._euiTnbBottom) then
+        tnb:ClearAllPoints()
+        if bottomY > 0 then
+            tnb:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+            tnb:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+        else
+            tnb:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+            tnb:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+        end
+        tnb._euiTnbBottom = (bottomY > 0) or nil
     end
     tnb:SetHeight(topBarH)
     if tnbBg then
@@ -2018,13 +2089,23 @@ function ns.RefreshAllNames()
         local d = GetFFD(btn)
         -- Party buttons read through the party proxy so a per-party cap applies.
         local bs = (d and d._isParty) and (ns._scaledPartyProxy or s) or s
+        -- Level Position "Attach to Name" keeps the level in front of the name.
+        local attach = ns.RF_LEVEL_ATTACH[bs.levelTextPosition or ns.RF_LEVEL_DEFAULT]
         if d and d.nameText then
-            d.nameText:SetText(ResolveDisplayName(unit, true, bs))
+            if attach then
+                ns._RFNameWithLevel(d.nameText, ResolveDisplayName(unit, true, bs), unit, attach)
+            else
+                d.nameText:SetText(ResolveDisplayName(unit, true, bs))
+            end
             local nr, ng, nb = GetNameColor(unit, bs)
             d.nameText:SetTextColor(nr, ng, nb)
         end
         if d and d.topNameBarText and bs.topNameBarEnabled then
-            d.topNameBarText:SetText(ResolveDisplayName(unit, false, bs))
+            if attach then
+                ns._RFNameWithLevel(d.topNameBarText, ResolveDisplayName(unit, false, bs), unit, attach)
+            else
+                d.topNameBarText:SetText(ResolveDisplayName(unit, false, bs))
+            end
             local tr, tg, tb = GetTopNameBarColor(unit, bs)
             d.topNameBarText:SetTextColor(tr, tg, tb)
         end
@@ -2388,6 +2469,103 @@ ns._RFPowerTextLife = function(d, unit, gone)
     local pType = d._pwType or UnitPowerType(unit) or 0
     ns.RF_PowerTextInto(d.powerText, d._pwtMode,
         UnitPowerPercent(unit, pType, true, CurveConstants.ScaleTo100), unit, pType)
+end
+
+-------------------------------------------------------------------------------
+--  Level Text: the unit's level in front of the name inside the name text itself
+--  (Attach to Name, "60 Name", the WoW Forever default; or with a divider, "60 | Name"), or
+--  on its own spot on Health Text's host in the name's colour. Nothing exists
+--  while None or attached: the FontString is built the first time a full paint
+--  runs with a spot set. d._lvlOn is true while it shows. UNIT_LEVEL (a level-only
+--  repaint, ns._RFRepaintLevel) is registered only while some view shows the level.
+--  The level is the effective one (scaled content), like the suite's other level
+--  texts. On ns (200-local cap).
+-------------------------------------------------------------------------------
+
+-- The attached positions and their formats: known level, unknown ("??") level.
+ns.RF_LEVEL_ATTACH = {
+    name    = { "%d %s", "?? %s" },
+    nameDiv = { "%d | %s", "?? | %s" },
+}
+
+-- True while the raid, party or extra-frames view shows Level Text.
+function ns._RFLevelWanted()
+    return (ns._scaledProfile.levelTextPosition or ns.RF_LEVEL_DEFAULT) ~= "none"
+        or (ns._scaledPartyProxy.levelTextPosition or ns.RF_LEVEL_DEFAULT) ~= "none"
+        or (ns._scaledExtraProxy.levelTextPosition or ns.RF_LEVEL_DEFAULT) ~= "none"
+end
+
+-- Anchor on Health Text's host with the 9-point scheme; party/extra-aware like the
+-- Power Text anchor, and re-run by every reload pass and the Party Frames kit pass.
+ns._RFAnchorLevelText = function(d)
+    local s = d._isParty and ns._scaledPartyProxy or (d._isExtra and ns._scaledExtraProxy) or ns._scaledProfile
+    local pos = s.levelTextPosition or ns.RF_LEVEL_DEFAULT
+    if pos == "none" or ns.RF_LEVEL_ATTACH[pos] then return end
+    ns.AnchorRFText(d.levelText, ns.RF_BarHost(d.health, s), pos,
+        s.levelTextOffsetX or 0, s.levelTextOffsetY or 0)
+end
+
+-- The level as text: a secret level goes straight to the setter (never compared),
+-- "??" for a unit too far above to read, blank while it is not known yet.
+ns._RFLevelInto = function(fs, unit)
+    local lvl = UnitEffectiveLevel(unit)
+    if issecretvalue(lvl) then
+        fs:SetFormattedText("%d", lvl)
+    elseif not lvl or lvl == 0 then
+        fs:SetText("")
+    elseif lvl < 0 then
+        fs:SetText("??")
+    else
+        fs:SetFormattedText("%d", lvl)
+    end
+end
+
+-- The level the previews show on every sample member: the player's own.
+ns._RFPreviewLevel = function()
+    local lvl = UnitEffectiveLevel("player")
+    if issecretvalue(lvl) or not lvl or lvl <= 0 then return 60 end
+    return lvl
+end
+
+-- Attach to Name: the name text in an attached position's format (fmt, from
+-- RF_LEVEL_ATTACH). The name (possibly secret) and the level only ever reach the
+-- format setter; an unknown level, or a name not known yet (empty), leaves the
+-- name alone.
+ns._RFNameWithLevel = function(fs, name, unit, fmt)
+    local lvl = UnitEffectiveLevel(unit)
+    local nameKnown = issecretvalue(name) or (name ~= nil and name ~= "")
+    if not nameKnown then
+        fs:SetText(name)
+    elseif issecretvalue(lvl) then
+        fs:SetFormattedText(fmt[1], lvl, name)
+    elseif not lvl or lvl == 0 then
+        fs:SetText(name)
+    elseif lvl < 0 then
+        fs:SetFormattedText(fmt[2], name)
+    else
+        fs:SetFormattedText(fmt[1], lvl, name)
+    end
+end
+
+-- The full paint's share for the own spot: shown or hidden by position (built on first
+-- need), filled, and coloured as the name (r, g, b).
+ns._RFLevelText = function(d, s, unit, r, g, b)
+    local pos = s.levelTextPosition or ns.RF_LEVEL_DEFAULT
+    if pos == "none" or ns.RF_LEVEL_ATTACH[pos] then
+        if d._lvlOn then d.levelText:Hide(); d._lvlOn = nil end
+        return
+    end
+    local fs = d.levelText
+    if not fs then
+        fs = d.textCarrier:CreateFontString(nil, "OVERLAY")
+        ApplyFont(fs, s.levelTextSize or 10)
+        fs:SetWordWrap(false)
+        d.levelText = fs
+        ns._RFAnchorLevelText(d)
+    end
+    if not d._lvlOn then fs:Show(); d._lvlOn = true end
+    ns._RFLevelInto(fs, unit)
+    fs:SetTextColor(r, g, b)
 end
 
 -------------------------------------------------------------------------------
@@ -5236,15 +5414,32 @@ ns._PaintButtonTail = function(button, d, s, unit)
     local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
 
     -- Name (visibility owned by AnchorNameText, which hides it when the Top Name Bar is enabled)
+    -- Level Position "Attach to Name" (either format) puts the level in front of the name,
+    -- in both name texts.
+    local lvlPos = s.levelTextPosition or ns.RF_LEVEL_DEFAULT
+    local lvlAttach = ns.RF_LEVEL_ATTACH[lvlPos]
     if d.nameText then
-        d.nameText:SetText(ResolveDisplayName(unit, true, s))
+        if lvlAttach then
+            ns._RFNameWithLevel(d.nameText, ResolveDisplayName(unit, true, s), unit, lvlAttach)
+        else
+            d.nameText:SetText(ResolveDisplayName(unit, true, s))
+        end
         local nr, ng, nb = GetNameColor(unit, s)
         d.nameText:SetTextColor(nr, ng, nb)
     end
 
+    -- Level Text on its own spot, in the name's colour. None or attached, never shown = no call.
+    if d._lvlOn or (lvlPos ~= "none" and not lvlAttach) then
+        ns._RFLevelText(d, s, unit, GetNameColor(unit, s))
+    end
+
     -- Top Name Bar text (unit name + class/custom color); size/anchor/visibility are LayoutTopNameBar's.
     if d.topNameBarText and s.topNameBarEnabled then
-        d.topNameBarText:SetText(ResolveDisplayName(unit, false, s))
+        if lvlAttach then
+            ns._RFNameWithLevel(d.topNameBarText, ResolveDisplayName(unit, false, s), unit, lvlAttach)
+        else
+            d.topNameBarText:SetText(ResolveDisplayName(unit, false, s))
+        end
         local tr, tg, tb = GetTopNameBarColor(unit, s)
         d.topNameBarText:SetTextColor(tr, tg, tb)
     end
@@ -5389,6 +5584,28 @@ ns._PaintButtonTail = function(button, d, s, unit)
 
     -- Threat highlight (aggro): the inner border (size 0 = off) or the Color Custom Borders recolor
     ns.RF_PaintThreat(d, s, unit)
+end
+
+-- UNIT_LEVEL: only the level repaints -- in front of the name (both name texts)
+-- or on its own spot, colours untouched; a button whose view shows no level is
+-- left alone. On ns (200-local cap).
+ns._RFRepaintLevel = function(button)
+    local unit = button:GetAttribute("unit")
+    if not unit or not UnitExists(unit) then return end
+    local d = GetFFD(button)
+    if not d.styled then return end
+    local s = d._isParty and ns._scaledPartyProxy or (d._isExtra and ns._scaledExtraProxy) or ns._scaledProfile
+    local lvlAttach = ns.RF_LEVEL_ATTACH[s.levelTextPosition or ns.RF_LEVEL_DEFAULT]
+    if lvlAttach then
+        if d.nameText then
+            ns._RFNameWithLevel(d.nameText, ResolveDisplayName(unit, true, s), unit, lvlAttach)
+        end
+        if d.topNameBarText and s.topNameBarEnabled then
+            ns._RFNameWithLevel(d.topNameBarText, ResolveDisplayName(unit, false, s), unit, lvlAttach)
+        end
+    elseif d._lvlOn then
+        ns._RFLevelInto(d.levelText, unit)
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -7288,6 +7505,10 @@ XF.Layout = function()
             ApplyFont(d.powerText, xs.powerTextSize or 8)
             ns._RFAnchorPowerText(d)
         end
+        if d.levelText then
+            ApplyFont(d.levelText, xs.levelTextSize or 10)
+            ns._RFAnchorLevelText(d)
+        end
         if d.healAbsorbText then
             ApplyFont(d.healAbsorbText, xs.healAbsorbTextSize or 9)
             if d.AnchorHealAbsorbText then d.AnchorHealAbsorbText() end
@@ -7324,6 +7545,7 @@ XF.Layout = function()
             if d.AnchorCombatIcon then d.AnchorCombatIcon() end
         end
         if d.pingFrame then ns._RFAnchorPing(d) end
+        if ns.RF_FvMissingAnchor then ns.RF_FvMissingAnchor(b, d) end
     end
 end
 
@@ -7449,6 +7671,8 @@ XF.EnsureBuilt = function(count)
                 if unit and unit == b:GetAttribute("unit") then
                     UpdateButton(b)
                 end
+            elseif event == "UNIT_LEVEL" then
+                ns._RFRepaintLevel(b)
             else -- UNIT_NAME_UPDATE / UNIT_CONNECTION
                 UpdateButton(b)
                 if event == "UNIT_CONNECTION" then ns._UpdateButtonRange(unit, b) end
@@ -7529,6 +7753,10 @@ function ns.XF_Apply()
             -- UNIT_FLAGS is opt-in: extra frames mirror the raid combat-icon toggle.
             if db.profile.showCombatIndicator then
                 t:RegisterUnitEvent("UNIT_FLAGS", unit)
+            end
+            -- UNIT_LEVEL is opt-in too: only while a view shows Level Text.
+            if ns._RFLevelWanted() then
+                t:RegisterUnitEvent("UNIT_LEVEL", unit)
             end
             t:RegisterEvent("READY_CHECK_CONFIRM")
             t:RegisterEvent("PLAYER_FLAGS_CHANGED")
@@ -10540,7 +10768,7 @@ local function ReloadFrames(skipButtons)
 
         -- Health bar height/anchor + Top Name Bar. The helper reserves the top
         -- bar's height from the top of the health area and styles the bar.
-        LayoutTopNameBar(s, bh, powerH, d.health, d.topNameBar, d.topNameBarBg, d.topNameBarText)
+        LayoutTopNameBar(s, bh, powerH, d.health, d.topNameBar, d.topNameBarBg, d.topNameBarText, d.power)
         if d.health then
             d.health:SetStatusBarTexture(texPath)
             d.health:GetStatusBarTexture():SetHorizTile(false)
@@ -10595,6 +10823,13 @@ local function ReloadFrames(skipButtons)
             d.powerText:Hide(); d._pwtMode = nil
             ApplyFont(d.powerText, s.powerTextSize or 8)
             ns._RFAnchorPowerText(d)
+        end
+
+        -- Level text (exists once a position has needed it): restyled; the full paint
+        -- that follows shows or hides it by position.
+        if d.levelText then
+            ApplyFont(d.levelText, s.levelTextSize or 10)
+            ns._RFAnchorLevelText(d)
         end
 
         -- Heal absorb text
@@ -10652,6 +10887,7 @@ local function ReloadFrames(skipButtons)
 
         -- Ping marker size + position (overlay exists only after a first ping)
         if d.pingFrame then ns._RFAnchorPing(d) end
+        if ns.RF_FvMissingAnchor then ns.RF_FvMissingAnchor(btn, d) end
 
         -- Border
         if d.UpdateBorder then d.UpdateBorder() end
@@ -10684,6 +10920,8 @@ end
 ns.ReloadFrames = ReloadFrames
 ns.PixelSnap = PixelSnap
 ns._allButtons = allButtons
+-- The raid unit map (RebuildUnitMap wipes it in place, so this stays live).
+ns._raidUnitToButton = unitToButton
 
 -- Global Dark Mode master: RF stores Dark Mode as a fill-color MODE
 -- (healthColorMode == "dark"), not a boolean -- enabling remembers the prior
@@ -10839,6 +11077,7 @@ ns._ResizePartyButtons = function(w, h)
                 if d.nameText then ApplyFont(d.nameText, pp.nameSize or 10) end
                 if d.healthText then ApplyFont(d.healthText, pp.healthTextSize or 9) end
                 if d.powerText then ApplyFont(d.powerText, pp.powerTextSize or 8) end
+                if d.levelText then ApplyFont(d.levelText, pp.levelTextSize or 10) end
                 if d.healAbsorbText then ApplyFont(d.healAbsorbText, pp.healAbsorbTextSize or 9) end
                 if d.statusText then ApplyFont(d.statusText, pp.statusTextSize or 14) end
             end
@@ -12137,6 +12376,13 @@ local function OnEvent(self, event, arg1, ...)
                 end
             end)
         end
+    elseif event == "UNIT_LEVEL" then
+        -- Level Text only (registered while a view shows it): the level alone repaints,
+        -- on its spot or in front of the name.
+        local btn = unitToButton[arg1]
+        if btn then ns._RFRepaintLevel(btn) end
+        btn = ns._partyUnitToButton[arg1]
+        if btn then ns._RFRepaintLevel(btn) end
     elseif event == "UNIT_THREAT_LIST_UPDATE" or event == "UNIT_THREAT_SITUATION_UPDATE" then
         local btn = unitToButton[arg1] or ns._partyUnitToButton[arg1]
         if btn then
@@ -12432,8 +12678,9 @@ do
             "powerUniformAnchors", "extendHealthBehindPower",
         },
         textDisplay = {
-            "nameSize", "nameMaxLength", "nameColorMode", "nameCustomColor",
+            "nameSize", "nameMaxLength", "nameFormat", "nameColorMode", "nameCustomColor",
             "namePosition", "nameOffsetX", "nameOffsetY",
+            "levelTextSize", "levelTextPosition", "levelTextOffsetX", "levelTextOffsetY",
             "healthTextMode", "healthTextColorMode", "healthTextCustomColor",
             "healthTextSize", "healthTextPosition", "healthTextOffsetX", "healthTextOffsetY",
             "healAbsorbTextMode", "healAbsorbTextColorMode", "healAbsorbTextCustomColor",
@@ -12447,6 +12694,11 @@ do
             "showRoleForTank", "showRoleForHealer", "showRoleForDPS",
             "showRaidMarker", "raidMarkerSize", "raidMarkerPosition", "raidMarkerOffsetX", "raidMarkerOffsetY",
             "showPingMarker", "pingMarkerSize", "pingMarkerPosition", "pingMarkerOffsetX", "pingMarkerOffsetY",
+            "showMissingBuffs", "missingBuffsSize", "missingBuffsPosition", "missingBuffsOffsetX", "missingBuffsOffsetY",
+            "missingBuffsFort", "missingBuffsMark", "missingBuffsSpirit", "missingBuffsThorns", "missingBuffsBlessing",
+            "missingBuffsGlowType", "missingBuffsGlowColorMode", "missingBuffsGlowR", "missingBuffsGlowG", "missingBuffsGlowB",
+            "missingBuffsGlowLines", "missingBuffsGlowThickness", "missingBuffsGlowSpeed", "missingBuffsGlowBackground",
+            "missingBuffsGlowBackgroundR", "missingBuffsGlowBackgroundG", "missingBuffsGlowBackgroundB",
             "showReadyCheck", "showSummonPending", "showIncomingRez",
             "readyCheckSize", "readyCheckPosition", "readyCheckOffsetX", "readyCheckOffsetY",
             "statusTextPosition", "statusTextOffsetX", "statusTextOffsetY", "statusTextSize", "statusTextColor",
@@ -12482,6 +12734,7 @@ do
             "topNameBarBgColor", "topNameBarBgOpacity",
             "topNameBarTextSize", "topNameBarTextColorMode", "topNameBarTextColor",
             "topNameBarTextOffsetX", "topNameBarTextOffsetY", "topNameBarTextAlign",
+            "topNameBarBottom",
         },
         rangeTooltip = {
             "oorAlpha", "showTooltip", "tooltipMode", "frameStrata",
@@ -12610,20 +12863,23 @@ ns._xfBmScale = 1
 local INDICATOR_SCALE_KEYS = {}
 for _, k in ipairs({
     -- Font sizes
-    "nameSize", "healthTextSize", "healAbsorbTextSize", "statusTextSize", "powerTextSize",
+    "nameSize", "healthTextSize", "healAbsorbTextSize", "statusTextSize", "powerTextSize", "levelTextSize",
     "debuffStacksTextSize", "debuffDurTextSize", "defDurTextSize",
     -- Icon sizes
     "roleIconSize", "leaderIconSize", "raidMarkerSize", "combatIndicatorSize", "pingMarkerSize",
+    "missingBuffsSize",
     "debuffSize", "defSize", "dispellableDebuffSize",
     -- Offsets
     "nameOffsetX", "nameOffsetY",
     "healthTextOffsetX", "healthTextOffsetY",
     "healAbsorbTextOffsetX", "healAbsorbTextOffsetY",
     "powerTextOffsetX", "powerTextOffsetY",
+    "levelTextOffsetX", "levelTextOffsetY",
     "statusTextOffsetX", "statusTextOffsetY",
     "roleIconOffsetX", "roleIconOffsetY",
     "leaderIconOffsetX", "leaderIconOffsetY",
     "raidMarkerOffsetX", "raidMarkerOffsetY",
+    "missingBuffsOffsetX", "missingBuffsOffsetY",
     "combatIndicatorOffsetX", "combatIndicatorOffsetY",
     "debuffOffsetX", "debuffOffsetY",
     "dispellableDebuffOffsetX", "dispellableDebuffOffsetY",
@@ -12806,6 +13062,8 @@ function ns._RefreshProxyModes()
     -- invalidate every button's absorb value-memo (and the gen-gated
     -- settings pushes inside UpdateAbsorb).
     ns._absorbGen = (ns._absorbGen or 0) + 1
+    -- Level Text's event follows the views (defined once the unit trackers exist).
+    if ns._RFSyncLevelRegistration then ns._RFSyncLevelRegistration() end
 end
 ns._RefreshProxyModes()
 
@@ -14496,7 +14754,7 @@ ns.ReloadPartyFrames = function(skipButtons)
         -- The Party Frames kit owns its bar rects (its pass runs below, after
         -- the texture swaps, so its masks seat on the new fills).
         if not d.kit then
-            LayoutTopNameBar(raw, bh, powerH, d.health, d.topNameBar, d.topNameBarBg, d.topNameBarText)
+            LayoutTopNameBar(raw, bh, powerH, d.health, d.topNameBar, d.topNameBarBg, d.topNameBarText, d.power)
         end
         if d.health then
             d.health:SetStatusBarTexture(texPath)
@@ -14565,6 +14823,12 @@ ns.ReloadPartyFrames = function(skipButtons)
             ns._RFAnchorPowerText(d)
         end
 
+        -- Level text: restyled; _UpdateAllPartyButtons below shows or hides it by position.
+        if d.levelText then
+            ApplyFont(d.levelText, pp.levelTextSize or 10)
+            ns._RFAnchorLevelText(d)
+        end
+
         -- Heal absorb text
         if d.healAbsorbText then
             ApplyFont(d.healAbsorbText, pp.healAbsorbTextSize or 9)
@@ -14624,6 +14888,7 @@ ns.ReloadPartyFrames = function(skipButtons)
 
         -- Ping marker
         if d.pingFrame then ns._RFAnchorPing(d) end
+        if ns.RF_FvMissingAnchor then ns.RF_FvMissingAnchor(btn, d) end
 
         -- Border
         if d.UpdateBorder then d.UpdateBorder() end
@@ -16569,6 +16834,12 @@ local function CreatePreviewFrame(index, party)
     powerFS:SetTextColor(1, 1, 1, 0.9)
     powerFS:Hide()
 
+    -- Level text on its own spot (anchored, sized, coloured and shown by ApplyPreviewData)
+    local levelFS = textCarrier:CreateFontString(nil, "OVERLAY")
+    ApplyFont(levelFS, s.levelTextSize or 10)
+    levelFS:SetWordWrap(false)
+    levelFS:Hide()
+
     -- Heal absorb text (preview)
     local healAbsorbFS = textCarrier:CreateFontString(nil, "OVERLAY")
     ApplyFont(healAbsorbFS, s.healAbsorbTextSize or 9)
@@ -16645,6 +16916,7 @@ local function CreatePreviewFrame(index, party)
     f._topNameBarText = tnbText
     f._healthText = healthFS
     f._powerText = powerFS
+    f._levelText = levelFS
     f._healAbsorbText = healAbsorbFS
     f._statusText = statusFS
     f._roleIcon = roleIcon
@@ -17002,7 +17274,7 @@ local function ApplyPreviewData(f, index)
 
     -- Health bar height/anchor + Top Name Bar (helper re-anchors health top to
     -- -topBarH; the per-unit power block below re-sets only the height)
-    LayoutTopNameBar(s, h, powerH, f._health, f._topNameBar, f._topNameBarBg, f._topNameBarText)
+    LayoutTopNameBar(s, h, powerH, f._health, f._topNameBar, f._topNameBarBg, f._topNameBarText, f._power)
 
     -- Health bar
     if f._health then
@@ -17050,7 +17322,12 @@ local function ApplyPreviewData(f, index)
 
     -- Top Name Bar text (preview unit name + class/custom color)
     if f._topNameBarText and s.topNameBarEnabled then
-        f._topNameBarText:SetText(name)
+        local attach = ns.RF_LEVEL_ATTACH[s.levelTextPosition or ns.RF_LEVEL_DEFAULT]
+        if attach then
+            f._topNameBarText:SetFormattedText(attach[1], ns._RFPreviewLevel(), name)
+        else
+            f._topNameBarText:SetText(name)
+        end
         if (s.topNameBarTextColorMode or "class") == "custom" then
             local c = s.topNameBarTextColor or { r = 1, g = 1, b = 1 }
             f._topNameBarText:SetTextColor(c.r, c.g, c.b)
@@ -17977,6 +18254,9 @@ local function ApplyPreviewData(f, index)
         end
     end
 
+    -- WoW Forever: Missing Buffs (EUI_RaidFrames_ForeverMissingBuffs.lua).
+    if ns.RF_FvMissingPreview then ns.RF_FvMissingPreview(f, index, s, indVis) end
+
     -- Ready check icon
     if f._readyCheck then
         local rcStatuses = previewRoles._readyCheck
@@ -18087,11 +18367,33 @@ local function ApplyPreviewData(f, index)
         end
         -- Force text re-render (WoW doesn't visually re-layout on JustifyH change alone)
         f._nameText:SetText("")
-        f._nameText:SetText(ns.CapName(name, s))
+        local attach = ns.RF_LEVEL_ATTACH[s.levelTextPosition or ns.RF_LEVEL_DEFAULT]
+        local pvName = ns.RF_FormatName and ns.RF_FormatName(name, s) or name
+        if attach then
+            f._nameText:SetFormattedText(attach[1], ns._RFPreviewLevel(), ns.CapName(pvName, s))
+        else
+            f._nameText:SetText(ns.CapName(pvName, s))
+        end
         ApplyFont(f._nameText, s.nameSize or 10)
         f._nameText:SetTextColor(ns.RF_PreviewTextColor(s.nameColorMode or "class",
             s.nameCustomColor, classToken, 1, 1, 1))
         end -- pos ~= "none"
+    end
+
+    -- Level text on its own spot (preview): the player's level in the name's colour.
+    if f._levelText then
+        local lpos = s.levelTextPosition or ns.RF_LEVEL_DEFAULT
+        if lpos == "none" or ns.RF_LEVEL_ATTACH[lpos] then
+            f._levelText:Hide()
+        else
+            ApplyFont(f._levelText, s.levelTextSize or 10)
+            ns.AnchorRFText(f._levelText, ns.RF_BarHost(f._health, s), lpos,
+                s.levelTextOffsetX or 0, s.levelTextOffsetY or 0)
+            f._levelText:SetFormattedText("%d", ns._RFPreviewLevel())
+            f._levelText:SetTextColor(ns.RF_PreviewTextColor(s.nameColorMode or "class",
+                s.nameCustomColor, classToken, 1, 1, 1))
+            f._levelText:Show()
+        end
     end
 
     -- Dead/offline/AFK states (only when indicators eyeball is on). The rez slot is
@@ -20430,6 +20732,24 @@ function ERF:OnEnable()
     for i = 1, 4 do MakeUnitTracker("party" .. i) end
     for i = 1, 40 do MakeUnitTracker("raid" .. i) end
     eventFrame:SetScript("OnEvent", OnEvent)
+
+    -- Level Text's UNIT_LEVEL: registered on every tracker only while a view shows the
+    -- level. Called from _RefreshProxyModes (every settings write, reload and profile
+    -- swap); the stamp keeps the 45-tracker walk to real flips.
+    local lvlRegistered = false
+    function ns._RFSyncLevelRegistration()
+        local want = ns._RFLevelWanted()
+        if want == lvlRegistered then return end
+        lvlRegistered = want
+        for unit, tracker in pairs(unitTrackers) do
+            if want then
+                tracker:RegisterUnitEvent("UNIT_LEVEL", unit)
+            else
+                tracker:UnregisterEvent("UNIT_LEVEL")
+            end
+        end
+    end
+    ns._RFSyncLevelRegistration()
 
     -- UNIT_FLAGS is opt-in: only registered while the combat icon is enabled.
     if ns.UpdateCombatEventRegistration then ns.UpdateCombatEventRegistration() end

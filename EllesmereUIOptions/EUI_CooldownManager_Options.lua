@@ -8886,7 +8886,9 @@ initFrame:SetScript("OnEvent", function(self)
                         spellID = ns.HostedBuffMarkerToSpell(spellID)
                     end
                 end
-                if spellID and spellID ~= 0 then
+                if spellID and spellID ~= 0 and not ns.IsEmptySlotMarker(spellID) then
+                    -- Empty Slot: no spell/item behind it, so skip the whole per-icon settings
+                    -- tree -- the "Remove Spell" row built above is the entire menu for it.
                     -- Hosted-buff SLOT? The slot decides, not the flag alone: the same
                     -- spellID can also be this bar's cooldown entry, which must keep the CD
                     -- store + cd/util menu. Legacy fallback: flag set with no marker entry yet means the plain entry is the buff (pre-marker data).
@@ -12934,6 +12936,43 @@ initFrame:SetScript("OnEvent", function(self)
 
             allItems[#allItems + 1] = esItem
             mH = mH + ITEM_H
+
+            -- "Empty Slot" option -- adds a purely decorative placeholder that reserves a
+            -- grid position (no spell/item behind it). Reorders/moves and removes exactly
+            -- like any other tracked entry; each Add mints a fresh unique marker so several can sit on one bar.
+            local eoItem = CreateFrame("Button", nil, inner)
+            eoItem:SetHeight(ITEM_H)
+            eoItem:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH)
+            eoItem:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH)
+            eoItem:SetFrameLevel(menu:GetFrameLevel() + 2)
+
+            local eoHl = eoItem:CreateTexture(nil, "ARTWORK")
+            eoHl:SetAllPoints(); eoHl:SetColorTexture(1, 1, 1, 0); eoHl:SetAlpha(0)
+
+            local eoLbl = eoItem:CreateFontString(nil, "OVERLAY")
+            eoLbl:SetFont(FONT_PATH, 11, GetCDMOptOutline())
+            eoLbl:SetPoint("LEFT", 10, 0)
+            eoLbl:SetJustifyH("LEFT")
+            eoLbl:SetText(EllesmereUI.L("Empty Slot"))
+            eoLbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
+
+            eoItem:SetScript("OnEnter", function()
+                eoLbl:SetTextColor(1, 1, 1, 1)
+                eoHl:SetColorTexture(1, 1, 1, hlA); eoHl:SetAlpha(1)
+            end)
+            eoItem:SetScript("OnLeave", function()
+                eoLbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
+                eoHl:SetAlpha(0)
+            end)
+            eoItem:SetScript("OnClick", function()
+                menu:Hide()
+                EnsureAssignedSpells(barKey)
+                ns.AddTrackedSpell(barKey, ns.NewEmptySlotMarker())
+                RefreshCDPreview()
+            end)
+
+            allItems[#allItems + 1] = eoItem
+            mH = mH + ITEM_H
         end
 
         if false then -- misc bar custom item menu removed
@@ -15425,6 +15464,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._previewCdID = trackedCd and trackedCd[i] or nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
+                    slot._previewIsEmptySlot = nil
                     if id then
                         local tex
                         local cdClaim = ns.CdClaimMarkerToCdID and ns.CdClaimMarkerToCdID(id)
@@ -15476,6 +15516,9 @@ initFrame:SetScript("OnEvent", function(self)
                             end
                             slot._previewSpellID = hostedSid
                             slot._previewHostedBuff = true
+                        elseif ns.IsEmptySlotMarker(id) then
+                            -- Empty Slot: blank placeholder, no icon/tooltip identity.
+                            slot._previewIsEmptySlot = true
                         elseif id <= -100 then
                             -- On-use bag item: negated itemID
                             tex = C_Item.GetItemIconByID(-id)
@@ -15509,6 +15552,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._previewCdID = nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
+                    slot._previewIsEmptySlot = nil
                 end
 
                 local bSz = bd.borderSize or 1
