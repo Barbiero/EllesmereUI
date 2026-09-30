@@ -7868,15 +7868,13 @@ initFrame:SetScript("OnEvent", function(self)
         end
         end   -- close Shape/Shape Border detached-only gate
 
-        -- Row 4: Portrait Dragon toggle | Dragon Size (+ cog with the rest).
-        -- Any shape, attached or detached, on player, target and focus alike:
-        -- the Player Frame Dragon always shows, the Elite Enemy Dragon marks
-        -- elite and boss (gold) and rare (silver) enemies. HIDDEN while Portrait
-        -- Mode is None, as Size/Position above (the mode dropdown rebuilds the
-        -- page on any change); a stock style gates both slots, which drops the
-        -- row. Values read through ns.UF_DragonSettings (a target on the
-        -- "wingless" Elite/Rare Indicator style shows that style's values), and
-        -- every setter pins that view first (ns.UF_PinLegacyDragon).
+        -- Row 4: Portrait Dragon toggle | Dragon Size (+ cog with the rest). Any
+        -- shape, on player, target and focus: the Player Frame Dragon always shows,
+        -- the Elite Enemy Dragon marks elite/boss (gold) and rare (silver) enemies.
+        -- HIDDEN while Portrait Mode is None (the mode dropdown rebuilds the page);
+        -- a stock style gates both slots, which drops the row. Values read through
+        -- ns.UF_DragonSettings (the "wingless" Elite/Rare style shows its own
+        -- values); every setter pins that view first (ns.UF_PinLegacyDragon).
         if SVal("portraitStyle", "attached") ~= "none" then
             local playerDragon = optState.selectedUnit == "player"
             local dragonName = playerDragon and "Player Frame Dragon" or "Elite Enemy Dragon"
@@ -10319,7 +10317,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- through the panel's own widget path; a transparent button over the row
             -- click-throughs to Resource & Cast Bars > Cast Bar (accent "click here").
             local hintRow
-            hintRow, h = W:DualRow(parent, y, { type = "label", text = hintText }, nil)
+            hintRow, h = W:DualRow(parent, y, { type = "label", text = hintText }, nil)  -- eui-style: allow dualrow-nil
             -- Labels are single-line by default; wrap this hint inside the full-width
             -- row so "click here" stays on screen.
             local lbl = hintRow._leftRegion and hintRow._leftRegion._label
