@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  UnitFrames_Options\SharedAppearance_Options.lua
+--  Unit Frames options: Display, Portrait, Text Bar and Extras sections of the
+--  shared (player/target/focus) settings. Definitions only; shared helpers
+--  come from ns._UFO_OptEnv, the page accessors from ctx (both filled by
+--  EUI_UnitFrames_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIUnitFrames"]
+if not ns then return end  -- module disabled: no options page
+
+function ns.UFO_BuildDisplaySection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local AttachFrameSourceCog, BuildBarTexDropdown, BuildInactiveNotice, CLASS_FULL_COORDS = env.AttachFrameSourceCog, env.BuildBarTexDropdown, env.BuildInactiveNotice, env.CLASS_FULL_COORDS
+    local CLASS_FULL_SPRITE_BASE, GROUP_UNIT_ORDER, PP, PromptReloadIfUnspawned = env.CLASS_FULL_SPRITE_BASE, env.GROUP_UNIT_ORDER, env.PP, env.PromptReloadIfUnspawned
+    local ReloadAndUpdate, SHORT_LABELS, UNIT_DB_MAP, UpdatePreview = env.ReloadAndUpdate, env.SHORT_LABELS, env.UNIT_DB_MAP, env.UpdatePreview
+    local db, frames, optState, portraitArtValues = env.db, env.frames, env.optState, env.portraitArtValues
+    local W, SDB, SGet, SSet = ctx.W, ctx.SDB, ctx.SGet, ctx.SSet
+    local SVal = ctx.SVal
+    local _, h
+
     -------------------------------------------------------------------
     --  DISPLAY
     -------------------------------------------------------------------
@@ -181,7 +202,7 @@
                 end)
                 dis:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
             end
-            return BuildInactiveNotice(parent, y, srcNow)
+            return BuildInactiveNotice(parent, y, srcNow), true
         end
     end
 
@@ -1003,6 +1024,19 @@
 
     _, h = W:Spacer(parent, y, 20); y = y - h
 
+    return y
+end
+
+function ns.UFO_BuildPortraitSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, ReloadAndUpdate, SHORT_LABELS, UNIT_DB_MAP = env.GROUP_UNIT_ORDER, env.ReloadAndUpdate, env.SHORT_LABELS, env.UNIT_DB_MAP
+    local UpdatePreview, db, detPortraitShapeOrder, detPortraitShapeValues = env.UpdatePreview, env.db, env.detPortraitShapeOrder, env.detPortraitShapeValues
+    local optState, portraitArtOrder, portraitArtValues, portraitModeOrder2 = env.optState, env.portraitArtOrder, env.portraitArtValues, env.portraitModeOrder2
+    local portraitModeValues2, portraitNonPlayerOrder, portraitNonPlayerValues = env.portraitModeValues2, env.portraitNonPlayerOrder, env.portraitNonPlayerValues
+    local W, SDB, SGet, SSet = ctx.W, ctx.SDB, ctx.SGet, ctx.SSet
+    local SVal = ctx.SVal
+    local _, h
+
     -------------------------------------------------------------------
     --  PORTRAIT
     -------------------------------------------------------------------
@@ -1754,6 +1788,18 @@
     end   -- close dragon row hidden-at-None gate
 
     _, h = W:Spacer(parent, y, 20); y = y - h
+
+    return y, sharedPortraitHeader, sharedPortraitModeRow
+end
+
+function ns.UFO_BuildTextBarSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, PP, RegisterWidgetRefresh, ReloadAndUpdate = env.GROUP_UNIT_ORDER, env.PP, env.RegisterWidgetRefresh, env.ReloadAndUpdate
+    local SHORT_LABELS, UNIT_DB_MAP, UpdatePreview, btbPositionOrder = env.SHORT_LABELS, env.UNIT_DB_MAP, env.UpdatePreview, env.btbPositionOrder
+    local btbPositionValues, btbTextOrder, btbTextValues, classIconLocOrder = env.btbPositionValues, env.btbTextOrder, env.btbTextValues, env.classIconLocOrder
+    local classIconLocValues, classIconOrder, classIconValues, optState = env.classIconLocValues, env.classIconOrder, env.classIconValues, env.optState
+    local W, SGet, SSet, SVal = ctx.W, ctx.SGet, ctx.SSet, ctx.SVal
+    local _, h
 
     -------------------------------------------------------------------
     --  TEXT BAR
@@ -2599,6 +2645,18 @@
     end
     end   -- close Text Bar hidden-while-disabled gate
 
+    return y, sharedBtbHeader, sharedBtbToggleRow, sharedBtbTextRow, sharedBtbCenterRow
+end
+
+function ns.UFO_BuildExtrasSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local CLASS_FULL_COORDS, GROUP_UNIT_ORDER, RegisterWidgetRefresh, ReloadAndUpdate = env.CLASS_FULL_COORDS, env.GROUP_UNIT_ORDER, env.RegisterWidgetRefresh, env.ReloadAndUpdate
+    local SHORT_LABELS, UNIT_DB_MAP, UpdatePreview, db = env.SHORT_LABELS, env.UNIT_DB_MAP, env.UpdatePreview, env.db
+    local optState = env.optState
+    local W, SApplySupport, SDB, SGetSupported = ctx.W, ctx.SApplySupport, ctx.SDB, ctx.SGetSupported
+    local SSetSupported, SValSupported, SVisible = ctx.SSetSupported, ctx.SValSupported, ctx.SVisible
+    local h
+
     local sharedAddHeader
     -------------------------------------------------------------------
     --  EXTRAS
@@ -3232,3 +3290,5 @@
         parent._ufFactionRow = factionRow
     end
 
+    return y, sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5
+end

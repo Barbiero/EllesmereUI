@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  UnitFrames_Options\SharedBars_Options.lua
+--  Unit Frames options: Health Bar, Power Bar, Class Resource and Absorbs sections of the
+--  shared (player/target/focus) settings. Definitions only; shared helpers
+--  come from ns._UFO_OptEnv, the page accessors from ctx (both filled by
+--  EUI_UnitFrames_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIUnitFrames"]
+if not ns then return end  -- module disabled: no options page
+
+function ns.UFO_BuildHealthBarSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local AddDarkModeBlock, GROUP_UNIT_ORDER, PP, RegisterWidgetRefresh = env.AddDarkModeBlock, env.GROUP_UNIT_ORDER, env.PP, env.RegisterWidgetRefresh
+    local ReloadAndUpdate, SHORT_LABELS, UNIT_DB_MAP, UpdatePreview = env.ReloadAndUpdate, env.SHORT_LABELS, env.UNIT_DB_MAP, env.UpdatePreview
+    local db, healthTextOrder, healthTextOrderPlayer, healthTextOrderTargetFocus = env.db, env.healthTextOrder, env.healthTextOrderPlayer, env.healthTextOrderTargetFocus
+    local healthTextValues, optState = env.healthTextValues, env.optState
+    local W, SDB, SGet, SSet = ctx.W, ctx.SDB, ctx.SGet, ctx.SSet
+    local SShowsLevel, SVal = ctx.SShowsLevel, ctx.SVal
+    local _, h
+
     -------------------------------------------------------------------
     --  HEALTH BAR
     -------------------------------------------------------------------
@@ -1335,6 +1356,17 @@
 
     _, h = W:Spacer(parent, y, 20); y = y - h
 
+    return y, sharedBarsHeader, sharedScaleRow, sharedSizeRow, sharedTextRow, sharedCenterTextRow
+end
+
+function ns.UFO_BuildPowerBarSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, PP, RegisterWidgetRefresh, ReloadAndUpdate = env.GROUP_UNIT_ORDER, env.PP, env.RegisterWidgetRefresh, env.ReloadAndUpdate
+    local SHORT_LABELS, UNIT_DB_MAP, UpdatePreview, optState = env.SHORT_LABELS, env.UNIT_DB_MAP, env.UpdatePreview, env.optState
+    local W, SDB, SGet, SSet = ctx.W, ctx.SDB, ctx.SGet, ctx.SSet
+    local SSetSupported, SVal, SValSupported = ctx.SSetSupported, ctx.SVal, ctx.SValSupported
+    local _, h
+
     -------------------------------------------------------------------
     --  POWER BAR
     -------------------------------------------------------------------
@@ -2322,6 +2354,19 @@
 
     _, h = W:Spacer(parent, y, 20); y = y - h
 
+    return y, sharedPowerHeader, sharedPowerRow1, sharedPowerRow2
+end
+
+function ns.UFO_BuildClassResourceSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, RegisterWidgetRefresh, ReloadAndUpdate, SHORT_LABELS = env.GROUP_UNIT_ORDER, env.RegisterWidgetRefresh, env.ReloadAndUpdate, env.SHORT_LABELS
+    local UNIT_DB_MAP, UpdatePreview, classPowerPosOrder, classPowerPosValues = env.UNIT_DB_MAP, env.UpdatePreview, env.classPowerPosOrder, env.classPowerPosValues
+    local classPowerStyleOrder, classPowerStyleValues, optState = env.classPowerStyleOrder, env.classPowerStyleValues, env.optState
+    local W, SApplySupport, SGetSupported, SSetSupported = ctx.W, ctx.SApplySupport, ctx.SGetSupported, ctx.SSetSupported
+    local SValSupported = ctx.SValSupported
+    local _, h
+    local row
+
     -- CLASS RESOURCE section: only shown in multi-edit or when player is selected
     local _showClassRes = optState.selectedUnit == "player"
     if _showClassRes then
@@ -2760,6 +2805,17 @@
     end -- _showClassRes
 
     _, h = W:Spacer(parent, y, 20); y = y - h
+
+    return y
+end
+
+function ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, RegisterWidgetRefresh, ReloadAndUpdate, SHORT_LABELS = env.GROUP_UNIT_ORDER, env.RegisterWidgetRefresh, env.ReloadAndUpdate, env.SHORT_LABELS
+    local UNIT_DB_MAP, UpdatePreview, db, optState = env.UNIT_DB_MAP, env.UpdatePreview, env.db, env.optState
+    local W, SApplySupport, SGetSupported, SSetSupported = ctx.W, ctx.SApplySupport, ctx.SGetSupported, ctx.SSetSupported
+    local SValSupported = ctx.SValSupported
+    local _, h
 
     -------------------------------------------------------------------
     --  ABSORBS (player/target/focus -- mirrors the Raid Frames section)
@@ -3392,3 +3448,5 @@
     _, h = W:Spacer(parent, y, 20); y = y - h
     end -- _supportsAbsorbs
 
+    return y, sharedAbsorbsHeader, absorbRow
+end

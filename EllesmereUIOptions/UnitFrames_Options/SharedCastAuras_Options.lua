@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  UnitFrames_Options\SharedCastAuras_Options.lua
+--  Unit Frames options: Cast Bar and Buffs and Debuffs sections of the
+--  shared (player/target/focus) settings. Definitions only; shared helpers
+--  come from ns._UFO_OptEnv, the page accessors from ctx (both filled by
+--  EUI_UnitFrames_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIUnitFrames"]
+if not ns then return end  -- module disabled: no options page
+
+function ns.UFO_BuildCastBarSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local GROUP_UNIT_ORDER, PP, RegisterWidgetRefresh, ReloadAndUpdate = env.GROUP_UNIT_ORDER, env.PP, env.RegisterWidgetRefresh, env.ReloadAndUpdate
+    local SHORT_LABELS, UF_ImpCastGlowDesc, UNIT_DB_MAP, UpdatePreview = env.SHORT_LABELS, env.UF_ImpCastGlowDesc, env.UNIT_DB_MAP, env.UpdatePreview
+    local db, optState = env.db, env.optState
+    local W, SGetSupported, SSetSupported, SVal = ctx.W, ctx.SGetSupported, ctx.SSetSupported, ctx.SVal
+    local SValSupported = ctx.SValSupported
+    local h
+
     -------------------------------------------------------------------
     --  CAST BAR
     -------------------------------------------------------------------
@@ -1055,6 +1075,20 @@
         end
     end
     end   -- close Cast Bar hidden-while-disabled gate
+
+    return y, sharedCastHeader, sharedCastRow1, castRow2, castTextRow, castTargetRow
+end
+
+function ns.UFO_BuildBuffsDebuffsSection(parent, y, ctx)
+    local env = ns._UFO_OptEnv
+    local AttachDebuffModeWarn, DebuffModeDropdownCfg, GROUP_UNIT_ORDER, PP = env.AttachDebuffModeWarn, env.DebuffModeDropdownCfg, env.GROUP_UNIT_ORDER, env.PP
+    local RegisterWidgetRefresh, ReloadAndUpdate, SHORT_LABELS, SwapAuraSlot = env.RegisterWidgetRefresh, env.ReloadAndUpdate, env.SHORT_LABELS, env.SwapAuraSlot
+    local UF_PurgeGlowDesc, UNIT_DB_MAP, UNIT_LABELS_SUP, UpdatePreview = env.UF_PurgeGlowDesc, env.UNIT_DB_MAP, env.UNIT_LABELS_SUP, env.UpdatePreview
+    local buffAnchorOrder, buffAnchorValues, buffGrowthOrder, buffGrowthValues = env.buffAnchorOrder, env.buffAnchorValues, env.buffGrowthOrder, env.buffGrowthValues
+    local db, frames, optState = env.db, env.frames, env.optState
+    local W, SApplySupport, SDB, SGet = ctx.W, ctx.SApplySupport, ctx.SDB, ctx.SGet
+    local SSetSupported, SVal, SValSupported = ctx.SSetSupported, ctx.SVal, ctx.SValSupported
+    local _, h
 
     local sharedBuffDebuffHeader
     -------------------------------------------------------------------
@@ -2231,3 +2265,5 @@
 
     _, h = W:Spacer(parent, y, 20); y = y - h
 
+    return y, sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3
+end

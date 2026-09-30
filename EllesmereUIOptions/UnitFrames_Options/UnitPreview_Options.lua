@@ -1,4 +1,20 @@
-local function BuildUnitPreview(parent, unitKey, side)
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  UnitFrames_Options\UnitPreview_Options.lua
+--  Unit Frames options: the unit frame preview in the page header
+--  (BuildUnitPreview). Definitions only; shared helpers and the
+--  preview state come from ns._UFO_OptEnv (filled by
+--  EUI_UnitFrames_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIUnitFrames"]
+if not ns then return end  -- module disabled: no options page
+
+function ns.UFO_BuildUnitPreview(parent, unitKey, side)
+    local env = ns._UFO_OptEnv
+    local ApplyClassIconTexture_Preview, ApplyPreviewPortraitShape, BlizzPreviewScale, CLASS_FULL_COORDS = env.ApplyClassIconTexture_Preview, env.ApplyPreviewPortraitShape, env.BlizzPreviewScale, env.CLASS_FULL_COORDS
+    local GetUFOptOutline, PP, PREVIEW_FONT, ResolveBlizzPreview = env.GetUFOptOutline, env.PP, env.PREVIEW_FONT, env.ResolveBlizzPreview
+    local SOLID_BACKDROP, SetPVFont, _previewBuffIcons, _previewCreatureNames = env.SOLID_BACKDROP, env.SetPVFont, env._previewBuffIcons, env._previewCreatureNames
+    local allPreviews, db, optState, unitSide = env.allPreviews, env.db, env.optState, env.unitSide
     -- Preview clamps the aura Y offset to this magnitude so a large offset
     -- can't balloon the preview/content header; real frames apply it in full.
     local PREVIEW_Y_CAP = 50

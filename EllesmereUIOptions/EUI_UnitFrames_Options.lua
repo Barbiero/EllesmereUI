@@ -2119,6 +2119,36 @@ initFrame:SetScript("OnEvent", function(self)
 
         row, h = BuildApplyAllRow(parent, y, GROUP_UNIT_ORDER, optState.selectedUnit); y = y - h
 
+        -- The sections live in UnitFrames_Options\Shared*_Options.lua and read
+        -- this page's accessors through ctx. Each returns the new y plus the rows
+        -- the click mapping below points at; Display returns true second when
+        -- the unit has no EUI frame (only the inactive notice is built).
+        local ctx = {
+            W = W, SGet = SGet, SSet = SSet, SDB = SDB, SVal = SVal, SShowsLevel = SShowsLevel,
+            SSetSupported = SSetSupported, SGetSupported = SGetSupported, SValSupported = SValSupported,
+            SVisible = SVisible, SApplySupport = SApplySupport,
+        }
+        local inactive
+        y, inactive = ns.UFO_BuildDisplaySection(parent, y, ctx)
+        if inactive then return y end
+        local sharedPortraitHeader, sharedPortraitModeRow
+        y, sharedPortraitHeader, sharedPortraitModeRow = ns.UFO_BuildPortraitSection(parent, y, ctx)
+        local sharedBarsHeader, sharedScaleRow, sharedSizeRow, sharedTextRow, sharedCenterTextRow
+        y, sharedBarsHeader, sharedScaleRow, sharedSizeRow, sharedTextRow, sharedCenterTextRow = ns.UFO_BuildHealthBarSection(parent, y, ctx)
+        local sharedPowerHeader, sharedPowerRow1, sharedPowerRow2
+        y, sharedPowerHeader, sharedPowerRow1, sharedPowerRow2 = ns.UFO_BuildPowerBarSection(parent, y, ctx)
+        local sharedCastHeader, sharedCastRow1, castRow2, castTextRow, castTargetRow
+        y, sharedCastHeader, sharedCastRow1, castRow2, castTextRow, castTargetRow = ns.UFO_BuildCastBarSection(parent, y, ctx)
+        local sharedBtbHeader, sharedBtbToggleRow, sharedBtbTextRow, sharedBtbCenterRow
+        y, sharedBtbHeader, sharedBtbToggleRow, sharedBtbTextRow, sharedBtbCenterRow = ns.UFO_BuildTextBarSection(parent, y, ctx)
+        y = ns.UFO_BuildClassResourceSection(parent, y, ctx)
+        local sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3
+        y, sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3 = ns.UFO_BuildBuffsDebuffsSection(parent, y, ctx)
+        local sharedAbsorbsHeader, absorbRow
+        y, sharedAbsorbsHeader, absorbRow = ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
+        local sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5
+        y, sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5 = ns.UFO_BuildExtrasSection(parent, y, ctx)
+
         -------------------------------------------------------------------
         --  Return click mapping targets + total height
         -------------------------------------------------------------------
@@ -2219,7 +2249,7 @@ initFrame:SetScript("OnEvent", function(self)
             fy = fy - DD_H - 20
 
             local side = unitSide[optState.selectedUnit] or "left"
-            local preview = BuildUnitPreview(hdr, optState.selectedUnit, side)
+            local preview = ns.UFO_BuildUnitPreview(hdr, optState.selectedUnit, side)
             activePreview = preview
             local previewScale = preview._previewScale or 1
             local initBuffTopPad = preview._buffTopPad or 0
@@ -2460,7 +2490,7 @@ initFrame:SetScript("OnEvent", function(self)
             fy = fy - DD_H - 20
 
             local side = unitSide[selectedMiniUnit] or "left"
-            local preview = BuildUnitPreview(hdr, selectedMiniUnit, side)
+            local preview = ns.UFO_BuildUnitPreview(hdr, selectedMiniUnit, side)
             activePreview = preview
             local previewScale = preview._previewScale or 1
             local initBuffTopPad = preview._buffTopPad or 0
@@ -2548,7 +2578,7 @@ initFrame:SetScript("OnEvent", function(self)
         ns._bossHeaderBuilder = function(hdr, hdrW)
             local fy = -20
             local side = unitSide.boss or "right"
-            local preview = BuildUnitPreview(hdr, "boss", side)
+            local preview = ns.UFO_BuildUnitPreview(hdr, "boss", side)
             activePreview = preview
             local previewScale = preview._previewScale or 1
             local initBuffTopPad = preview._buffTopPad or 0
@@ -2670,18 +2700,32 @@ initFrame:SetScript("OnEvent", function(self)
         end
     end)
 
-    -- Shared helpers for the mini and boss frame builders under
-    -- UnitFrames_Options\ (loaded before this file, read when a page builds).
+    -- Shared helpers and state for the builders under UnitFrames_Options\
+    -- (loaded before this file, read when a page builds).
     ns._UFO_OptEnv = {
-        abs = abs, AddDarkModeBlock = AddDarkModeBlock, AttachDebuffModeWarn = AttachDebuffModeWarn,
-        AttachFrameSourceCog = AttachFrameSourceCog, buffAnchorOrder = buffAnchorOrder, buffAnchorValues = buffAnchorValues,
-        buffGrowthOrder = buffGrowthOrder, buffGrowthValues = buffGrowthValues, BuildApplyAllRow = BuildApplyAllRow,
-        BuildBarTexDropdown = BuildBarTexDropdown, BuildInactiveNotice = BuildInactiveNotice, classThemeSubOrder = classThemeSubOrder,
-        classThemeSubValues = classThemeSubValues, db = db, DebuffModeDropdownCfg = DebuffModeDropdownCfg,
-        healthTextOrder = healthTextOrder, healthTextOrderBoss = healthTextOrderBoss, healthTextValues = healthTextValues,
-        MINI_GROUP_ORDER = MINI_GROUP_ORDER, PP = PP, PromptReloadIfUnspawned = PromptReloadIfUnspawned,
-        RegisterWidgetRefresh = RegisterWidgetRefresh, ReloadAndUpdate = ReloadAndUpdate, SwapAuraSlot = SwapAuraSlot,
-        UpdatePreview = UpdatePreview,
+        _previewBuffIcons = _previewBuffIcons, _previewCreatureNames = _previewCreatureNames, abs = abs,
+        AddDarkModeBlock = AddDarkModeBlock, allPreviews = allPreviews, ApplyClassIconTexture_Preview = ApplyClassIconTexture_Preview,
+        ApplyPreviewPortraitShape = ApplyPreviewPortraitShape, AttachDebuffModeWarn = AttachDebuffModeWarn, AttachFrameSourceCog = AttachFrameSourceCog,
+        BlizzPreviewScale = BlizzPreviewScale, btbPositionOrder = btbPositionOrder, btbPositionValues = btbPositionValues,
+        btbTextOrder = btbTextOrder, btbTextValues = btbTextValues, buffAnchorOrder = buffAnchorOrder,
+        buffAnchorValues = buffAnchorValues, buffGrowthOrder = buffGrowthOrder, buffGrowthValues = buffGrowthValues,
+        BuildApplyAllRow = BuildApplyAllRow, BuildBarTexDropdown = BuildBarTexDropdown, BuildInactiveNotice = BuildInactiveNotice,
+        CLASS_FULL_COORDS = CLASS_FULL_COORDS, CLASS_FULL_SPRITE_BASE = CLASS_FULL_SPRITE_BASE, classIconLocOrder = classIconLocOrder,
+        classIconLocValues = classIconLocValues, classIconOrder = classIconOrder, classIconValues = classIconValues,
+        classPowerPosOrder = classPowerPosOrder, classPowerPosValues = classPowerPosValues, classPowerStyleOrder = classPowerStyleOrder,
+        classPowerStyleValues = classPowerStyleValues, classThemeSubOrder = classThemeSubOrder, classThemeSubValues = classThemeSubValues,
+        db = db, DebuffModeDropdownCfg = DebuffModeDropdownCfg, detPortraitShapeOrder = detPortraitShapeOrder,
+        detPortraitShapeValues = detPortraitShapeValues, frames = frames, GetUFOptOutline = GetUFOptOutline,
+        GROUP_UNIT_ORDER = GROUP_UNIT_ORDER, healthTextOrder = healthTextOrder, healthTextOrderBoss = healthTextOrderBoss,
+        healthTextOrderPlayer = healthTextOrderPlayer, healthTextOrderTargetFocus = healthTextOrderTargetFocus, healthTextValues = healthTextValues,
+        MINI_GROUP_ORDER = MINI_GROUP_ORDER, optState = optState, portraitArtOrder = portraitArtOrder,
+        portraitArtValues = portraitArtValues, portraitModeOrder2 = portraitModeOrder2, portraitModeValues2 = portraitModeValues2,
+        portraitNonPlayerOrder = portraitNonPlayerOrder, portraitNonPlayerValues = portraitNonPlayerValues, PP = PP,
+        PREVIEW_FONT = PREVIEW_FONT, PromptReloadIfUnspawned = PromptReloadIfUnspawned, RegisterWidgetRefresh = RegisterWidgetRefresh,
+        ReloadAndUpdate = ReloadAndUpdate, ResolveBlizzPreview = ResolveBlizzPreview, SetPVFont = SetPVFont,
+        SHORT_LABELS = SHORT_LABELS, SOLID_BACKDROP = SOLID_BACKDROP, SwapAuraSlot = SwapAuraSlot,
+        UF_ImpCastGlowDesc = UF_ImpCastGlowDesc, UF_PurgeGlowDesc = UF_PurgeGlowDesc, UNIT_DB_MAP = UNIT_DB_MAP,
+        UNIT_LABELS_SUP = UNIT_LABELS_SUP, unitSide = unitSide, UpdatePreview = UpdatePreview,
     }
 
     ---------------------------------------------------------------------------
