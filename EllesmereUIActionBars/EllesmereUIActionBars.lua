@@ -16964,6 +16964,7 @@ local function UpdateXPBar()
     end
 
     text:SetText(strLevel .. strXP .. strRested)
+    if frame._fitTextBg then frame._fitTextBg() end
 
     EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("XPBar", frame, s)
 end
@@ -16987,6 +16988,47 @@ local function CreateXPBar()
     restedBar:GetStatusBarTexture():SetDrawLayer("ARTWORK", 2)
     restedBar:Hide()
     holder._restedBar = restedBar
+
+    -- WoW Forever: Text Background (custom). A filled box behind the XP text so the Forever
+    -- XP dividers do not show through the glyphs and fragment them. On the text's own host
+    -- frame (above the dividers via frame level, below the text via ARTWORK vs the text's
+    -- OVERLAY); re-fit to the string in FitTextBg, called from UpdateXPBar after SetText.
+    -- On/off + colour come from the XPBar settings (showTextBg / textBgColor). Nil = off.
+    local textBg = holder._text:GetParent():CreateTexture(nil, "ARTWORK")
+    textBg:Hide()
+    holder._textBg = textBg
+    local function FitTextBg()
+        local cfg = EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"]
+        local t = holder._text
+        if not cfg or not cfg.showTextBg or not t then textBg:Hide(); return end
+        local sw, sh = t:GetStringWidth() or 0, t:GetStringHeight() or 0
+        if sw <= 0 or sh <= 0 or (t:GetText() or "") == "" then textBg:Hide(); return end
+        local padX, padY = 3, 1
+        local c = cfg.textBgColor or {}
+        textBg:SetColorTexture(c.r or 0.06, c.g or 0.06, c.b or 0.08, c.a or 0.9)
+        -- The box is a static (never-rotated) quad: axis-aligned since the readout is only ever
+        -- rotated by 0 or +/-90 degrees, so when reoriented we just swap its dimensions to stand it
+        -- upright. Its centre therefore == its anchor point exactly.
+        local rot = holder._txRot or 0
+        local bw, bh
+        if rot ~= 0 then bw, bh = sh + padY * 2, sw + padX * 2
+        else bw, bh = sw + padX * 2, sh + padY * 2 end
+        if textBg.SetRotation then textBg:SetRotation(0) end
+        textBg:SetSize(bw, bh)
+        -- SetRotation pivots the fontstring about the TOP-CENTRE of its (unrotated) region, so the
+        -- rendered text lands displaced from the region centre by (hh*sin, hh*(1-cos)), hh = half
+        -- the text height. Measured empirically: sh/2 at +90deg for font 9 (4.4) and font 22 (11).
+        -- This is 0 unrotated and flips sign for Read Downward, so the box tracks the text at any
+        -- size/angle. Anchor to the holder (not the rotated fontstring, which would desync).
+        local hh = sh / 2
+        local compX = hh * math.sin(rot)
+        local compY = hh * (1 - math.cos(rot))
+        textBg:ClearAllPoints()
+        textBg:SetPoint("CENTER", holder, holder._txAP or "CENTER",
+            (holder._txOX or 0) + compX, (holder._txOY or 0) + compY)
+        textBg:Show()
+    end
+    holder._fitTextBg = FitTextBg
 
     -- Tooltip. Click Through suppresses it: on a mouseover bar the holder keeps mouse
     -- motion only so the hover fade can see the cursor.

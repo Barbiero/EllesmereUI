@@ -2134,6 +2134,14 @@ initFrame:SetScript("OnEvent", function(self)
                     refreshAlpha = function() return DivOn() and 1 or 0.3 end },
               } });  y = y - h
         if not EllesmereUI._prebuilding then
+            -- Text Background colour on the Text Background toggle.
+            EllesmereUI.BuildInlineSwatches(xpbRowA._leftRegion, {
+                { tooltip = "Text Background Color",
+                  getValue = function() local c = XPB() and XPB().textBgColor; if c then return c.r or 0.06, c.g or 0.06, c.b or 0.08 end return 0.06, 0.06, 0.08 end,
+                  setValue = function(r, g, b) local o = XPB().textBgColor or {}; XPB().textBgColor = { r = r, g = g, b = b, a = o.a or 0.9 }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                  onClick = function(self) if self._eabOrigClick then self._eabOrigClick(self) end end,
+                  refreshAlpha = function() return (XPB() and XPB().showTextBg) and 1 or 0.3 end },
+            }, { size = 20 })
             -- Divider Text colour + a 4-arrow cog (Text Size / X / Y offset) on Divider Text.
             EllesmereUI.BuildInlineSwatches(xpbRowB._leftRegion, {
                 { tooltip = "Divider Text Color",
