@@ -243,7 +243,10 @@ initFrame:SetScript("OnEvent", function(self)
     --  frame creation, no GC pressure, just SetPoint/SetSize/SetColorTexture/
     --  SetTexCoord on already-existing objects.
     ---------------------------------------------------------------------------
-    local activePreview    -- reference to the current preview frame (if any)
+    -- Mutable state shared with the page builders under ActionBars_Options\.
+    -- A table instead of locals so every file reads and writes the live value.
+    -- activePreview: reference to the current preview frame (if any).
+    local optState = {}
     local headerFixedH = 0 -- fixed height in content header (dropdown + label + padding), excluding preview
     local _barsHeaderBuilder  -- stored header builder for cache restore
     local _abPreviewHintFS                 -- hint FontString for Single Bar Edit
@@ -256,24 +259,24 @@ initFrame:SetScript("OnEvent", function(self)
     -- Lightweight refresh: re-read settings, update visuals.
     local function UpdatePreview()
         -- Recover activePreview from content header if lost (e.g. page cache restore)
-        if not activePreview and EllesmereUI._contentHeaderPreview then
-            activePreview = EllesmereUI._contentHeaderPreview
+        if not optState.activePreview and EllesmereUI._contentHeaderPreview then
+            optState.activePreview = EllesmereUI._contentHeaderPreview
         end
-        if activePreview and activePreview.Update then
-            activePreview:Update()
+        if optState.activePreview and optState.activePreview.Update then
+            optState.activePreview:Update()
         end
     end
 
     -- Full refresh also recalculates content header height (for bar scale changes)
     local function UpdatePreviewAndResize()
-        if not activePreview and EllesmereUI._contentHeaderPreview then
-            activePreview = EllesmereUI._contentHeaderPreview
+        if not optState.activePreview and EllesmereUI._contentHeaderPreview then
+            optState.activePreview = EllesmereUI._contentHeaderPreview
         end
-        if activePreview and activePreview.Update then
-            activePreview:Update()
+        if optState.activePreview and optState.activePreview.Update then
+            optState.activePreview:Update()
             if headerFixedH > 0 then
                 local hintH = (not IsPreviewHintDismissed()) and 29 or 0
-                local wrapH = activePreview._wrapper and activePreview._wrapper:GetHeight() or (activePreview:GetHeight() * activePreview:GetScale())
+                local wrapH = optState.activePreview._wrapper and optState.activePreview._wrapper:GetHeight() or (optState.activePreview:GetHeight() * optState.activePreview:GetScale())
                 local newTotal = headerFixedH + wrapH + hintH
                 EllesmereUI:UpdateContentHeaderHeight(newTotal)
             end
@@ -288,7 +291,7 @@ initFrame:SetScript("OnEvent", function(self)
         specChangeFrame:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
         specChangeFrame:SetScript("OnEvent", function(self, event)
             if event == "ACTIVE_TALENT_GROUP_CHANGED" and _barsHeaderBuilder then
-                activePreview = nil
+                optState.activePreview = nil
                 if EllesmereUI:IsShown() and EllesmereUI:GetActiveModule() == "EllesmereUIActionBars" then
                     EllesmereUI:SetContentHeader(_barsHeaderBuilder)
                     UpdatePreviewAndResize()
@@ -312,7 +315,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Skip visibility-only / data bars (no count). Guard on count, not buttonPrefix:
         -- custom bars (Bar9/Bar10) lack a prefix but render from EABButtons like any bar.
         if not barInfo or not barInfo.count then
-            activePreview = nil
+            optState.activePreview = nil
             return 0
         end
 
@@ -1156,7 +1159,7 @@ initFrame:SetScript("OnEvent", function(self)
         pf:Update()
 
         -- Return the actual computed height (converted to parent-space)
-        activePreview = pf
+        optState.activePreview = pf
         EllesmereUI._contentHeaderPreview = pf
         return pf._wrapper:GetHeight()
     end
@@ -5713,8 +5716,8 @@ initFrame:SetScript("OnEvent", function(self)
             end
 
             local textOverlays = {}
-            if activePreview then
-                local pv = activePreview
+            if optState.activePreview then
+                local pv = optState.activePreview
                 local pvButtons = pv._buttons
                 local iconLevel = (pvButtons[1] and pvButtons[1].frame and pvButtons[1].frame:GetFrameLevel() or 5) + 10
                 local textOnIconLevel = iconLevel + 10
@@ -5743,7 +5746,7 @@ initFrame:SetScript("OnEvent", function(self)
         local y = yOffset
         local _, h
 
-        activePreview = nil
+        optState.activePreview = nil
 
         -- Consume any pending bar selection from Element Options navigation.
         if EllesmereUI._consumePendingActionBarSelect then EllesmereUI._consumePendingActionBarSelect() end
