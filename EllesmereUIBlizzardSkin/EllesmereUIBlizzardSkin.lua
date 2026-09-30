@@ -49,6 +49,7 @@ local WINDOW_ENABLE_KEYS = {
     groupinvite     = "reskinGroupInvite",
     readycheck      = "reskinReadyCheck",
     micromenu       = "reskinMicroMenu",
+    bagbar          = "reskinBagBar",
     housing         = "reskinHousing",
     professions     = "reskinProfessions",
     worldmap        = "reskinWorldMap",
