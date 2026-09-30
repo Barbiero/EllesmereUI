@@ -1453,6 +1453,11 @@ initFrame:SetScript("OnEvent", function(self)
         local W = EllesmereUI.Widgets
         local _, h
 
+        -- The only sub-content here (Remember Sign-Up Roles) hooks retail's premade
+        -- application dialog, which Forever's vanilla LFG window does not have, so on
+        -- Forever the card shows just the skin toggle.
+        if EllesmereUI.IS_FOREVER then return y end
+
         _, h = WSCardSection(parent, "QUALITY OF LIFE", y);  y = y - h
 
         _, h = W:DualRow(parent, y,
@@ -1774,7 +1779,10 @@ initFrame:SetScript("OnEvent", function(self)
         },
         {
             key   = "lfg",
-            title = "LFG Menu",
+            -- Forever's window is literally titled "Looking For Group"; spell it out with the
+            -- abbreviation in parens so the settings search matches both "looking for group"
+            -- and "lfg" (the card search indexes title + desc). Retail keeps its Group Finder label.
+            title = EllesmereUI.IS_FOREVER and "Looking For Group (LFG)" or "LFG Menu",
             desc  = "Group Finder and Premade Groups window, plus browsing quality-of-life extras.",
             reloadMsg = "Changing the Group Finder reskin requires a UI reload to fully swap between Blizzard and Ellesmere styles.",
             setEnabled = function(v)
@@ -2205,12 +2213,14 @@ initFrame:SetScript("OnEvent", function(self)
 
     -- WoW Forever drops the cards for windows it does not skin or has no use
     -- for: the micro menu keeps Blizzard's art (its pack is not registered
-    -- there, see WindowPacks), the Group Finder, Delve Tier Picker and
-    -- Housing Dashboard never load on that client, and the Great Vault has
-    -- no content there. Their saved enable keys stay untouched.
+    -- there, see WindowPacks), the Delve Tier Picker and Housing Dashboard
+    -- never load on that client, and the Great Vault has no content there.
+    -- The LFG Menu card stays -- Forever's own vanilla Looking For Group window
+    -- is skinned by GroupFinderForever under the same key. Their saved enable
+    -- keys stay untouched.
     if EllesmereUI.IS_FOREVER then
         local foreverDropped = {
-            micromenu = true, lfg = true, greatvault = true,
+            micromenu = true, greatvault = true,
             delvepicker = true, housing = true,
         }
         for i = #WINDOWS, 1, -1 do
