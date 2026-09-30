@@ -11,8 +11,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --
 --  Left of row 1 is the glow's own Glow When (entry.mode). The And toggle is
 --  entry.andMode = "and" | nil (its buff and state grey out while off); the
---  second buff and its state are entry.conditions[1]. Glows on the same button
---  are separated by a thin divider; Duplicate inserts a full copy right below.
+--  second buff and its state are entry.conditions[1]. Each glow starts with a
+--  collapse bar (collapsed: buff icon + name only, entry.collapsed); Duplicate
+--  inserts a full copy right below.
 --  Frames are built with the page; nothing exists until it is opened.
 -------------------------------------------------------------------------------
 local ns = EllesmereUI._ModuleNS["EllesmereUICooldownManager"]
@@ -408,22 +409,6 @@ function ns.BuildBarGlowCombatRow(W, parent, y, entry, onChange)
     return y - h
 end
 
--- Thin divider between two glows on the same button. Returns the new y.
-function ns.BarGlowDivider(parent, y)
-    local H = 18
-    local f = CreateFrame("Frame", nil, parent)
-    f:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y)
-    f:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, y)
-    f:SetHeight(H)
-    local pad = EllesmereUI.CONTENT_PAD or 20
-    local line = f:CreateTexture(nil, "ARTWORK")
-    line:SetHeight((EllesmereUI.PP and EllesmereUI.PP.mult) or 1)
-    line:SetPoint("LEFT", f, "LEFT", pad, 0)
-    line:SetPoint("RIGHT", f, "RIGHT", -pad, 0)
-    line:SetColorTexture(1, 1, 1, 0.12)
-    return y - H
-end
-
 -- "Duplicate" left of a glow's Remove button: inserts a full copy of the glow
 -- (buff, style, colour, stacks, And condition, hero talent) right below it, so
 -- variants of the same buff (e.g. one per hero tree) start from the original.
@@ -438,7 +423,9 @@ function ns.BarGlowDuplicateButton(region, removeBtn, buffList, index, onDone)
     EllesmereUI.MakeStyledButton(b, EllesmereUI.L("Duplicate"), 13, EllesmereUI.RB_COLOURS, function()
         local src = buffList[index]
         if type(src) ~= "table" then return end
-        table.insert(buffList, index + 1, CopyTable(src))
+        local copy = CopyTable(src)
+        copy.collapsed = nil   -- the copy opens expanded
+        table.insert(buffList, index + 1, copy)
         if onDone then onDone() end
     end)
     return b
@@ -463,4 +450,71 @@ function ns.BarGlowPreviewIconSize(icons, previewParent)
         end
     end
     return nil
+end
+
+-- Collapse bar across the top of each glow, the same height either way.
+-- Expanded: a down arrow above the glow's rows. Collapsed (entry.collapsed =
+-- true, saved): a right arrow, the buff icon and its name, and the rows are
+-- skipped. A click flips it and rebuilds the page. The hidden search pre-build
+-- and an active search always build every row. Returns the new y and whether
+-- the caller should build the rows.
+local ARROW_DOWN  = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-down3.png"
+local ARROW_RIGHT = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-right.png"
+
+function ns.BuildBarGlowHeader(parent, y, entry, aIdx)
+    if EllesmereUI._prebuilding or EllesmereUI._lessCommonSearchActive then return y, true end
+    local collapsed = entry.collapsed == true
+    if aIdx > 1 then y = y - 8 end
+    local H = 38
+    local pad = EllesmereUI.CONTENT_PAD or 20
+    local bar = CreateFrame("Button", nil, parent)
+    bar:SetPoint("TOPLEFT", parent, "TOPLEFT", pad, y)
+    bar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -pad, y)
+    bar:SetHeight(H)
+    bar:SetFrameLevel(parent:GetFrameLevel() + 5)
+    local bg = bar:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(1, 1, 1, 0.04)
+
+    -- The arrow drawn three times, 1px apart, for a bolder stroke than the icon art.
+    local arrows = {}
+    for i, off in ipairs({ { 0, 0 }, { 1, 0 }, { 0, -1 } }) do
+        local t = bar:CreateTexture(nil, "OVERLAY")
+        t:SetSize(16, 16)
+        t:SetTexture(collapsed and ARROW_RIGHT or ARROW_DOWN)
+        t:SetPoint("LEFT", bar, "LEFT", 10 + off[1], off[2])
+        arrows[i] = t
+    end
+    local arrow = arrows[1]
+    local function PaintArrow(r, g, b, a)
+        for _, t in ipairs(arrows) do t:SetVertexColor(r, g, b); t:SetAlpha(a) end
+    end
+    PaintArrow(1, 1, 1, 0.7)
+
+    local title
+    if collapsed then
+        local ico = ns.BarGlowSpellIcon(bar, 26, entry.spellID)
+        ico:SetPoint("LEFT", arrow, "RIGHT", 11, 0)
+        local name = SpellLabel(entry.spellID)
+        title = EllesmereUI.MakeFont(bar, 13, nil, 1, 1, 1)
+        title:SetPoint("LEFT", ico, "RIGHT", 10, 0)
+        title:SetText(name)
+    end
+
+    local EG = EllesmereUI.ELLESMERE_GREEN
+    bar:SetScript("OnEnter", function()
+        bg:SetColorTexture(1, 1, 1, 0.08)
+        PaintArrow(EG.r, EG.g, EG.b, 1)
+        if title then title:SetTextColor(EG.r, EG.g, EG.b) end
+    end)
+    bar:SetScript("OnLeave", function()
+        bg:SetColorTexture(1, 1, 1, 0.04)
+        PaintArrow(1, 1, 1, 0.7)
+        if title then title:SetTextColor(1, 1, 1) end
+    end)
+    bar:SetScript("OnClick", function()
+        entry.collapsed = (not collapsed) and true or nil
+        EllesmereUI:RefreshPage(true)
+    end)
+    return y - H - (collapsed and 0 or 4), not collapsed
 end
