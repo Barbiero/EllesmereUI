@@ -1608,11 +1608,18 @@ initFrame:SetScript("OnEvent", function(self)
                   -- bar included where it is not built, so the three bars keep
                   -- one shared value in a profile carried to another client.
                   for _, k in ipairs({"XPBar", "RepBar", "FavorBar"}) do
-                      if EAB.db.profile.bars[k] then
-                          EAB.db.profile.bars[k].orientation = v
+                      local b = EAB.db.profile.bars[k]
+                      if b then
+                          -- Orientation-aware sizing (custom): keep the bar's length and
+                          -- thickness across a flip by swapping the two dimensions, so a 600x18
+                          -- horizontal bar becomes 18x600 vertical rather than 600 wide.
+                          if b.orientation ~= v then b.width, b.height = b.height, b.width end
+                          b.orientation = v
                           if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(k) end
                       end
                   end
+                  -- Rebuild the page so the Width/Height sliders pick up the swapped caps.
+                  EllesmereUI:RefreshPage()
               end });  y = y - h
 
         -- Reorient toggles: run the XP readout / the divider % labels ALONG a vertical bar.
@@ -1780,15 +1787,23 @@ initFrame:SetScript("OnEvent", function(self)
 
             local wDis, wTip, wRaw = EllesmereUI.MatchGuard(barKey, "Width", _blizzDis, BLIZZ_DIS_TIP)
             local hDis, hTip, hRaw = EllesmereUI.MatchGuard(barKey, "Height", _blizzDis, BLIZZ_DIS_TIP)
+            -- Orientation-aware caps (custom): the "length" axis (Width when horizontal, Height
+            -- when vertical) scales up to the screen width; the "thickness" axis stays capped
+            -- small. Sliders rebuild when the Orientation dropdown flips (RefreshPage), and the
+            -- flip swaps the stored width/height so the caps always fit. Replaces the flat 600 cap.
+            local _dbVert = (S().orientation == "VERTICAL")
+            local _dbLenMax = math.floor((UIParent and UIParent:GetWidth()) or 1920)
+            local _dbWMin, _dbWMax = (_dbVert and 4 or 50), (_dbVert and 100 or _dbLenMax)
+            local _dbHMin, _dbHMax = (_dbVert and 50 or 4), (_dbVert and _dbLenMax or 100)
             sizeRow, h = W:DualRow(parent, y,
-                { type="slider", text="Width", min=50, max=600, step=1,
+                { type="slider", text="Width", min=_dbWMin, max=_dbWMax, step=1,
                   disabled=wDis, disabledTooltip=wTip, rawTooltip=wRaw,
                   getValue=function() return S().width or 400 end,
                   setValue=function(v)
                       S().width = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end },
-                { type="slider", text="Height", min=4, max=40, step=1,
+                { type="slider", text="Height", min=_dbHMin, max=_dbHMax, step=1,
                   disabled=hDis, disabledTooltip=hTip, rawTooltip=hRaw,
                   getValue=function() return S().height or 18 end,
                   setValue=function(v)
