@@ -1515,7 +1515,13 @@ function ns.PresetHasCdState(frame)
     -- Fake-Active engine applies before honoring one. Without it an orphaned
     -- profile-level entry both hid a plain tracked spell and stopped the
     -- appearance refresh from ever clearing the flag it set.
-    if ns.CdmIsInjectedFrame and not ns.CdmIsInjectedFrame(frame) then return false end
+    -- Racials are the one exception: the Presets cog is their ONLY cd-state
+    -- config surface (no separate per-spell settings menu, unlike custom
+    -- spells), so a racial natively tracked by Blizzard's CDM must still honor it.
+    if ns.CdmIsInjectedFrame and not ns.CdmIsInjectedFrame(frame)
+       and not (ns._myRacialsSet and ns._myRacialsSet[fc.spellID]) then
+        return false
+    end
     local cas = ns.GetEffectiveCustomActiveState(fc.spellID)
     local eff = cas and cas.cdStateEffect
     if eff == false then eff = nil end  -- blocking-false = no effect

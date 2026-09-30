@@ -1354,9 +1354,13 @@ EvalCdStateNow = function()
                     local fc = f and FCt[f]
                     -- rule.user rules come from the profile store; built-in rules
                     -- (FAKE_ACTIVE_RULES) deliberately decorate Blizzard icons and
-                    -- keep their reach.
+                    -- keep their reach. Racials are also let through natively-tracked
+                    -- (non-injected) frames: the Presets cog is their only cd-state
+                    -- config surface, unlike custom spells which legitimately defer
+                    -- to normal per-spell settings once Blizzard tracks them for real.
                     if fc and KeyMatches(sid, fc.spellID)
-                       and (not rule.user or IsInjectedFrame(f)) then
+                       and (not rule.user or IsInjectedFrame(f)
+                            or (ns._myRacialsSet and ns._myRacialsSet[sid])) then
                         hasIcon = true
                         WireCdStateFrame(f)
                         if eff then ApplyCdState(f, fc, cas, eff, onCD, ready) end
