@@ -1632,15 +1632,13 @@ initFrame:SetScript("OnEvent", function(self)
                   return EAB.db.profile.bars["XPBar"] and EAB.db.profile.bars["XPBar"].orientation or "HORIZONTAL"
               end,
               setValue=function(v)
-                  -- Every stored data bar takes the orientation, the House Favor
-                  -- bar included where it is not built, so the three bars keep
-                  -- one shared value in a profile carried to another client.
-                  -- A flip swaps a bar's width and height while its shape suits
-                  -- the old orientation, so it keeps its length and thickness
-                  -- (400 x 18 horizontal becomes 18 x 400 vertical); a bar
-                  -- already shaped for the new one keeps its size. Every bar is
-                  -- written before any is laid out, so a size match between two
-                  -- data bars reads the new sizes when the first one resizes.
+                  -- Every stored data bar takes the orientation, the House Favor bar included
+                  -- where it is not built, so the three bars keep one shared value in a profile
+                  -- carried to another client. A flip swaps a bar's width and height while its
+                  -- shape suits the old orientation, so it keeps its length and thickness (400 x
+                  -- 18 horizontal becomes 18 x 400 vertical); a bar already shaped for the new
+                  -- one keeps its size. Every bar is written before any is laid out, so a size
+                  -- match between two data bars reads the new sizes when the first one resizes.
                   local bars = EAB.db.profile.bars
                   for _, k in ipairs(STORED_DATA_BAR_KEYS) do
                       local b = bars[k]
