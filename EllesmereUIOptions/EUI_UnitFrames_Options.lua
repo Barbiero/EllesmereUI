@@ -5325,6 +5325,16 @@ initFrame:SetScript("OnEvent", function(self)
                 ns.UpdatePortraitSeparator(pf, portraitFrame, s, effectiveSide,
                     sp and isAttached, EllesmereUI.BlizzStyle.Get("unitframes"), true)
             end
+            -- After the separators have their final layout, mirror the live
+            -- Magic dispel copies, including their above/below and left/right art.
+            local dispelBorderOn = pf._pvDispelBorder and pf._pvDispelBorder:IsShown()
+            if dispelBorderOn or pf._pvDispelPowerSeam or pf._pvDispelPortraitSeam then
+                local mc = db.profile.dispelColorMagic or { r = 0.349, g = 0.475, b = 1.0 }
+                ns.UF_ApplyDispelSeparatorCopy(pf, pf, "_pvDispelPowerSeam",
+                    dispelBorderOn and power and power._pbSeam, mc)
+                ns.UF_ApplyDispelSeparatorCopy(pf, pf, "_pvDispelPortraitSeam",
+                    dispelBorderOn and pf._portraitSeparator, mc)
+            end
 
             -- Re-snap BTB
             if btbFrame and s.bottomTextBar and btbIsAtt then
@@ -13744,7 +13754,7 @@ initFrame:SetScript("OnEvent", function(self)
                           get=function() return db.profile.dispelOverlayByMe == true end,
                           set=function(v) db.profile.dispelOverlayByMe = v and true or false; DispelRefresh() end },
                         { type="toggle", label="Color Custom Borders",
-                          tooltip="Recolors the frame border in the dispel type color while a debuff of that type is shown.",
+                          tooltip="Recolors the frame border, portrait outer ring and enabled power and portrait separators in the dispel type color while a debuff of that type is shown.",
                           -- Copies the frame's own border: only over a custom border (CustomBorderOff).
                           disabled=CustomBorderOff,
                           disabledTooltip=CustomBorderOffTip,
