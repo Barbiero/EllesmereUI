@@ -44,6 +44,7 @@ local BAGS_DEFAULTS = {
         bankCategorySidebar   = false,
         bankHideTabsInSidebar = false,
         bankHideEmptyWhenNested = false,
+        bankListView          = false,  -- reload to apply
         bagArmoryGroupBySlot  = false,
         bagCompactArmorySlotGroups = false,
         bagHideOneBagWarning  = false,
@@ -56,6 +57,13 @@ local BAGS_DEFAULTS = {
         bagDesaturateJunkItems = false,
         bagDisplayBindType    = false,
         bagBindTypeFontSize   = 11,
+        bagDisplayMode        = "grid",  -- "grid" | "list" (reload to apply)
+        bagListRoundIcons     = false,
+        bagListSplitArmor     = false,
+        bagListSplitWeapons   = false,
+        bagListSplitProfessions = false,
+        bagListGapL           = 15,
+        bagListGapR           = 23,
     },
 }
 local db = EllesmereUI.Lite.NewDB("EllesmereUIBagsDB", BAGS_DEFAULTS)
