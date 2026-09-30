@@ -1411,9 +1411,10 @@ end
 -- region. Clicking the cog opens a popup with a toggle that swaps
 -- settings.portraitSide between "left" and "right" live; withArtStyle
 -- (Target of Target / Focus Target) adds the 2D / Class art choice.
-local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle)
+local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
     local env = ns._UFO_OptEnv
     local ReloadAndUpdate, UpdatePreview, classThemeSubOrder, classThemeSubValues = env.ReloadAndUpdate, env.UpdatePreview, env.classThemeSubOrder, env.classThemeSubValues
+    local _, portraitShow
     local rows = {
         { type="toggle", label="Portrait on Right",
           get=function() return (settingsTable.portraitSide or "left") == "right" end,
@@ -1427,8 +1428,20 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle)
             values={ ["2d"] = "2D Portrait", ["class"] = "Class" }, order={ "2d", "class" },
             get=function() return settingsTable.portraitMode == "class" and "class" or "2d" end,
             set=function(v)
-                settingsTable.portraitMode = v
-                ReloadAndUpdate(); UpdatePreview()
+                local function ApplyArt()
+                    settingsTable.portraitMode = v
+                    ReloadAndUpdate(); UpdatePreview()
+                end
+                if v == "2d" and settingsTable.portraitMode == "class"
+                    and settingsTable.portraitMirror and not EllesmereUI.BlizzStyle.Get("unitframes")
+                    and ns.UF_Ask2DMirroredPortraits(function()
+                        ApplyArt()
+                        EllesmereUI:RefreshPage()
+                    end) then
+                    if portraitShow and portraitShow._popupFrame then portraitShow._popupFrame:Hide() end
+                    return
+                end
+                ApplyArt()
             end }
         rows[#rows + 1] = { type="dropdown", label="Class Style",
             values=classThemeSubValues, order=classThemeSubOrder,
@@ -1466,7 +1479,47 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle)
                 return "Custom Non-Player Portrait"
             end }
     end
-    EllesmereUI.BuildInlineCog(rgn, {
+    if unitKey == "targettarget" then
+        rows[#rows + 1] = { type="toggle", label="Mirror Portrait",
+            tooltip="Mirrors playable-race portraits in 2D. Always flips class art horizontally.",
+            disabled=function() return EllesmereUI.BlizzStyle.Get("unitframes") end,
+            disabledTooltip=function() return EllesmereUI.BlizzStyle.Label("unitframes") end,
+            requireState="disabled",
+            get=function() return settingsTable.portraitMirror == true end,
+            set=function(v)
+                local function ApplyMirror()
+                    settingsTable.portraitMirror = v or nil
+                    ns.UF_RefreshPortraitMirror(unitKey)
+                    UpdatePreview()
+                end
+                if v and not settingsTable.portraitMirror and settingsTable.portraitMode ~= "class"
+                    and ns.UF_Ask2DMirroredPortraits(function()
+                        ApplyMirror()
+                        EllesmereUI:RefreshPage()
+                    end) then
+                    if portraitShow and portraitShow._popupFrame then portraitShow._popupFrame:Hide() end
+                    return
+                end
+                ApplyMirror()
+            end }
+        rows[#rows + 1] = { type="toggle", label="Vertical Border Separator",
+            tooltip="Draws the selected border style between the attached portrait and the bars.",
+            disabled=function()
+                return EllesmereUI.BlizzStyle.Get("unitframes") or (settingsTable.borderSize or 1) <= 0
+                    or not EllesmereUI.GetBorderCompanion(settingsTable.borderTexture or "solid", "sepV")
+            end,
+            disabledTooltip=function()
+                if EllesmereUI.BlizzStyle.Get("unitframes") then return EllesmereUI.BlizzStyle.Label("unitframes") end
+                return "This option requires a border style with divider art and a Border Size above 0."
+            end,
+            rawTooltip=true,
+            get=function() return settingsTable.portraitSeparator == true end,
+            set=function(v)
+                settingsTable.portraitSeparator = v or nil
+                ReloadAndUpdate(); UpdatePreview()
+            end }
+    end
+    _, portraitShow = EllesmereUI.BuildInlineCog(rgn, {
         gap = 9,
         title = "Portrait Settings",
         -- Side and art only show on a shown portrait (the stock styles
@@ -1520,7 +1573,7 @@ function ns.UFO_BuildFoTToTOptions(W, parent, y, settingsTable, unitKey)
                 EllesmereUI:RefreshPage()
               end }) or { type="label", text="" })
         if isEUI and not EllesmereUI._prebuilding then
-            AttachPortraitSideCog(portraitRow._rightRegion, settingsTable, true)
+            AttachPortraitSideCog(portraitRow._rightRegion, settingsTable, true, unitKey)
         end
         AttachFrameSourceCog(portraitRow._leftRegion, unitKey, {
             tooltip = "Due to Blizzard API restrictions, Blizzard's native " .. childName
