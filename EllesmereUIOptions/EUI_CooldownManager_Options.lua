@@ -1570,7 +1570,7 @@ initFrame:SetScript("OnEvent", function(self)
                             cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                         end
                         ns.StopNativeGlow(ov)
-                        ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                        ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
                     end
 
                     -- At Stacks (toggle) + gear (Comparison / Stack Count), paired with
@@ -1603,6 +1603,7 @@ initFrame:SetScript("OnEvent", function(self)
                               entry.glowStyle = tonumber(v) or 1
                               Refresh()
                               RefreshPreviewGlow()
+                              EllesmereUI:RefreshPage()
                           end,
                         }
                     );  y = y - h
@@ -1679,7 +1680,7 @@ initFrame:SetScript("OnEvent", function(self)
                                     elseif entry.colorMode == "custom" and entry.glowColor then
                                         cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                                     end
-                                    ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                                    ns.StartNativeGlow(ov, style, cr, cg, cb, { panel = true, alpha = entry.glowAlpha })
                                     _bgPreviewGlowActive[pvKey] = true
                                     -- Hide accent border so glow is visible
                                     if previewBtn._accentBrd then previewBtn._accentBrd:Hide() end
@@ -1691,20 +1692,22 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
-                    -- Row: Glow Color (swatches) | Remove Glow
+                    -- Row: Glow Color (swatches) | Blackout Opacity. Always present (like
+                    -- At Stacks) rather than only while Blackout is selected, so the layout
+                    -- never leaves a gap; the slider just locks with a tooltip otherwise.
                     local colorRow
                     colorRow, h = W:DualRow(parent, y,
                         { type = "label", text = "Glow Color" },
-                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
-                          onClick = function()
-                              table.remove(buffList, removeAIdx)
-                              if #buffList == 0 then
-                                  bg.assignments[assignKey] = nil
-                              end
+                        { type = "slider", text = "Blackout Opacity",
+                          min = 0, max = 100, step = 1,
+                          disabled = function() return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8 end,
+                          disabledTooltip = "Only available when Glow Type is set to Blackout",
+                          getValue = function() return math.floor((entry.glowAlpha or 1.0) * 100 + 0.5) end,
+                          setValue = function(v)
+                              entry.glowAlpha = v / 100
                               Refresh()
-                              EllesmereUI:RefreshPage(true)
-                          end,
-                        }
+                              RefreshPreviewGlow()
+                          end }
                     );  y = y - h
 
                     -- Inline color swatch for glow color (on left region)
@@ -1733,13 +1736,29 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
+                    -- Row: Remove Glow, bottom of the left column.
+                    local removeRow
+                    removeRow, h = W:DualRow(parent, y,
+                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
+                          onClick = function()
+                              table.remove(buffList, removeAIdx)
+                              if #buffList == 0 then
+                                  bg.assignments[assignKey] = nil
+                              end
+                              Refresh()
+                              EllesmereUI:RefreshPage(true)
+                          end,
+                        },
+                        { type = "label", text = "" }
+                    );  y = y - h
+
                     -- Buff icon to the LEFT of the Remove button
                     do
-                        local rightRgn = colorRow._rightRegion
-                        if rightRgn and rightRgn._control then
-                            local btn = rightRgn._control
+                        local leftRgn = removeRow._leftRegion
+                        if leftRgn and leftRgn._control then
+                            local btn = leftRgn._control
                             local btnH = btn:GetHeight()
-                            local ico = rightRgn:CreateTexture(nil, "ARTWORK")
+                            local ico = leftRgn:CreateTexture(nil, "ARTWORK")
                             ico:SetSize(btnH, btnH)
                             PP.Point(ico, "RIGHT", btn, "LEFT", -8, 0)
                             ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
@@ -8262,6 +8281,107 @@ initFrame:SetScript("OnEvent", function(self)
         popup._box:HighlightText()
     end
 
+    -- Numeric popup for the Blackout glow style: the user enters an opacity
+    -- percent (1-100) for the solid fill. Mirrors ShowAlphaPopup's look;
+    -- onConfirm receives the integer percent.
+    local function ShowGlowOpacityPopup(currentPct, onConfirm)
+        local popupName = "EUI_CDM_GlowOpacityPopup"
+        local popup = _G[popupName]
+        if not popup then
+            local dimmer = CreateFrame("Frame", popupName .. "Dimmer", UIParent)
+            dimmer:SetFrameStrata("FULLSCREEN_DIALOG")
+            dimmer:SetAllPoints(UIParent)
+            dimmer:EnableMouse(true)
+            dimmer:Hide()
+            local dimTex = dimmer:CreateTexture(nil, "BACKGROUND")
+            dimTex:SetAllPoints(); dimTex:SetColorTexture(0, 0, 0, 0.25)
+            dimmer:SetScript("OnMouseDown", function(self) self:Hide() end)
+
+            popup = CreateFrame("Frame", popupName, dimmer)
+            popup:SetSize(300, 150)
+            popup:SetPoint("CENTER", UIParent, "CENTER", 0, 60)
+            popup:SetFrameStrata("FULLSCREEN_DIALOG")
+            popup:SetFrameLevel(dimmer:GetFrameLevel() + 10)
+            popup:EnableMouse(true)
+            local popBg = popup:CreateTexture(nil, "BACKGROUND")
+            popBg:SetAllPoints(); popBg:SetColorTexture(0.06, 0.08, 0.10, 1)
+            EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15, EllesmereUI.PP)
+            popup._dimmer = dimmer
+
+            local title = popup:CreateFontString(nil, "OVERLAY")
+            title:SetFont(FONT_PATH, 14, GetCDMOptOutline())
+            title:SetPoint("TOP", popup, "TOP", 0, -18)
+            title:SetTextColor(1, 1, 1, 1)
+            title:SetText(EllesmereUI.L("Glow Opacity"))
+
+            local hint = popup:CreateFontString(nil, "OVERLAY")
+            hint:SetFont(FONT_PATH, 11, GetCDMOptOutline())
+            hint:SetPoint("TOP", title, "BOTTOM", 0, -6)
+            hint:SetTextColor(0.7, 0.7, 0.7, 0.85)
+            hint:SetText(EllesmereUI.L("Blackout glow opacity (1-100%)"))
+
+            local box = CreateFrame("EditBox", nil, popup)
+            box:SetSize(180, 28)
+            box:SetPoint("TOP", hint, "BOTTOM", 0, -12)
+            box:SetAutoFocus(true)
+            box:SetNumeric(true)
+            box:SetMaxLetters(3)
+            box:SetFont(FONT_PATH, 13, GetCDMOptOutline())
+            box:SetTextColor(1, 1, 1, 0.9)
+            box:SetJustifyH("CENTER")
+            local boxBg = box:CreateTexture(nil, "BACKGROUND")
+            boxBg:SetAllPoints(); boxBg:SetColorTexture(0.04, 0.06, 0.08, 1)
+            EllesmereUI.MakeBorder(box, 1, 1, 1, 0.12, EllesmereUI.PP)
+            popup._box = box
+
+            local ar, ag, ab = EllesmereUI.GetAccentColor()
+            local okBtn = CreateFrame("Button", nil, popup)
+            okBtn:SetSize(80, 28)
+            okBtn:SetPoint("BOTTOMRIGHT", popup, "BOTTOM", -4, 16)
+            local okBg = okBtn:CreateTexture(nil, "BACKGROUND")
+            okBg:SetAllPoints(); okBg:SetColorTexture(ar, ag, ab, 0.15)
+            EllesmereUI.MakeBorder(okBtn, ar, ag, ab, 0.3, EllesmereUI.PP)
+            local okLbl = okBtn:CreateFontString(nil, "OVERLAY")
+            okLbl:SetFont(FONT_PATH, 12, GetCDMOptOutline())
+            okLbl:SetPoint("CENTER"); okLbl:SetText(EllesmereUI.L("Save"))
+            okLbl:SetTextColor(ar, ag, ab, 0.9)
+            okBtn:SetScript("OnEnter", function() okLbl:SetTextColor(1, 1, 1, 1) end)
+            okBtn:SetScript("OnLeave", function() okLbl:SetTextColor(ar, ag, ab, 0.9) end)
+
+            local cancelBtn = CreateFrame("Button", nil, popup)
+            cancelBtn:SetSize(80, 28)
+            cancelBtn:SetPoint("BOTTOMLEFT", popup, "BOTTOM", 4, 16)
+            local cBg = cancelBtn:CreateTexture(nil, "BACKGROUND")
+            cBg:SetAllPoints(); cBg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
+            EllesmereUI.MakeBorder(cancelBtn, 1, 1, 1, 0.10, EllesmereUI.PP)
+            local cLbl = cancelBtn:CreateFontString(nil, "OVERLAY")
+            cLbl:SetFont(FONT_PATH, 12, GetCDMOptOutline())
+            cLbl:SetPoint("CENTER"); cLbl:SetText(EllesmereUI.L("Cancel"))
+            cLbl:SetTextColor(0.7, 0.7, 0.7, 0.8)
+            cancelBtn:SetScript("OnEnter", function() cLbl:SetTextColor(1, 1, 1, 1) end)
+            cancelBtn:SetScript("OnLeave", function() cLbl:SetTextColor(0.7, 0.7, 0.7, 0.8) end)
+            cancelBtn:SetScript("OnClick", function() dimmer:Hide() end)
+            popup._cancelBtn = cancelBtn
+
+            local function Commit()
+                local v = tonumber(box:GetText())
+                if v and v >= 1 and v <= 100 then
+                    dimmer:Hide()
+                    if popup._onConfirm then popup._onConfirm(math.floor(v)) end
+                end
+            end
+            okBtn:SetScript("OnClick", Commit)
+            box:SetScript("OnEnterPressed", Commit)
+            box:SetScript("OnEscapePressed", function() dimmer:Hide() end)
+        end
+        popup._onConfirm = onConfirm
+        popup._box:SetText(currentPct and tostring(currentPct) or "")
+        ns.PadPopupOpen(popup._dimmer, popup, popup._cancelBtn)  -- controller cursor
+        popup._dimmer:Show()
+        popup._box:SetFocus()
+        popup._box:HighlightText()
+    end
+
     -- Numeric popup for the per-spell "Threshold Seconds" (Threshold Text): the
     -- user enters the seconds-remaining boundary below which Threshold Color /
     -- Threshold Decimals apply. 0 disarms the feature for the spell. Mirrors
@@ -9797,13 +9917,18 @@ initFrame:SetScript("OnEvent", function(self)
                         -- (cdStateGlowStyle). The stored button* values still render as
                         -- Action Button Glow and read back as the matching entry here.
                         { val = "pixelGlowReady",  label = "Glow (CD Ready)" },
+                        -- Mirror of the ready glow above: glows for the whole cooldown instead
+                        -- of at readiness. Shares the Glow Style picker and the Proc Glow
+                        -- priority gate below with every other glow effect here.
+                        { val = "glowOnCD", label = "Glow (On CD)" },
                         -- Resource Aware variants: also require the spell to be castable
                         -- (resources/form) via the event-driven usability watcher. That watcher has
                         -- a small cost, so these are separate opt-in values (with a confirm popup) and the plain variants above stay cost-free.
                         { val = "pixelGlowReadyUsable",  label = "Glow CD Ready (Resource Aware)",
                           tooltip = "Glow CD Ready (Resource Aware)" },
                     }
-                    -- CD Ready glow style picker (CDM saved numbering, every icon style).
+                    -- Glow style picker (CDM saved numbering, every icon style), shared by
+                    -- both the CD Ready and On CD glow effects.
                     local CD_READY_STYLE_ITEMS = {}
                     for _, i in ipairs(ns.GLOW_VIEW.ordered) do local entry = ns.GLOW_STYLES[i]
                         CD_READY_STYLE_ITEMS[#CD_READY_STYLE_ITEMS + 1] = { val = i, label = entry.name }
@@ -9811,6 +9936,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local CD_GLOW_EFFECT = {
                         pixelGlowReady = "pixelGlowReady", buttonGlowReady = "pixelGlowReady",
                         pixelGlowReadyUsable = "pixelGlowReadyUsable", buttonGlowReadyUsable = "pixelGlowReadyUsable",
+                        glowOnCD = "glowOnCD",
                     }
                     -- Reverse Swipe single-select (per-spell / per-preset), shared by both the regular-spell (ss) and preset/custom (cas) menus below.
                     local REVERSE_SWIPE_ITEMS = {
@@ -11182,6 +11308,7 @@ initFrame:SetScript("OnEvent", function(self)
                             { val = "hiddenOnCD",      label = "Hidden (On CD)" },
                             { val = "hiddenReady",     label = "Hidden (CD Ready)" },
                             { val = "pixelGlowReady",  label = "Glow (CD Ready)" },
+                            { val = "glowOnCD",        label = "Glow (On CD)" },
                         }
                         local KEEP_COLORED_ITEMS = {
                             { val = nil,  label = "None" },
@@ -11237,11 +11364,12 @@ initFrame:SetScript("OnEvent", function(self)
                                     end)
                                 end
                             end,
-                            { apply = { keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle" },
+                            { apply = { keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle", "cdStateGlowAlpha" },
                                         write = function(t, v)
                                             t.cdStateEffect = v or false
                                             t.cdStateGlowStyle = CD_GLOW_EFFECT[v]
                                                 and ns.CdReadyGlowStyle(cas and cas.cdStateEffect, cas) or nil
+                                            t.cdStateGlowAlpha = (t.cdStateGlowStyle == 8) and cas and cas.cdStateGlowAlpha or nil
                                             if v == "lowerAlphaOnCD" then
                                                 -- Push this icon's current percent (no popup).
                                                 t.cdStateLowerAlpha = (cas and cas.cdStateLowerAlpha) or 0.5
@@ -11251,17 +11379,43 @@ initFrame:SetScript("OnEvent", function(self)
                                         end } })
 
                         -- CD Ready Glow Style (preset/custom): mirror of the regular-spell row.
-                        MakeSubnavRow("CD Ready Glow Style", CD_READY_STYLE_ITEMS,
+                        MakeSubnavRow("Glow Style", CD_READY_STYLE_ITEMS,
                             function() return ns.CdReadyGlowStyle(cas.cdStateEffect, cas) end,
                             function(v)
                                 SetCasOwn("cdStateGlowStyle", v)
                                 if ns.FakeActive_Rearm then ns.FakeActive_Rearm() end
                             end,
                             function() return cas.cdStateGlowStyle == nil end,
-                            nil,
+                            function(si, item, sub)
+                                -- Blackout: clicking prompts for the opacity percent, then
+                                -- selects this style (mirrors Lower Alpha's onClick above).
+                                if item.val == 8 then
+                                    item.dynamicLabel = function()
+                                        local base = EllesmereUI.L(ns.GLOW_STYLES[8].name)
+                                        if ns.CdReadyGlowStyle(cas.cdStateEffect, cas) == 8 then
+                                            local pct = math.floor(((cas.cdStateGlowAlpha or 1) * 100) + 0.5)
+                                            return pct .. "% " .. base
+                                        end
+                                        return base
+                                    end
+                                    si:SetScript("OnClick", function()
+                                        local cur = math.floor((((cas and cas.cdStateGlowAlpha) or 1) * 100) + 0.5)
+                                        menu:Hide()
+                                        ShowGlowOpacityPopup(cur, function(pct)
+                                            local c = EnsureCAS()
+                                            c.cdStateGlowAlpha = pct / 100
+                                            c.cdStateGlowStyle = 8
+                                            if ns.FakeActive_Rearm then ns.FakeActive_Rearm() end
+                                        end)
+                                    end)
+                                end
+                            end,
                             { disabled = function() return not CD_GLOW_EFFECT[cas.cdStateEffect] end,
-                              apply = { keys = { "cdStateGlowStyle" },
-                                        write = function(t, v) t.cdStateGlowStyle = v end } })
+                              apply = { keys = { "cdStateGlowStyle", "cdStateGlowAlpha" },
+                                        write = function(t, v)
+                                            t.cdStateGlowStyle = v
+                                            t.cdStateGlowAlpha = (v == 8) and cas and cas.cdStateGlowAlpha or nil
+                                        end } })
 
                         -- Cooldown Saturation (preset/custom): mirror of the regular-spell row.
                         -- These icons are greyed by the Fake-Active engine rather than by Blizzard, so the runtime reads this key in PresetKeepsColor instead of the SetDesaturated hook -- same setting, same key name.
@@ -11882,7 +12036,8 @@ initFrame:SetScript("OnEvent", function(self)
                                 return
                             end
                             local isGlow = (item.val == "pixelGlowReady" or item.val == "buttonGlowReady"
-                                or item.val == "pixelGlowReadyUsable" or item.val == "buttonGlowReadyUsable")
+                                or item.val == "pixelGlowReadyUsable" or item.val == "buttonGlowReadyUsable"
+                                or item.val == "glowOnCD")
                             if isGlow and ss.procGlow and ss.procGlow > 0 then
                                 si:SetAlpha(0.35)
                                 si:SetScript("OnClick", function() end)
@@ -11893,13 +12048,14 @@ initFrame:SetScript("OnEvent", function(self)
                             end
                         end,
                         { apply = { confirmRA = true,
-                                    keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle" },
+                                    keys = { "cdStateEffect", "cdStateLowerAlpha", "cdStateGlowStyle", "cdStateGlowAlpha" },
                                     write = function(t, v)
                                         -- "None" applied bar-wide = explicitly no effect
                                         -- (false blocks the all-specs tier below).
                                         t.cdStateEffect = v or false
                                         t.cdStateGlowStyle = CD_GLOW_EFFECT[v]
                                             and ns.CdReadyGlowStyle(ss.cdStateEffect, ss) or nil
+                                        t.cdStateGlowAlpha = (t.cdStateGlowStyle == 8) and ss.cdStateGlowAlpha or nil
                                         if v == "lowerAlphaOnCD" then
                                             -- Push this spell's current percent (no popup).
                                             t.cdStateLowerAlpha = ss.cdStateLowerAlpha or 0.5
@@ -11919,17 +12075,43 @@ initFrame:SetScript("OnEvent", function(self)
 
                     -- 4b. CD Ready Glow Style: the style both CD Ready glows use.
                     if not isCustomInjected then
-                        MakeSubnavRow("CD Ready Glow Style", CD_READY_STYLE_ITEMS,
+                        MakeSubnavRow("Glow Style", CD_READY_STYLE_ITEMS,
                             function() return ns.CdReadyGlowStyle(ss.cdStateEffect, ss) end,
                             function(v)
                                 EnsureSS(); SetOwn("cdStateGlowStyle", v)
                                 if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end
                             end,
                             function() return ss.cdStateGlowStyle == nil end,
-                            nil,
+                            function(si, item, sub)
+                                -- Blackout: clicking prompts for the opacity percent, then
+                                -- selects this style (mirrors Lower Alpha's onClick above).
+                                if item.val == 8 then
+                                    item.dynamicLabel = function()
+                                        local base = EllesmereUI.L(ns.GLOW_STYLES[8].name)
+                                        if ns.CdReadyGlowStyle(ss.cdStateEffect, ss) == 8 then
+                                            local pct = math.floor(((ss.cdStateGlowAlpha or 1) * 100) + 0.5)
+                                            return pct .. "% " .. base
+                                        end
+                                        return base
+                                    end
+                                    si:SetScript("OnClick", function()
+                                        local cur = math.floor(((ss.cdStateGlowAlpha or 1) * 100) + 0.5)
+                                        menu:Hide()
+                                        ShowGlowOpacityPopup(cur, function(pct)
+                                            EnsureSS()
+                                            ss.cdStateGlowAlpha = pct / 100
+                                            SetOwn("cdStateGlowStyle", 8)
+                                            if ns.RefreshCDMIconAppearance then ns.RefreshCDMIconAppearance(barKey) end
+                                        end)
+                                    end)
+                                end
+                            end,
                             { disabled = function() return not CD_GLOW_EFFECT[ss.cdStateEffect] end,
-                              apply = { keys = { "cdStateGlowStyle" },
-                                        write = function(t, v) t.cdStateGlowStyle = v end } })
+                              apply = { keys = { "cdStateGlowStyle", "cdStateGlowAlpha" },
+                                        write = function(t, v)
+                                            t.cdStateGlowStyle = v
+                                            t.cdStateGlowAlpha = (v == 8) and ss.cdStateGlowAlpha or nil
+                                        end } })
                     end
 
                     -- 4a. Threshold Text: decimals/color change on this spell's countdowns

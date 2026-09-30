@@ -1486,6 +1486,7 @@ function ns.CdReadyGlowStyle(cse, settings)
     local st = settings and settings.cdStateGlowStyle
     if type(st) == "number" and st >= 1 and st <= #ns.GLOW_STYLES then return st end
     if cse == "pixelGlowReady" or cse == "pixelGlowReadyUsable" then return 1 end
+    if cse == "glowOnCD" then return 8 end  -- Blackout: the default look for this effect
     return 3
 end
 
@@ -1499,6 +1500,12 @@ function ns.CdReadyGlowColor(style, settings)
     return 1, 1, 1
 end
 
+-- CD Ready / On CD glow opacity (Blackout only; other styles ignore it).
+-- nil = fully opaque, matches StartSolidFill's own default.
+function ns.CdReadyGlowAlpha(settings)
+    return settings and settings.cdStateGlowAlpha
+end
+
 -- Does this icon have a custom Cooldown State Effect (preset cd-state)? Appearance refresh
 -- uses this so it doesn't clear a preset's _cdStateHidden flag: presets store cdState in customActiveStates, not per-bar spellSettings.
 function ns.PresetHasCdState(frame)
@@ -1508,7 +1515,13 @@ function ns.PresetHasCdState(frame)
     -- Fake-Active engine applies before honoring one. Without it an orphaned
     -- profile-level entry both hid a plain tracked spell and stopped the
     -- appearance refresh from ever clearing the flag it set.
-    if ns.CdmIsInjectedFrame and not ns.CdmIsInjectedFrame(frame) then return false end
+    -- Racials are the one exception: the Presets cog is their ONLY cd-state
+    -- config surface (no separate per-spell settings menu, unlike custom
+    -- spells), so a racial natively tracked by Blizzard's CDM must still honor it.
+    if ns.CdmIsInjectedFrame and not ns.CdmIsInjectedFrame(frame)
+       and not (ns._myRacialsSet and ns._myRacialsSet[fc.spellID]) then
+        return false
+    end
     local cas = ns.GetEffectiveCustomActiveState(fc.spellID)
     local eff = cas and cas.cdStateEffect
     if eff == false then eff = nil end  -- blocking-false = no effect
@@ -2245,8 +2258,9 @@ ns.CDM_BAR_ROOTS = {
 -------------------------------------------------------------------------------
 local _G_Glows = EllesmereUI.Glows
 -- CDM saved glow numbering (1 Pixel, 2 Shape, 3 Action Button, 4 Auto-Cast,
--- 5 GCD, 6 Modern, 7 Classic) as a view over the shared style table.
-ns.GLOW_VIEW = _G_Glows.MakeView({ 1, 4, 2, 3, 5, 6, 7 })
+-- 5 GCD, 6 Modern, 7 Classic, 8 Blackout) as a view over the shared style
+-- table. 
+ns.GLOW_VIEW = _G_Glows.MakeView({ 1, 4, 2, 3, 5, 6, 7, 8 })
 local GLOW_STYLES = ns.GLOW_VIEW.list
 ns.GLOW_STYLES = GLOW_STYLES
 
@@ -2607,6 +2621,11 @@ StartNativeGlow = function(overlay, style, cr, cg, cb, opts)
         _G_Glows.StartButtonGlow(overlay, pW, cr, cg, cb, nil, pH)
     elseif entry.autocast then
         _G_Glows.StartAutoCastShine(overlay, pW, cr, cg, cb, 1.0, pH)
+    elseif entry.solidFill then
+        local ifc2 = _ecmeFC[parent]
+        local shapeMask = ifc2 and ifc2.shapeMask
+        _G_Glows.StartSolidFill(overlay, noColor and 0 or cr, noColor and 0 or cg, noColor and 0 or cb,
+            { alpha = opts and opts.alpha, shapeMask = shapeMask })
     else
         if noColor then cr, cg, cb = nil, nil, nil end
         _G_Glows.StartFlipBookGlow(overlay, pW, entry, cr, cg, cb, pH)
@@ -2648,6 +2667,34 @@ StopNativeGlow = function(overlay)
 end
 ns.StartNativeGlow = StartNativeGlow
 ns.StopNativeGlow = StopNativeGlow
+
+-- Cooldown State Effect glow (CD Ready / On CD): Blackout renders on its own
+-- frame BELOW frame.Cooldown (fd.blackoutOverlay, icon+12) instead of the
+-- shared fd.glowOverlay (icon+16, ABOVE the cooldown widget), so the swipe and
+-- countdown text stay visible on top of the fill; every other style keeps
+-- using the shared overlay. Picks the overlay from the resolved style and
+-- stops whichever one is NOT used, so a style change (e.g. Blackout -> Pixel)
+-- never leaves the other overlay lit.
+function ns.StartCdGlow(fd, style, cr, cg, cb, opts)
+    if not fd then return end
+    local e = ns.GLOW_STYLES[style]
+    local overlay, other
+    if e and e.solidFill then
+        overlay, other = fd.blackoutOverlay, fd.glowOverlay
+    else
+        overlay, other = fd.glowOverlay, fd.blackoutOverlay
+    end
+    if other then StopNativeGlow(other) end
+    if overlay then StartNativeGlow(overlay, style, cr, cg, cb, opts) end
+    return overlay
+end
+
+-- Stops the CD-state glow regardless of which overlay it landed on.
+function ns.StopCdGlow(fd)
+    if not fd then return end
+    if fd.glowOverlay then StopNativeGlow(fd.glowOverlay) end
+    if fd.blackoutOverlay then StopNativeGlow(fd.blackoutOverlay) end
+end
 
 -- Combat edges for Show Glows Only in Combat. Entering combat replays what was
 -- suppressed; leaving combat takes the running glows down but keeps their
@@ -6113,7 +6160,7 @@ local function RefreshCDMIconAppearance(barKey)
             -- Don't touch: active glow is managed by the SetSwipeColor hook. Stopping it here causes a visible blink.
         elseif ifd and ifd._cdStateGlowOn then
             -- cdState glow active: stop it so the desat hook restarts with the updated style. Also re-evaluate immediately for off-CD spells (desat hook won't fire for those).
-            if glowOv then StopNativeGlow(glowOv) end
+            ns.StopCdGlow(ifd)
             ifd._cdStateGlowOn = false
             local fc = _ecmeFC[icon]
             local sid = fc and fc.spellID
@@ -6123,15 +6170,26 @@ local function RefreshCDMIconAppearance(barKey)
                 -- Shared resolver: direct hit + full identity/override matching against the family store, with bar-tier fallback.
                 local ss = ns.ResolveSpellSettings and ns.ResolveSpellSettings(icon, sid, sd, bk)
                 local cse = ns.GetSpellCdStateEffect(icon, ss)
-                if (cse == "pixelGlowReady" or cse == "buttonGlowReady"
-                    or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable") and glowOv then
+                local isReadyGlow = (cse == "pixelGlowReady" or cse == "buttonGlowReady"
+                    or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable")
+                local isOnCdGlow = cse == "glowOnCD"
+                if (isReadyGlow or isOnCdGlow) and glowOv then
                     local glowUsable = (cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable")
                     local glowLive = sid
                     if C_SpellBook and C_SpellBook.FindSpellOverrideByID then
                         glowLive = C_SpellBook.FindSpellOverrideByID(sid) or sid
                     end
                     local cseInfo = C_Spell.GetSpellCooldown(glowLive)
-                    if cseInfo and (not cseInfo.isActive or cseInfo.isOnGCD) then
+                    -- Glow (On CD) wants the opposite cooldown state of the ready variants.
+                    local wantsGlow
+                    if cseInfo then
+                        if isOnCdGlow then
+                            wantsGlow = cseInfo.isActive and not cseInfo.isOnGCD
+                        else
+                            wantsGlow = not cseInfo.isActive or cseInfo.isOnGCD
+                        end
+                    end
+                    if wantsGlow then
                         -- Plain variants glow purely from cooldown state (legacy behavior, zero
                         -- extra reads). Resource Aware variants also require usability, except during the loading-screen settle window (API untrustworthy; the watched-set pass after the window corrects it).
                         local isUsable = true
@@ -6144,12 +6202,15 @@ local function RefreshCDMIconAppearance(barKey)
                         end
                         if isUsable == true then
                             local style = ns.CdReadyGlowStyle(cse, ss)
-                            StartNativeGlow(glowOv, style, ns.CdReadyGlowColor(style, ss))
+                            local cr, cg, cb = ns.CdReadyGlowColor(style, ss)
+                            ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss) })
                             ifd._cdStateGlowOn = true
                         end
                     end
-                    -- Event-driven re-evaluation: Resource Aware glows always, plus plain glows on
-                    -- EUI custom frames (their SetDesaturation never fires the SetDesaturated hook that would re-evaluate them). Fake-Active-owned frames (PresetHasCdState) excluded.
+                    -- Event-driven re-evaluation: Resource Aware glows always, plus plain/on-CD
+                    -- glows on EUI custom frames (their SetDesaturation never fires the
+                    -- SetDesaturated hook that would re-evaluate them). Fake-Active-owned
+                    -- frames (PresetHasCdState) excluded.
                     local watchGlow = glowUsable
                     if not watchGlow
                         and (icon._isRacialFrame or icon._isTrinketFrame or icon._isPresetFrame
@@ -6161,7 +6222,7 @@ local function RefreshCDMIconAppearance(barKey)
                 end
             end
         elseif glowOv then
-            StopNativeGlow(glowOv)
+            ns.StopCdGlow(ifd)
             if ifd then ifd.procGlowActive = false end
         end
 
@@ -6223,9 +6284,11 @@ local function RefreshCDMIconAppearance(barKey)
                         ns.SetCdStateShiftHidden(fc, false)
                     end
                     if not ifd or not ifd._cdStateGlowOn then
-                        if (cse == "pixelGlowReady" or cse == "buttonGlowReady"
+                        local isReadyGlow = (cse == "pixelGlowReady" or cse == "buttonGlowReady"
                             or cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable")
-                           and not onCD and glowOv then
+                        local isOnCdGlow = cse == "glowOnCD"
+                        local wantsGlow = (isOnCdGlow and onCD) or (isReadyGlow and not onCD)
+                        if wantsGlow and glowOv then
                             -- Plain variants glow purely from cooldown state (legacy). Resource Aware variants also require usability outside the loading-screen settle window.
                             local isUsable = true
                             if cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable" then
@@ -6237,18 +6300,19 @@ local function RefreshCDMIconAppearance(barKey)
                             end
                             if isUsable == true then
                                 local style = ns.CdReadyGlowStyle(cse, csSs)
-                                StartNativeGlow(glowOv, style, ns.CdReadyGlowColor(style, csSs))
+                                local cr, cg, cb = ns.CdReadyGlowColor(style, csSs)
+                                ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(csSs) })
                                 if ifd then ifd._cdStateGlowOn = true end
                             end
                         end
                     end
-                    -- Resource Aware glows always watch cooldown events. Plain glows normally
+                    -- Resource Aware glows always watch cooldown events. Plain/on-CD glows normally
                     -- re-evaluate through the SetDesaturated hook, but EUI's custom frames
                     -- (racial/trinket/potion/custom) drive desaturation via SetDesaturation(float),
                     -- which never fires that hook -- without a watch their glow stays lit for the
                     -- whole cooldown. Frames owned by the Fake-Active preset path (PresetHasCdState) are excluded; that engine glows them.
                     local watchGlow = cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable"
-                    if not watchGlow and (cse == "pixelGlowReady" or cse == "buttonGlowReady")
+                    if not watchGlow and (cse == "pixelGlowReady" or cse == "buttonGlowReady" or cse == "glowOnCD")
                         and (icon._isRacialFrame or icon._isTrinketFrame or icon._isPresetFrame
                              or icon._isItemPresetFrame or icon._isCustomSpellFrame)
                         and not (ns.PresetHasCdState and ns.PresetHasCdState(icon)) then
