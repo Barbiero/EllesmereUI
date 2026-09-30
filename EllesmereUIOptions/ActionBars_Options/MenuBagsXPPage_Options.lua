@@ -1,8 +1,21 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  ActionBars_Options\MenuBagsXPPage_Options.lua
+--  Action Bars options: the Menu, Bags & XP Bars page (BuildMenuBagsXPPage).
+--  Definitions only; the shared helpers come from ns._ABO_OptEnv (filled by
+--  EUI_ActionBars_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIActionBars"]
+if not ns then return end  -- module disabled: no options page
+
 ---------------------------------------------------------------------------
 --  Menu, Bags & XP Bars page  (dedicated tab)
 ---------------------------------------------------------------------------
 
 local function BuildMenuBagsXPPage(pageName, parent, yOffset)
+    local env = ns._ABO_OptEnv
+    local ApplyVisibilityKey, EAB, EndCapsCtl, GetVisibilityKey = env.ApplyVisibilityKey, env.EAB, env.EndCapsCtl, env.GetVisibilityKey
+    local ShownBorderDefaults = env.ShownBorderDefaults
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h
@@ -897,3 +910,6 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
 
     return math.abs(y)
 end
+
+-- Used by EUI_ActionBars_Options.lua
+ns.ABO_BuildMenuBagsXPPage = BuildMenuBagsXPPage

@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  ActionBars_Options\BarVisibilityLayout_Options.lua
+--  Action Bars options: the Bar 10 caution and the Visibility and Layout
+--  sections of the Bar Display page. Called by BuildSharedBarSettings; returns
+--  y. Shared helpers come from ns._ABO_OptEnv, the per-build helpers from ctx.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIActionBars"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildBarVisibilityLayout(parent, y, ctx)
+    local env = ns._ABO_OptEnv
+    local ApplyVisibilityKey, BAR_LOOKUP, CopyVisibilitySettings, EAB = env.ApplyVisibilityKey, env.BAR_LOOKUP, env.CopyVisibilitySettings, env.EAB
+    local EndCapsCtl, FirstBarButton, floor, GetVisibilityKey = env.EndCapsCtl, env.FirstBarButton, env.floor, env.GetVisibilityKey
+    local GROUP_BAR_ORDER, IsDataBar, PP, SB = env.GROUP_BAR_ORDER, env.IsDataBar, env.PP, env.SB
+    local SECTION_LAYOUT, SECTION_VISIBILITY, SelectedKey, SHORT_LABELS = env.SECTION_LAYOUT, env.SECTION_VISIBILITY, env.SelectedKey, env.SHORT_LABELS
+    local BgDisabled, SDB, SGet, SSet = ctx.BgDisabled, ctx.SDB, ctx.SGet, ctx.SSet
+    local SSetColor, SUpdatePreview, SUpdatePreviewAndResize, SVal = ctx.SSetColor, ctx.SUpdatePreview, ctx.SUpdatePreviewAndResize, ctx.SVal
+    local visOnly = ctx.visOnly
+    local W = ctx.W
+    local _, h
+    local row
     -- Declared out here, not in the `do` block that builds it: the Toggle Action Bar
     -- keybind lives past that block's end and anchors into this row's right slot.
     local visRow1
@@ -366,6 +388,10 @@
         end
     end
 
+    -----------------------------------------------------------------------
+    --  LAYOUT  (hidden when visibility-only)
+    -----------------------------------------------------------------------
+    if not visOnly then
         _, h = W:SectionHeader(parent, SECTION_LAYOUT, y);  y = y - h
 
         -- WoW Forever: the bar's end caps and the frame and dividers behind
@@ -895,3 +921,10 @@
             end
             end
         end
+    end  -- if not visOnly
+
+    return y
+end
+
+-- Used by EUI_ActionBars_Options.lua
+ns.ABO_BuildBarVisibilityLayout = BuildBarVisibilityLayout

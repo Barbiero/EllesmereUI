@@ -1,4 +1,31 @@
-    -- Called later, directly below ICON EFFECTS; defined here to share the layout helpers' callbacks instead of duplicating them.
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  ActionBars_Options\BarAppearance_Options.lua
+--  Action Bars options: the Bar Background, Icon Appearance, Icon Effects,
+--  Paging and Text sections of the Bar Display page. Called by
+--  BuildSharedBarSettings for bars that are not visibility-only; returns y and
+--  the rows its click navigation maps to. Shared helpers come from
+--  ns._ABO_OptEnv, the per-build helpers from ctx.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIActionBars"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildBarAppearance(parent, y, ctx)
+    local env = ns._ABO_OptEnv
+    local EAB, GROUP_BAR_ORDER, InCombatLockdown, PP = env.EAB, env.GROUP_BAR_ORDER, env.InCombatLockdown, env.PP
+    local SB, SECTION_ICON_APPEARANCE, SECTION_TEXT, SelectedKey = env.SB, env.SECTION_ICON_APPEARANCE, env.SECTION_TEXT, env.SelectedKey
+    local SHORT_LABELS, ShownBorderDefaults, TEXT_ANCHOR_DROPDOWN_ORDER, TEXT_ANCHOR_LABELS = env.SHORT_LABELS, env.ShownBorderDefaults, env.TEXT_ANCHOR_DROPDOWN_ORDER, env.TEXT_ANCHOR_LABELS
+    local BgDisabled, SGet, SSeedTextOffsets, SSet = ctx.BgDisabled, ctx.SGet, ctx.SSeedTextOffsets, ctx.SSet
+    local SSetColor, SUpdatePreview, SUpdatePreviewAndResize, SVal = ctx.SSetColor, ctx.SUpdatePreview, ctx.SUpdatePreviewAndResize, ctx.SVal
+    local W = ctx.W
+    local _, h
+    local row
+    -- Row / section references for click-navigation (returned to BuildSharedBarSettings)
+    local iconsSectionHeader, textSectionHeader
+    local borderRow
+    local keybindRow, chargesRow
+
+    -- Called later, directly below ICON EFFECTS; defined here to share the page helpers (ctx) instead of duplicating them.
     local function BuildBarBackgroundSection()
     -------------------------------------------------------------------
     --  BAR BACKGROUND
@@ -2389,3 +2416,9 @@
     end
 
     _, h = W:Spacer(parent, y, 20);  y = y - h
+
+    return y, iconsSectionHeader, textSectionHeader, keybindRow, chargesRow, classColorBorderRow
+end
+
+-- Used by EUI_ActionBars_Options.lua
+ns.ABO_BuildBarAppearance = BuildBarAppearance

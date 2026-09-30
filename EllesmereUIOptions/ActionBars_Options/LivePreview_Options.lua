@@ -1,3 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  ActionBars_Options\LivePreview_Options.lua
+--  Action Bars options: the live preview in the Bar Display content header
+--  (BuildLivePreview). Definitions only; the shared helpers come from
+--  ns._ABO_OptEnv (filled by EUI_ActionBars_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIActionBars"]
+if not ns then return end  -- module disabled: no options page
+
 --- Build (or rebuild for a different bar) the live preview frame. Shows only
 --- Edit-Mode-enabled buttons (numButtonsShowable) at the first real button's
 --- GetWidth/GetHeight so icon size matches Blizzard's.
@@ -5,6 +15,10 @@
 --- @param yOff    number  current y offset in the page layout
 --- @return number height consumed by the preview
 local function BuildLivePreview(parent, yOff)
+    local env = ns._ABO_OptEnv
+    local BAR_LOOKUP, EAB, FirstBarButton, floor = env.BAR_LOOKUP, env.EAB, env.FirstBarButton, env.floor
+    local optState, pcall, PP, RANGE_INDICATOR = env.optState, env.pcall, env.PP, env.RANGE_INDICATOR
+    local SB, SelectedKey = env.SB, env.SelectedKey
     local barKey  = SelectedKey()
     local barInfo = BAR_LOOKUP[barKey]
     -- Skip visibility-only / data bars (no count). Guard on count, not buttonPrefix:
@@ -858,3 +872,6 @@ local function BuildLivePreview(parent, yOff)
     EllesmereUI._contentHeaderPreview = pf
     return pf._wrapper:GetHeight()
 end
+
+-- Used by EUI_ActionBars_Options.lua
+ns.ABO_BuildLivePreview = BuildLivePreview

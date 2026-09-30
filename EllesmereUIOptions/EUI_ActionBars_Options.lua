@@ -562,7 +562,6 @@ initFrame:SetScript("OnEvent", function(self)
 
     local function BuildSharedBarSettings(parent, y)
         local W = EllesmereUI.Widgets
-        local _, h
 
         ---------------------------------------------------------------
         --  Unified Get / Set / DB abstraction
@@ -612,20 +611,31 @@ initFrame:SetScript("OnEvent", function(self)
         parent._showRowDivider = true
 
         local visOnly = IsVisOnly()
-        local row
         -- Row / section references for click-navigation
         local iconsSectionHeader, textSectionHeader
-        local borderRow
         local keybindRow, chargesRow
 
         local function BgDisabled()
             return not SB().bgEnabled
         end
 
-        -----------------------------------------------------------------------
-        --  LAYOUT  (hidden when visibility-only)
-        -----------------------------------------------------------------------
+        -- The sections live in ActionBars_Options\BarVisibilityLayout_Options.lua
+        -- (Bar 10 caution, VISIBILITY, LAYOUT) and BarAppearance_Options.lua (BAR
+        -- BACKGROUND, ICON APPEARANCE, ICON EFFECTS, PAGING, TEXT); the second
+        -- returns the rows the click navigation below maps to.
+        local ctx = {
+            BgDisabled = BgDisabled, SDB = SDB, SGet = SGet, SSeedTextOffsets = SSeedTextOffsets,
+            SSet = SSet, SSetColor = SSetColor, SUpdatePreview = SUpdatePreview,
+            SUpdatePreviewAndResize = SUpdatePreviewAndResize, SVal = SVal, visOnly = visOnly,
+            W = W,
+        }
+        y = ns.ABO_BuildBarVisibilityLayout(parent, y, ctx)
+
         if not visOnly then
+            local classColorBorderRow
+            y, iconsSectionHeader, textSectionHeader, keybindRow, chargesRow, classColorBorderRow =
+                ns.ABO_BuildBarAppearance(parent, y, ctx)
+
             -------------------------------------------------------------------
             --  CLICK NAVIGATION
             -------------------------------------------------------------------
@@ -739,7 +749,7 @@ initFrame:SetScript("OnEvent", function(self)
             ddBtn:SetHeight(DD_H)
             fy = fy - DD_H - PV_PAD
 
-            local previewH = BuildLivePreview(hdr, fy)
+            local previewH = ns.ABO_BuildLivePreview(hdr, fy)
             fy = fy - previewH - PV_PAD
 
             headerFixedH = 20 + DD_H + PV_PAD + PV_PAD
@@ -839,6 +849,10 @@ initFrame:SetScript("OnEvent", function(self)
     end
 
 
+    -- Bar Animations page (ActionBars_Options\AnimationsPage_Options.lua). Called
+    -- here so its Custom Proc Glow site registers at the original point in the load order.
+    local BuildAnimationsPage = ns.ABO_InitAnimationsPage(PP, EAB, PAGE_ANIMATIONS)
+
     ---------------------------------------------------------------------------
     --  Unlock Mode page  (opens EllesmereUI Unlock Mode overlay)
     ---------------------------------------------------------------------------
@@ -851,6 +865,23 @@ initFrame:SetScript("OnEvent", function(self)
         end)
         return 0
     end
+
+    -- Shared with the page builders under ActionBars_Options\ (read in their
+    -- prologs). Every field is final here: optState holds the mutable state.
+    ns._ABO_OptEnv = {
+        ApplyVisibilityKey = ApplyVisibilityKey, BAR_LOOKUP = BAR_LOOKUP,
+        CopyVisibilitySettings = CopyVisibilitySettings, EAB = EAB, EndCapsCtl = EndCapsCtl,
+        FirstBarButton = FirstBarButton, floor = floor, GetVisibilityKey = GetVisibilityKey,
+        GROUP_BAR_ORDER = GROUP_BAR_ORDER, InCombatLockdown = InCombatLockdown,
+        IsDataBar = IsDataBar, optState = optState, pcall = pcall, PP = PP,
+        RANGE_INDICATOR = RANGE_INDICATOR, SB = SB,
+        SECTION_ICON_APPEARANCE = SECTION_ICON_APPEARANCE, SECTION_LAYOUT = SECTION_LAYOUT,
+        SECTION_TEXT = SECTION_TEXT, SECTION_VISIBILITY = SECTION_VISIBILITY,
+        SelectedKey = SelectedKey, SHORT_LABELS = SHORT_LABELS,
+        ShownBorderDefaults = ShownBorderDefaults,
+        TEXT_ANCHOR_DROPDOWN_ORDER = TEXT_ANCHOR_DROPDOWN_ORDER,
+        TEXT_ANCHOR_LABELS = TEXT_ANCHOR_LABELS,
+    }
 
     ---------------------------------------------------------------------------
     --  Register the module
@@ -865,7 +896,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- would flash it onscreen, so skip PAGE_DISPLAY here; it indexes on first visit.
             if EllesmereUI._prebuilding then
                 if pageName == PAGE_MENUBAGSXP then
-                    return BuildMenuBagsXPPage(pageName, parent, yOffset)
+                    return ns.ABO_BuildMenuBagsXPPage(pageName, parent, yOffset)
                 elseif pageName == PAGE_ANIMATIONS then
                     return BuildAnimationsPage(pageName, parent, yOffset)
                 end
@@ -877,7 +908,7 @@ initFrame:SetScript("OnEvent", function(self)
             if pageName == PAGE_DISPLAY then
                 return BuildBarDisplayPage(pageName, parent, yOffset)
             elseif pageName == PAGE_MENUBAGSXP then
-                return BuildMenuBagsXPPage(pageName, parent, yOffset)
+                return ns.ABO_BuildMenuBagsXPPage(pageName, parent, yOffset)
             elseif pageName == PAGE_ANIMATIONS then
                 return BuildAnimationsPage(pageName, parent, yOffset)
             end

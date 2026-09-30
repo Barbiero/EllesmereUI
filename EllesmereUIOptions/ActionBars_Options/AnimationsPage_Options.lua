@@ -1,3 +1,15 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  ActionBars_Options\AnimationsPage_Options.lua
+--  Action Bars options: the Bar Animations page (Bar Interactions, Custom
+--  Proc Glow). EUI_ActionBars_Options.lua calls the init function once at
+--  load, at the block's original place, so the Custom Proc Glow site
+--  registers in the same order as before; it returns the page builder.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIActionBars"]
+if not ns then return end  -- module disabled: no options page
+
+local function InitAnimationsPage(PP, EAB, PAGE_ANIMATIONS)
     local SECTION_BAR_INTERACTIONS = "BAR INTERACTIONS"
     local SECTION_PROC_GLOW     = "CUSTOM PROC GLOW"
 
@@ -594,3 +606,9 @@
 
         return math.abs(y)
     end
+
+    return BuildAnimationsPage
+end
+
+-- Used by EUI_ActionBars_Options.lua
+ns.ABO_InitAnimationsPage = InitAnimationsPage
