@@ -2369,13 +2369,14 @@ function ns.UFO_BuildClassResourceSection(parent, y, ctx)
 
     -- CLASS RESOURCE section: only shown in multi-edit or when player is selected
     local _showClassRes = optState.selectedUnit == "player"
+    -- Declared outside the gate: returned for the click mapping.
+    local sharedClassResHeader, sharedClassResRow
     if _showClassRes then
     _, h = W:Spacer(parent, y, 20); y = y - h
 
     -------------------------------------------------------------------
     --  CLASS RESOURCE
     -------------------------------------------------------------------
-    local sharedClassResHeader
     sharedClassResHeader, h = W:SectionHeader(parent, "CLASS RESOURCE", y); y = y - h
 
     -- The class resource style that builds: WoW Forever outside its own
@@ -2388,7 +2389,6 @@ function ns.UFO_BuildClassResourceSection(parent, y, ctx)
     end
 
     -- Row 1: Enable Class Resource + Class Colors (with inline swatch)
-    local sharedClassResRow
     sharedClassResRow, h = W:DualRow(parent, y,
         { type="dropdown", text="Enable Class Resource", values=classPowerStyleValues, order=classPowerStyleOrder,
           -- Forever ships no class resource bar that can be re-parented: the
@@ -2806,7 +2806,7 @@ function ns.UFO_BuildClassResourceSection(parent, y, ctx)
 
     _, h = W:Spacer(parent, y, 20); y = y - h
 
-    return y
+    return y, sharedClassResHeader, sharedClassResRow
 end
 
 function ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
@@ -2822,7 +2822,7 @@ function ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
     -------------------------------------------------------------------
     -- Declared outside the gate: the click-mapping table at the bottom of
     -- this function references them (block-locals would be nil there).
-    local sharedAbsorbsHeader, absorbRow
+    local sharedAbsorbsHeader, absorbRow, healAbsorbRow
     local _supportsAbsorbs = (optState.selectedUnit == "player" or optState.selectedUnit == "target" or optState.selectedUnit == "focus")
     if _supportsAbsorbs then
     sharedAbsorbsHeader, h = W:SectionHeader(parent, "ABSORBS AND HEALS", y); y = y - h
@@ -3109,7 +3109,6 @@ function ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
     end
 
     -- Row 2: Heal Absorb Style (+ color swatch + placement cog) | Heal Absorb Opacity
-    local healAbsorbRow
     healAbsorbRow, h = W:DualRow(parent, y,
         { type="dropdown", text="Heal Absorb Style", values=absorbStyleValues,
           order=healAbsorbStyleOrder,
@@ -3448,5 +3447,5 @@ function ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
     _, h = W:Spacer(parent, y, 20); y = y - h
     end -- _supportsAbsorbs
 
-    return y, sharedAbsorbsHeader, absorbRow
+    return y, sharedAbsorbsHeader, absorbRow, healAbsorbRow
 end

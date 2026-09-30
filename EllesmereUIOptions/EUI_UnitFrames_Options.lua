@@ -2141,11 +2141,12 @@ initFrame:SetScript("OnEvent", function(self)
         y, sharedCastHeader, sharedCastRow1, castRow2, castTextRow, castTargetRow = ns.UFO_BuildCastBarSection(parent, y, ctx)
         local sharedBtbHeader, sharedBtbToggleRow, sharedBtbTextRow, sharedBtbCenterRow
         y, sharedBtbHeader, sharedBtbToggleRow, sharedBtbTextRow, sharedBtbCenterRow = ns.UFO_BuildTextBarSection(parent, y, ctx)
-        y = ns.UFO_BuildClassResourceSection(parent, y, ctx)
+        local sharedClassResHeader, sharedClassResRow
+        y, sharedClassResHeader, sharedClassResRow = ns.UFO_BuildClassResourceSection(parent, y, ctx)
         local sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3
         y, sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3 = ns.UFO_BuildBuffsDebuffsSection(parent, y, ctx)
-        local sharedAbsorbsHeader, absorbRow
-        y, sharedAbsorbsHeader, absorbRow = ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
+        local sharedAbsorbsHeader, absorbRow, healAbsorbRow
+        y, sharedAbsorbsHeader, absorbRow, healAbsorbRow = ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
         local sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5
         y, sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5 = ns.UFO_BuildExtrasSection(parent, y, ctx)
 
