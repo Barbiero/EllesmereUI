@@ -1,3 +1,11 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Profiles_Options.lua -- Global Settings > Profiles (and its Presets
+--  subpage). It registers nothing: the Global Settings module
+--  (EUI__General_Options.lua) dispatches its builder.
+-------------------------------------------------------------------------------
+local PP = EllesmereUI.PanelPP
+
 ---------------------------------------------------------------------------
 --  Profiles page
 ---------------------------------------------------------------------------
@@ -222,7 +230,7 @@ local function MakeAccentFade(btn, lbl, brd)
     end
 end
 
-local function BuildProfilesPage(pageName, parent, yOffset)
+function _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h

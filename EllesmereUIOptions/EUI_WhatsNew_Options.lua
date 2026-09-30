@@ -1,9 +1,12 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-- Patch Notes and EUI Legends page builders; their content tables stay in EUI__General_Options.lua.
+
 -------------------------------------------------------------------------------
 --  What's New page -- three tiers: hero cards (2/row), small clickable
 --  listings, fix lines. Content: EllesmereUI._WHATSNEW_PATCHES (newest
 --  first). Entry `nav` deep-links via NavigateToElementSettings (opens page,
 --  pulses control); no `nav` = static non-clickable card. File-scope fn so
---  it adds no locals/upvalues to the deferred options closure below.
+--  it adds no locals/upvalues to the deferred options closure.
 -------------------------------------------------------------------------------
 function EllesmereUI._BuildWhatsNewPage(pageName, parent, yOffset)
     local PP  = EllesmereUI.PanelPP

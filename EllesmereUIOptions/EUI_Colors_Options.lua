@@ -1,3 +1,10 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Colors_Options.lua -- Global Settings > Colors. It registers nothing:
+--  the Global Settings module (EUI__General_Options.lua) dispatches its builder.
+-------------------------------------------------------------------------------
+local PP = EllesmereUI.PanelPP
+
 ---------------------------------------------------------------------------
 --  Colors Page
 ---------------------------------------------------------------------------
@@ -30,7 +37,7 @@ local GRADIENT_DIR_VALUES = {
 }
 local GRADIENT_DIR_ORDER = { "HORIZONTAL", "HORIZONTAL_REV", "VERTICAL", "VERTICAL_REV" }
 
-local function BuildColorsPage(pageName, parent, yOffset)
+function _G._EUI_BuildColorsPage(pageName, parent, yOffset)
     local W = EllesmereUI.Widgets
     local y = yOffset
     local _, h

@@ -2431,7 +2431,7 @@ initFrame:SetScript("OnEvent", function(self)
                 elseif pageName == PAGE_STYLE then
                     return _G._EUI_BuildStylePage and _G._EUI_BuildStylePage(pageName, parent, yOffset)
                 elseif pageName == PAGE_COLORS then
-                    return BuildColorsPage(pageName, parent, yOffset)
+                    return _G._EUI_BuildColorsPage(pageName, parent, yOffset)
                 elseif pageName == PAGE_WHATSNEW then
                     return EllesmereUI._BuildWhatsNewPage(pageName, parent, yOffset)
                 end
@@ -2454,9 +2454,9 @@ initFrame:SetScript("OnEvent", function(self)
             elseif pageName == PAGE_STYLE then
                 return _G._EUI_BuildStylePage and _G._EUI_BuildStylePage(pageName, parent, yOffset)
             elseif pageName == PAGE_COLORS then
-                return BuildColorsPage(pageName, parent, yOffset)
+                return _G._EUI_BuildColorsPage(pageName, parent, yOffset)
             elseif pageName == PAGE_PROFILES then
-                return BuildProfilesPage(pageName, parent, yOffset)
+                return _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
             elseif pageName == PAGE_WHATSNEW then
                 return EllesmereUI._BuildWhatsNewPage(pageName, parent, yOffset)
             end
@@ -2478,7 +2478,7 @@ initFrame:SetScript("OnEvent", function(self)
             elseif pageName == PAGE_PROFILES and not EllesmereUI._profilesRoot then
                 C_Timer.After(0, function()
                     if EllesmereUI:GetActiveModule() == GLOBAL_KEY then
-                        BuildProfilesPage(PAGE_PROFILES, nil, -6)
+                        _G._EUI_BuildProfilesPage(PAGE_PROFILES, nil, -6)
                     end
                 end)
             end
@@ -2694,13 +2694,13 @@ initFrame:SetScript("OnEvent", function(self)
         return 200
     end
     -- PAGE_PRESETS is a NAVIGATION tab only: the in-game browser is retired, so the tab shows the presets-website popup over the normal Profiles page.
-    -- The tab builds the profiles page and flips it to the presets subpage via the pending flag consumed at the end of BuildProfilesPage.
+    -- The tab builds the profiles page and flips it to the presets subpage via the pending flag consumed at the end of _G._EUI_BuildProfilesPage.
     EllesmereUI:RegisterModule(PROFILES_KEY, {
         title       = "Profiles & Presets",
         description = "Import, export, and switch EllesmereUI profiles and presets.",
         pages       = { PAGE_PROFILES, PAGE_PRESETS, PAGE_OVERRIDES, PAGE_FULLEXPORT },
         buildPage   = function(pageName, parent, yOffset)
-            -- BuildProfilesPage bypasses `parent` and builds onto the live shared _scrollFrame, and first checks the active profile against the
+            -- _G._EUI_BuildProfilesPage bypasses `parent` and builds onto the live shared _scrollFrame, and first checks the active profile against the
             -- current spec -- it can call SwitchProfile/RefreshAllAddons and pop a "Reload Required" confirmation. None of that is safe from a
             -- hidden indexing pass, so skip PAGE_PROFILES; it indexes on the player's first visit.
             if EllesmereUI._prebuilding then
@@ -2725,9 +2725,9 @@ initFrame:SetScript("OnEvent", function(self)
                 -- The in-game presets browser is retired: the tab opens the
                 -- website popup (copyable link) over the normal Profiles page.
                 if EllesmereUI.VideoGuides then EllesmereUI.VideoGuides.Show("presets_website") end
-                return BuildProfilesPage(PAGE_PROFILES, parent, yOffset)
+                return _G._EUI_BuildProfilesPage(PAGE_PROFILES, parent, yOffset)
             end
-            return BuildProfilesPage(pageName, parent, yOffset)
+            return _G._EUI_BuildProfilesPage(pageName, parent, yOffset)
         end,
         onPageCacheRestore = function(pageName)
             if pageName == PAGE_FULLEXPORT then
@@ -2761,14 +2761,14 @@ initFrame:SetScript("OnEvent", function(self)
                     C_Timer.After(0, function()
                         if EllesmereUI:GetActiveModule() == PROFILES_KEY
                            and EllesmereUI:GetActivePage() == PAGE_PRESETS then
-                            BuildProfilesPage(PAGE_PROFILES, nil, -6)
+                            _G._EUI_BuildProfilesPage(PAGE_PROFILES, nil, -6)
                         end
                     end)
                 end
             elseif not EllesmereUI._profilesRoot then
                 C_Timer.After(0, function()
                     if EllesmereUI:GetActiveModule() == PROFILES_KEY then
-                        BuildProfilesPage(PAGE_PROFILES, nil, -6)
+                        _G._EUI_BuildProfilesPage(PAGE_PROFILES, nil, -6)
                     end
                 end)
             else
