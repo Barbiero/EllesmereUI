@@ -1176,13 +1176,13 @@ end
             end)
         end
         if GameTooltipStatusBar then
-            GameTooltipStatusBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
             local sbBg = GameTooltipStatusBar:CreateTexture(nil, "BACKGROUND")
             sbBg:SetAllPoints(); sbBg:SetColorTexture(0, 0, 0, 0.5)
             GameTooltipStatusBar:ClearAllPoints()
             GameTooltipStatusBar:SetPoint("BOTTOMLEFT", _GameTooltip, "BOTTOMLEFT", 1, 1)
             GameTooltipStatusBar:SetPoint("BOTTOMRIGHT", _GameTooltip, "BOTTOMRIGHT", -1, 1)
-            GameTooltipStatusBar:SetHeight(3)
+            -- Texture + height (Health Strip Texture/Height options); unset keeps UI-StatusBar at 3px.
+            EllesmereUI._applyTooltipHealthStripStyle(true)
         end
     end
 
@@ -3554,6 +3554,24 @@ do
     EllesmereUI._applyTooltipHealthStrip = function()
         if not GameTooltipStatusBar then return end
         GameTooltipStatusBar:SetAlpha(_healthStripHidden() and 0 or 1)
+    end
+
+    -- Texture + height of the reskinned strip. Only the tooltip reskin restyles
+    -- the bar, so this is a no-op until _ttInitVisual has called it with
+    -- init=true; the options setters then re-apply live.
+    local styled, texLookup
+    EllesmereUI._applyTooltipHealthStripStyle = function(init)
+        if init then styled = true end
+        if not styled or not GameTooltipStatusBar then return end
+        local db = EllesmereUIDB
+        local key = db and db.tooltipHealthStripTexture
+        local path = "Interface\\TargetingFrame\\UI-StatusBar"
+        if key and key ~= "blizzard" then
+            if not texLookup then texLookup = EllesmereUI.BuildBarTextureTables() end
+            path = EllesmereUI.ResolveTexturePath(texLookup, key, "Interface\\Buttons\\WHITE8X8")
+        end
+        GameTooltipStatusBar:SetStatusBarTexture(path)
+        GameTooltipStatusBar:SetHeight(db and db.tooltipHealthStripHeight or 3)
     end
 
     if GameTooltipStatusBar then
