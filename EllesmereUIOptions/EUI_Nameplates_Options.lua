@@ -165,41 +165,41 @@ initFrame:SetScript("OnEvent", function(self)
     --  Live Preview System: cosmetic-only enemy nameplate preview built once
     --  and updated via :Update() (no rebuild/GC pressure), reading live DB settings for colors, sizes, font, etc.
     ---------------------------------------------------------------------------
-    local activePreview
+    -- Mutable state shared with the page builders under Nameplates_Options\.
+    -- A table instead of locals so every file reads and writes the live value.
+    -- Nil until set: activePreview (preview frame), _previewHintFS (hint
+    -- FontString), RefreshCoreEyes (Display page), _colorPreviewRefreshAll
+    -- (Colors page, refreshes all color preview bars on cache restore).
+    local optState = {}
     local _displayHeaderBuilder   -- stored for page cache re-use
-    local _colorPreviewRefreshAll -- refresh all color preview bars on cache restore
-    local RefreshCoreEyes          -- forward-declared; defined in BuildDisplayPage
-    local _previewHintFS                 -- the hint FontString
     local _headerBaseH = 0               -- header height WITHOUT hint (for cache restore)
 
     local function IsPreviewHintDismissed()
         return EllesmereUIDB and EllesmereUIDB.previewHintDismissed
     end
 
-    -- Raid marker hidden by default, toggled via eye icon; scoped here so both BuildNameplatePreview and BuildDisplayPage can access it.
-    local showRaidMarkerPreview = false
-    local showClassificationPreview = false
-    local showTargetGlowPreview = false
-    local showAbsorbPreview = false
+    -- Raid marker hidden by default, toggled via eye icon; optState fields so both the preview and the Display page can access them.
+    optState.showRaidMarkerPreview = false
+    optState.showClassificationPreview = false
+    optState.showTargetGlowPreview = false
+    optState.showAbsorbPreview = false
 
     -- Transient flags: force-show indicators during slider drag
-    local _sliderDragShowRaidMarker = false
-    local _sliderDragShowClassification = false
+    optState._sliderDragShowRaidMarker = false
+    optState._sliderDragShowClassification = false
 
     -- Random preview values regenerate only on tab switch, not on profile changes or setting tweaks (those trigger fast-path RefreshPage rebuilds).
-    local _previewHpPct
-    local _previewCastFill
-    local _previewCastIconIdx
+    -- optState._previewHpPct, _previewCastFill, _previewCastIconIdx: set below.
     local displayCastIcons = { 136197, 236802, 135808, 136116, 135735, 136048, 135812, 136075 }
     local function RandomizePreviewValues()
-        _previewHpPct = math.floor(60 + math.random() * 15)
-        _previewCastFill = 0.40 + math.random() * 0.20
-        _previewCastIconIdx = math.random(#displayCastIcons)
+        optState._previewHpPct = math.floor(60 + math.random() * 15)
+        optState._previewCastFill = 0.40 + math.random() * 0.20
+        optState._previewCastIconIdx = math.random(#displayCastIcons)
     end
 
     local function UpdatePreview()
-        if activePreview and activePreview.Update then
-            activePreview:Update()
+        if optState.activePreview and optState.activePreview.Update then
+            optState.activePreview:Update()
         end
     end
 
@@ -293,8 +293,8 @@ initFrame:SetScript("OnEvent", function(self)
             if enrage then return "enrage" end
             return nil
         end
-        if not _previewHpPct then RandomizePreviewValues() end
-        local previewHpPct = _previewHpPct
+        if not optState._previewHpPct then RandomizePreviewValues() end
+        local previewHpPct = optState._previewHpPct
         local previewHpVal = math.floor(PV_CONST.FAKE_MAX_HP * previewHpPct / 100)
         health:SetMinMaxValues(0, PV_CONST.FAKE_MAX_HP)
         health:SetValue(previewHpVal)
@@ -351,7 +351,7 @@ initFrame:SetScript("OnEvent", function(self)
             if fill then fill:SetDrawLayer("ARTWORK", 1); fill:AddMaskTexture(absorbMask) end
         end
         local function ToggleAbsorbPreview()
-            if showAbsorbPreview then
+            if optState.showAbsorbPreview then
                 local barW = health:GetWidth()
                 local barH = health:GetHeight()
                 local hpPct = (previewHpPct or 75) / 100
@@ -601,7 +601,7 @@ initFrame:SetScript("OnEvent", function(self)
         cast:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
         UnsnapTex(cast:GetStatusBarTexture())
         cast:SetMinMaxValues(0, 1)
-        cast:SetValue(_previewCastFill)
+        cast:SetValue(optState._previewCastFill)
         cast:SetFrameLevel(pf:GetFrameLevel() + 10)
 
         local castBG = cast:CreateTexture(nil, "BACKGROUND")
@@ -625,7 +625,7 @@ initFrame:SetScript("OnEvent", function(self)
         UnsnapTex(castParts.icon)
         castParts.icon:SetAllPoints()
         castParts.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        castParts.icon:SetTexture(displayCastIcons[_previewCastIconIdx])
+        castParts.icon:SetTexture(displayCastIcons[optState._previewCastIconIdx])
 
         castParts.spark = cast:CreateTexture(nil, "OVERLAY", nil, 1)
         castParts.spark:SetTexture("Interface\\AddOns\\EllesmereUI\\media\\cast_spark.tga")
@@ -732,7 +732,7 @@ initFrame:SetScript("OnEvent", function(self)
                 previewGlow.blizzDesel = desel
             end
             if sel then
-                if showTargetGlowPreview then
+                if optState.showTargetGlowPreview then
                     local c = NAMEPLATE_BORDER_TARGET_COLOR
                     if c and c.r then sel:SetVertexColor(c.r, c.g, c.b) else sel:SetVertexColor(1, 1, 1) end
                     sel:Show(); desel:Hide()
@@ -785,7 +785,7 @@ initFrame:SetScript("OnEvent", function(self)
                 box:SetSize(L.w, bh)
                 SetPVFont(box._fs, FONT_PATH, ns.NP_ForeverLevelFont(bh), GetNPOptOutline())
                 -- Its target border rides the ring's preview toggle.
-                if box._sel then box._sel:SetShown(showTargetGlowPreview and true or false) end
+                if box._sel then box._sel:SetShown(optState.showTargetGlowPreview and true or false) end
                 -- Show Level Box, as live.
                 box:SetShown(ns.NP_ForeverBoxOn())
             end
@@ -1144,7 +1144,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             end
             -- Apply current random preview values (regenerated on tab switch only)
-            local curHpPct = _previewHpPct or 70
+            local curHpPct = optState._previewHpPct or 70
             local curHpVal = math.floor(PV_CONST.FAKE_MAX_HP * curHpPct / 100)
             health:SetValue(curHpVal)
             local pctStr = curHpPct .. "%"
@@ -1154,8 +1154,8 @@ initFrame:SetScript("OnEvent", function(self)
             local pctStrDec = string.format("%.1f%%", curHpPct + 0.4)
             local pctNoSignStrDec = string.format("%.1f", curHpPct + 0.4)
             -- Text on hpText/hpNumber is set later by the slot-based positioning logic
-            cast:SetValue(_previewCastFill or 0.60)
-            castParts.icon:SetTexture(displayCastIcons[_previewCastIconIdx or 1])
+            cast:SetValue(optState._previewCastFill or 0.60)
+            castParts.icon:SetTexture(displayCastIcons[optState._previewCastIconIdx or 1])
             do
                 local hbgC = (DB() and DB().bgColor) or defaults.bgColor
                 local hbgA = DBVal("bgAlpha") or defaults.bgAlpha
@@ -1351,11 +1351,11 @@ initFrame:SetScript("OnEvent", function(self)
 
             -- Clear drag-show flags when not dragging
             if not IsDragging() then
-                _sliderDragShowRaidMarker = false
-                _sliderDragShowClassification = false
+                optState._sliderDragShowRaidMarker = false
+                optState._sliderDragShowClassification = false
             end
 
-            local showRM = showRaidMarkerPreview or _sliderDragShowRaidMarker
+            local showRM = optState.showRaidMarkerPreview or optState._sliderDragShowRaidMarker
 
             -- Cast spell icon settings (mirror ns.GetCastIconReserve), computed once and reused by the core icons, cast bar, and target arrows below; barH/castH are already-snapped profile numbers in scope.
             local icdb = DB()
@@ -1420,7 +1420,7 @@ initFrame:SetScript("OnEvent", function(self)
                 clYOff = DBVal(clPos .. "SlotYOffset") or 0
             end
             local reIconSz = (clPos ~= "none") and (DBVal(clPos .. "SlotSize") or defaults[clPos .. "SlotSize"] or 20) or 20
-            local showCL = showClassificationPreview or _sliderDragShowClassification
+            local showCL = optState.showClassificationPreview or optState._sliderDragShowClassification
             classIcon:SetSize(reIconSz, reIconSz)
             if clPos == "none" or not showCL then
                 classIcon:Hide()
@@ -2558,7 +2558,7 @@ initFrame:SetScript("OnEvent", function(self)
             local glowBorder    = previewGlow.getBorderOn()
             local glowHighlight = previewGlow.getHighlight()
             -- EllesmereUI: background glow, tinted + faded with the Glow Color/Opacity
-            if showTargetGlowPreview and glowEUI then
+            if optState.showTargetGlowPreview and glowEUI then
                 local gc = previewGlow.getGlowCol()
                 local ga = previewGlow.getGlowAlpha()
                 for _, t in ipairs(previewGlow.texs) do t:SetVertexColor(gc.r, gc.g, gc.b, ga) end
@@ -2567,7 +2567,7 @@ initFrame:SetScript("OnEvent", function(self)
                 pgf:Hide()
             end
             -- Border Color: override the preview border with the custom target color
-            if showTargetGlowPreview and glowBorder then
+            if optState.showTargetGlowPreview and glowBorder then
                 local bc = previewGlow.getBorderCol()
                 for _, tex in ipairs(borderFrame._texs) do tex:SetVertexColor(bc.r, bc.g, bc.b) end
                 for _, tex in ipairs(simpleBorderFrame._texs) do tex:SetVertexColor(bc.r, bc.g, bc.b) end
@@ -2575,7 +2575,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             -- Highlight: translucent wash across the preview health bar (color/opacity via the Target Highlight cog).
             if previewGlow.highlight then
-                local showHL = showTargetGlowPreview and glowHighlight
+                local showHL = optState.showTargetGlowPreview and glowHighlight
                 if showHL then
                     local hc = previewGlow.getHighlightCol()
                     previewGlow.highlight:SetColorTexture(hc.r, hc.g, hc.b, previewGlow.getHighlightAlpha())
@@ -2611,7 +2611,7 @@ initFrame:SetScript("OnEvent", function(self)
 
             -- Notify framework so the scroll area adjusts: report full content header height (preset offset + bottom padding, not just the preview frame), converting totalH from preview-local to parent-space.
             local headerExtra = pf._headerExtra or 0
-            local hintH = (_previewHintFS and _previewHintFS:IsShown()) and 29 or 0
+            local hintH = (optState._previewHintFS and optState._previewHintFS:IsShown()) and 29 or 0
             EllesmereUI:UpdateContentHeaderHeight(totalH * previewScale + headerExtra + hintH)
 
             -- Refresh text overlay sizes (font/text may have changed)
@@ -2646,7 +2646,7 @@ initFrame:SetScript("OnEvent", function(self)
         pf._cpMax        = CP.MAX_POSSIBLE
         pf._arrows       = arrows
 
-        activePreview = pf
+        optState.activePreview = pf
         pf:Update()
         -- Return visual height in parent-scale pixels (pf:GetHeight() is local, scale it)
         return pf:GetHeight() * previewScale
@@ -3982,31 +3982,31 @@ initFrame:SetScript("OnEvent", function(self)
             local PREVIEW_BOTTOM_PAD = 5
             local previewH = BuildNameplatePreview(headerParent, headerW)
             -- Position the preview at the top of the header area. pf's SetScale matches the UIParent/panel ratio, so SetPoint offsets (in that scaled space) must divide by the same ratio for the correct visual offset.
-            if activePreview then
-                activePreview:ClearAllPoints()
+            if optState.activePreview then
+                optState.activePreview:ClearAllPoints()
                 local correction = UIParent:GetEffectiveScale() / headerParent:GetEffectiveScale()
-                activePreview:SetPoint("TOP", headerParent, "TOP", 0, -(PRESET_HEADER_H + PREVIEW_TOP_PAD) / correction)
-                activePreview._headerExtra = PRESET_HEADER_H + PREVIEW_TOP_PAD + PREVIEW_BOTTOM_PAD
+                optState.activePreview:SetPoint("TOP", headerParent, "TOP", 0, -(PRESET_HEADER_H + PREVIEW_TOP_PAD) / correction)
+                optState.activePreview._headerExtra = PRESET_HEADER_H + PREVIEW_TOP_PAD + PREVIEW_BOTTOM_PAD
             end
 
             -- "Click elements" hint: parented to activePreview (not headerParent directly, which orphaned it via ClearContentHeaderInner on page switch) so the FontString travels through the content-header cache; if orphaned (parent gone), nil it to recreate.
-            if _previewHintFS and not _previewHintFS:GetParent() then
-                _previewHintFS = nil
+            if optState._previewHintFS and not optState._previewHintFS:GetParent() then
+                optState._previewHintFS = nil
             end
             local hintShown = not IsPreviewHintDismissed()
             if hintShown then
-                if not _previewHintFS then
-                    _previewHintFS = EllesmereUI.MakeFont(activePreview or headerParent, 11, nil, 1, 1, 1)
-                    _previewHintFS:SetAlpha(0.45)
-                    _previewHintFS:SetText(EllesmereUI.L("Click elements to scroll to and highlight their options"))
+                if not optState._previewHintFS then
+                    optState._previewHintFS = EllesmereUI.MakeFont(optState.activePreview or headerParent, 11, nil, 1, 1, 1)
+                    optState._previewHintFS:SetAlpha(0.45)
+                    optState._previewHintFS:SetText(EllesmereUI.L("Click elements to scroll to and highlight their options"))
                 end
-                _previewHintFS:SetParent(activePreview or headerParent)
-                _previewHintFS:ClearAllPoints()
-                _previewHintFS:SetPoint("BOTTOM", headerParent, "BOTTOM", 0, 17)
-                _previewHintFS:SetAlpha(0.45)
-                _previewHintFS:Show()
-            elseif _previewHintFS then
-                _previewHintFS:Hide()
+                optState._previewHintFS:SetParent(optState.activePreview or headerParent)
+                optState._previewHintFS:ClearAllPoints()
+                optState._previewHintFS:SetPoint("BOTTOM", headerParent, "BOTTOM", 0, 17)
+                optState._previewHintFS:SetAlpha(0.45)
+                optState._previewHintFS:Show()
+            elseif optState._previewHintFS then
+                optState._previewHintFS:Hide()
             end
 
             _headerBaseH = previewH + PRESET_HEADER_H + PREVIEW_TOP_PAD + PREVIEW_BOTTOM_PAD
@@ -4815,7 +4815,7 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshAbsorbEye()
-                if showAbsorbPreview then
+                if optState.showAbsorbPreview then
                     eyeTex:SetTexture(EYE_INVISIBLE)
                 else
                     eyeTex:SetTexture(EYE_VISIBLE)
@@ -4823,7 +4823,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             RefreshAbsorbEye()
             eyeBtn:SetScript("OnClick", function()
-                showAbsorbPreview = not showAbsorbPreview
+                optState.showAbsorbPreview = not optState.showAbsorbPreview
                 RefreshAbsorbEye()
                 UpdatePreview()
             end)
@@ -4912,7 +4912,7 @@ initFrame:SetScript("OnEvent", function(self)
         local _refreshRaidMarkerEyePos
         local _refreshClassificationEyePos
 
-        RefreshCoreEyes = function()
+        optState.RefreshCoreEyes = function()
             if _refreshRaidMarkerEyePos then _refreshRaidMarkerEyePos() end
             if _refreshClassificationEyePos then _refreshClassificationEyePos() end
         end
@@ -6087,14 +6087,14 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Top",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("top") end,
-              setValue = function(v) SetElementAtPosition("top", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("top", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("top") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true },
             { type="dropdown", text="Right",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("right") end,
-              setValue = function(v) SetElementAtPosition("right", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("right", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("right") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true });  y = y - h
@@ -6108,14 +6108,14 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Left",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("left") end,
-              setValue = function(v) SetElementAtPosition("left", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("left", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("left") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true },
             { type="dropdown", text="Top Right",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("topright") end,
-              setValue = function(v) SetElementAtPosition("topright", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("topright", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("topright") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true });  y = y - h
@@ -6129,14 +6129,14 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Top Left",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("topleft") end,
-              setValue = function(v) SetElementAtPosition("topleft", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("topleft", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("topleft") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true },
             { type="dropdown", text="Bottom",
               values = coreElementValues, order = coreElementOrder,
               getValue = function() return GetElementAtPosition("bottom") end,
-              setValue = function(v) SetElementAtPosition("bottom", v); RefreshAllSlots(); RefreshCoreEyes() end,
+              setValue = function(v) SetElementAtPosition("bottom", v); RefreshAllSlots(); optState.RefreshCoreEyes() end,
               disabled = function() return CorePosOffDisabled("bottom") end,
               disabledTooltip = "This option requires an aura or indicator to be assigned", rawTooltip = true,
               labelOnlyDisabled = true });  y = y - h
@@ -6166,11 +6166,11 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshIcon()
-                eyeTex:SetTexture(showRaidMarkerPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                eyeTex:SetTexture(optState.showRaidMarkerPreview and EYE_INVISIBLE or EYE_VISIBLE)
             end
             RefreshIcon()
             eyeBtn:SetScript("OnClick", function()
-                showRaidMarkerPreview = not showRaidMarkerPreview
+                optState.showRaidMarkerPreview = not optState.showRaidMarkerPreview
                 RefreshIcon()
                 UpdatePreview()
             end)
@@ -6213,11 +6213,11 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshIcon()
-                eyeTex:SetTexture(showClassificationPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                eyeTex:SetTexture(optState.showClassificationPreview and EYE_INVISIBLE or EYE_VISIBLE)
             end
             RefreshIcon()
             eyeBtn:SetScript("OnClick", function()
-                showClassificationPreview = not showClassificationPreview
+                optState.showClassificationPreview = not optState.showClassificationPreview
                 RefreshIcon()
                 UpdatePreview()
             end)
@@ -7128,7 +7128,7 @@ initFrame:SetScript("OnEvent", function(self)
                 -- setting); -12: the widest FlipBook styles overhang ~8px per side.
                 local pv = GO.BuildPreview(leftRgn, impDesc, {
                     bar = false, width = 26, height = 26,
-                    icon = function() return displayCastIcons[_previewCastIconIdx or 1] end,
+                    icon = function() return displayCastIcons[optState._previewCastIconIdx or 1] end,
                     anchor = leftRgn._lastInline, x = -12,
                 })
                 if pv then
@@ -7536,7 +7536,7 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshTargetGlowEye()
-                if showTargetGlowPreview then
+                if optState.showTargetGlowPreview then
                     eyeTex:SetTexture(EYE_INVISIBLE)
                 else
                     eyeTex:SetTexture(EYE_VISIBLE)
@@ -7544,7 +7544,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             RefreshTargetGlowEye()
             eyeBtn:SetScript("OnClick", function()
-                showTargetGlowPreview = not showTargetGlowPreview
+                optState.showTargetGlowPreview = not optState.showTargetGlowPreview
                 RefreshTargetGlowEye()
                 UpdatePreview()
             end)
@@ -8801,7 +8801,7 @@ initFrame:SetScript("OnEvent", function(self)
             if not m or not m.section or not m.target then return end
 
             -- Header grows by 29 but shrinks by 39 (kept as shipped).
-            EllesmereUI.DismissPreviewHint(_previewHintFS, _headerBaseH, 29, 17)
+            EllesmereUI.DismissPreviewHint(optState._previewHintFS, _headerBaseH, 29, 17)
 
             local sf = EllesmereUI._scrollFrame
             if not sf then return end
@@ -8819,19 +8819,19 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Hit overlay factory for preview elements. opts (optional): hlAnchor = frame to draw the highlight around (instead of btn); hlBehindText = true draws it on a child frame at icon level+1 (text lives at icon level+2).
         local function SnapPreview(val)
-            local s = activePreview and activePreview:GetEffectiveScale() or 1
+            local s = optState.activePreview and optState.activePreview:GetEffectiveScale() or 1
             if s <= 0 then s = 1 end
             return math.floor(val * s + 0.5) / s
         end
         -- Destroy any stale hit overlays from a previous BuildDisplayPage call (RefreshPage can re-call buildPage without cleaning the preview).
-        if activePreview and activePreview._hitOverlays then
-            for i = 1, #activePreview._hitOverlays do
-                local ov = activePreview._hitOverlays[i]
+        if optState.activePreview and optState.activePreview._hitOverlays then
+            for i = 1, #optState.activePreview._hitOverlays do
+                local ov = optState.activePreview._hitOverlays[i]
                 ov:EnableMouse(false)
                 ov:Hide()
                 ov:SetParent(nil)
             end
-            wipe(activePreview._hitOverlays)
+            wipe(optState.activePreview._hitOverlays)
         end
 
         local allOverlays = {}
@@ -8847,8 +8847,8 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Create hit overlays for all interactive preview elements
         local textOverlays = {}  -- collect text overlays for size refresh
-        if activePreview then
-            local pv = activePreview
+        if optState.activePreview then
+            local pv = optState.activePreview
             -- Icon overlays need to be above the icon frames (which are at health:GetFrameLevel() + 8)
             local iconLevel = (pv._health and pv._health:GetFrameLevel() or 20) + 15
             -- Text overlays on icons need to be above the icon overlays
@@ -8975,13 +8975,13 @@ initFrame:SetScript("OnEvent", function(self)
             local raidOverlay
             if pv._raidFrame then
                 raidOverlay = CreateHitOverlay(pv._raidFrame, "raidMarker")
-                if not showRaidMarkerPreview then raidOverlay:Hide() end
+                if not optState.showRaidMarkerPreview then raidOverlay:Hide() end
             end
             -- Rare/elite icon
             local classOverlay
             if pv._classIcon then
                 classOverlay = CreateHitOverlay(pv._classIcon, "classIcon")
-                if not showClassificationPreview then classOverlay:Hide() end
+                if not optState.showClassificationPreview then classOverlay:Hide() end
             end
             -- Faction badge: shown and hidden with the badge by the preview update.
             if pv._factionIcon then
@@ -10360,7 +10360,7 @@ initFrame:SetScript("OnEvent", function(self)
         _, h = W:Spacer(parent, y, 20);  y = y - h
 
         -- Build a refresh-all function for page cache restore
-        _colorPreviewRefreshAll = function()
+        optState._colorPreviewRefreshAll = function()
             for _, prev in ipairs(_G._EUI_ColorPreviews) do
                 if prev.UpdateColor then prev.UpdateColor() end
                 if prev.UpdateOverlay then prev.UpdateOverlay() end
@@ -10430,15 +10430,15 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Randomize preview values when switching TO this tab
                 RandomizePreviewValues()
                 -- Refresh the preview after cache restore
-                if activePreview and activePreview.Update then activePreview:Update() end
+                if optState.activePreview and optState.activePreview.Update then optState.activePreview:Update() end
                 -- Refresh hint visibility only; never recreate here.
                 local dismissed = IsPreviewHintDismissed()
-                if _previewHintFS then
+                if optState._previewHintFS then
                     if dismissed then
-                        _previewHintFS:Hide()
+                        optState._previewHintFS:Hide()
                     else
-                        _previewHintFS:SetAlpha(0.45)
-                        _previewHintFS:Show()
+                        optState._previewHintFS:SetAlpha(0.45)
+                        optState._previewHintFS:Show()
                     end
                 end
                 -- Set correct header height based on current hint state
@@ -10447,7 +10447,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
             elseif pageName == PAGE_COLORS then
                 -- Refresh all color preview bars (colors from DB)
-                if _colorPreviewRefreshAll then _colorPreviewRefreshAll() end
+                if optState._colorPreviewRefreshAll then optState._colorPreviewRefreshAll() end
             end
         end,
         onReset     = function()
