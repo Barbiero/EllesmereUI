@@ -3123,6 +3123,7 @@ local function DecorateFrame(frame, barData)
         fd.borderFrame:SetFrameLevel(barData.borderBehind and math.max(0, baseLvl - 1) or (baseLvl + 13))
     end
     if fd.glowOverlay then fd.glowOverlay:SetFrameLevel(baseLvl + 16) end
+    if fd.blackoutOverlay then fd.blackoutOverlay:SetFrameLevel(baseLvl + 12) end
     if fd.textOverlay then fd.textOverlay:SetFrameLevel(baseLvl + 23) end
     if blizzArt then ns.CdmApplyBlizzIconArt(frame) end
 
@@ -3216,6 +3217,20 @@ local function DecorateFrame(frame, barData)
         go:EnableMouse(false)
         fd.glowOverlay = go
         go:SetFrameLevel(baseLvl + 16)
+    end
+
+    -- Blackout (solid-fill Cooldown State glow) lives BELOW frame.Cooldown
+    -- (icon+14), unlike every other glow style on glowOverlay (icon+16,
+    -- above it): a fill there would fully hide the swipe/countdown text.
+    -- ns.StartCdGlow/ns.StopCdGlow pick this frame instead whenever the
+    -- resolved style is Blackout.
+    if not fd.blackoutOverlay then
+        local bo = CreateFrame("Frame", nil, frame)
+        bo:SetAllPoints(frame)
+        bo:SetAlpha(0)
+        bo:EnableMouse(false)
+        fd.blackoutOverlay = bo
+        bo:SetFrameLevel(baseLvl + 12)
     end
 
     -- Re-arm the buff ticker's active-glow "nothing configured" latch: this
@@ -4194,7 +4209,7 @@ local function DecorateFrame(frame, barData)
                 -- (clear any glow we owned).
                 if ns.PresetHasCdState and ns.PresetHasCdState(frame) then
                     if fd._cdStateGlowOn then
-                        if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                        ns.StopCdGlow(fd)
                         fd._cdStateGlowOn = false
                         -- The Fake-Active path tracks this overlay via its own
                         -- flag; clear it too so its next tick re-asserts the
@@ -4213,7 +4228,7 @@ local function DecorateFrame(frame, barData)
                 elseif cse == "hiddenReadyShift" then cse = "hiddenReady" end
                 if not cse then
                     if fd._cdStateGlowOn then
-                        if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                        ns.StopCdGlow(fd)
                         fd._cdStateGlowOn = false
                     end
                     -- A preset's cdState lives in customActiveStates (Fake-Active
@@ -4290,7 +4305,7 @@ local function DecorateFrame(frame, barData)
                     if fd._cdGlowBoundSid ~= sid2 then
                         fd._cdGlowBoundSid = sid2
                         if fd._cdStateGlowOn then
-                            ns.StopNativeGlow(fd.glowOverlay)
+                            ns.StopCdGlow(fd)
                             fd._cdStateGlowOn = false
                         end
                     end
@@ -4303,11 +4318,11 @@ local function DecorateFrame(frame, barData)
                             and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
-                        if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                        ns.StopCdGlow(fd)
                         fd._cdStateGlowOn = false
                     end
                 elseif cse == "pixelGlowReadyUsable" or cse == "buttonGlowReadyUsable" then
@@ -4317,7 +4332,7 @@ local function DecorateFrame(frame, barData)
                     if fd._cdGlowBoundSid ~= sid2 then
                         fd._cdGlowBoundSid = sid2
                         if fd._cdStateGlowOn then
-                            ns.StopNativeGlow(fd.glowOverlay)
+                            ns.StopCdGlow(fd)
                             fd._cdStateGlowOn = false
                         end
                     end
@@ -4365,11 +4380,11 @@ local function DecorateFrame(frame, barData)
                                     and not fd.procGlowActive then
                                     local style = ns.CdReadyGlowStyle(self.cse, self.ss2)
                                     local cr, cg, cb = ns.CdReadyGlowColor(style, self.ss2)
-                                    ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(self.ss2) })
+                                    ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(self.ss2) })
                                     fd._cdStateGlowOn = true
                                 end
                             elseif fd._cdStateGlowOn then
-                                if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                                ns.StopCdGlow(fd)
                                 fd._cdStateGlowOn = false
                             end
                         end)
@@ -4389,7 +4404,7 @@ local function DecorateFrame(frame, barData)
                     if fd._cdGlowBoundSid ~= sid2 then
                         fd._cdGlowBoundSid = sid2
                         if fd._cdStateGlowOn then
-                            ns.StopNativeGlow(fd.glowOverlay)
+                            ns.StopCdGlow(fd)
                             fd._cdStateGlowOn = false
                         end
                     end
@@ -4398,11 +4413,11 @@ local function DecorateFrame(frame, barData)
                             and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
-                        if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                        ns.StopCdGlow(fd)
                         fd._cdStateGlowOn = false
                     end
                 end
@@ -5020,7 +5035,7 @@ do
                     if fd._cdGlowBoundSid ~= sid2 then
                         fd._cdGlowBoundSid = sid2
                         if fd._cdStateGlowOn then
-                            ns.StopNativeGlow(fd.glowOverlay)
+                            ns.StopCdGlow(fd)
                             fd._cdStateGlowOn = false
                         end
                     end
@@ -5055,11 +5070,11 @@ do
                         if not fd._cdStateGlowOn and not fd.procGlowActive then
                             local style = ns.CdReadyGlowStyle(cse2, ss2)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss2)
-                            ns.StartNativeGlow(fd.glowOverlay, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
+                            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss2) })
                             fd._cdStateGlowOn = true
                         end
                     elseif fd._cdStateGlowOn then
-                        ns.StopNativeGlow(fd.glowOverlay)
+                        ns.StopCdGlow(fd)
                         fd._cdStateGlowOn = false
                     end
                 end
@@ -5070,7 +5085,7 @@ do
                 -- set drains (checked below and on the next queued flush).
                 _cdGlowWatched[frame] = nil
                 if fd and fd._cdStateGlowOn then
-                    if fd.glowOverlay then ns.StopNativeGlow(fd.glowOverlay) end
+                    ns.StopCdGlow(fd)
                     fd._cdStateGlowOn = false
                 end
             end

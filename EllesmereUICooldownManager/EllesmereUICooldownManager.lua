@@ -2662,6 +2662,34 @@ end
 ns.StartNativeGlow = StartNativeGlow
 ns.StopNativeGlow = StopNativeGlow
 
+-- Cooldown State Effect glow (CD Ready / On CD): Blackout renders on its own
+-- frame BELOW frame.Cooldown (fd.blackoutOverlay, icon+12) instead of the
+-- shared fd.glowOverlay (icon+16, ABOVE the cooldown widget), so the swipe and
+-- countdown text stay visible on top of the fill; every other style keeps
+-- using the shared overlay. Picks the overlay from the resolved style and
+-- stops whichever one is NOT used, so a style change (e.g. Blackout -> Pixel)
+-- never leaves the other overlay lit.
+function ns.StartCdGlow(fd, style, cr, cg, cb, opts)
+    if not fd then return end
+    local e = ns.GLOW_STYLES[style]
+    local overlay, other
+    if e and e.solidFill then
+        overlay, other = fd.blackoutOverlay, fd.glowOverlay
+    else
+        overlay, other = fd.glowOverlay, fd.blackoutOverlay
+    end
+    if other then StopNativeGlow(other) end
+    if overlay then StartNativeGlow(overlay, style, cr, cg, cb, opts) end
+    return overlay
+end
+
+-- Stops the CD-state glow regardless of which overlay it landed on.
+function ns.StopCdGlow(fd)
+    if not fd then return end
+    if fd.glowOverlay then StopNativeGlow(fd.glowOverlay) end
+    if fd.blackoutOverlay then StopNativeGlow(fd.blackoutOverlay) end
+end
+
 -- Combat edges for Show Glows Only in Combat. Entering combat replays what was
 -- suppressed; leaving combat takes the running glows down but keeps their
 -- records, so the next pull lights them again without waiting for their owners
@@ -6126,7 +6154,7 @@ local function RefreshCDMIconAppearance(barKey)
             -- Don't touch: active glow is managed by the SetSwipeColor hook. Stopping it here causes a visible blink.
         elseif ifd and ifd._cdStateGlowOn then
             -- cdState glow active: stop it so the desat hook restarts with the updated style. Also re-evaluate immediately for off-CD spells (desat hook won't fire for those).
-            if glowOv then StopNativeGlow(glowOv) end
+            ns.StopCdGlow(ifd)
             ifd._cdStateGlowOn = false
             local fc = _ecmeFC[icon]
             local sid = fc and fc.spellID
@@ -6169,7 +6197,7 @@ local function RefreshCDMIconAppearance(barKey)
                         if isUsable == true then
                             local style = ns.CdReadyGlowStyle(cse, ss)
                             local cr, cg, cb = ns.CdReadyGlowColor(style, ss)
-                            StartNativeGlow(glowOv, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss) })
+                            ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(ss) })
                             ifd._cdStateGlowOn = true
                         end
                     end
@@ -6188,7 +6216,7 @@ local function RefreshCDMIconAppearance(barKey)
                 end
             end
         elseif glowOv then
-            StopNativeGlow(glowOv)
+            ns.StopCdGlow(ifd)
             if ifd then ifd.procGlowActive = false end
         end
 
@@ -6267,7 +6295,7 @@ local function RefreshCDMIconAppearance(barKey)
                             if isUsable == true then
                                 local style = ns.CdReadyGlowStyle(cse, csSs)
                                 local cr, cg, cb = ns.CdReadyGlowColor(style, csSs)
-                                StartNativeGlow(glowOv, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(csSs) })
+                                ns.StartCdGlow(ifd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(csSs) })
                                 if ifd then ifd._cdStateGlowOn = true end
                             end
                         end

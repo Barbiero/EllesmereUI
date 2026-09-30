@@ -1218,23 +1218,29 @@ ApplyCdState = function(frame, fc, cas, eff, onCD, ready)
     if fc._cdStateHidden then frame:SetAlpha(FrameBaseAlpha(fc)) end
     fc._cdStateHidden = false
     if ns.SetCdStateShiftHidden then ns.SetCdStateShiftHidden(fc, false) end
-    local glow = fd and fd.glowOverlay
-    if not glow then return end
-    if not onCD then
+    if not fd then return end
+    -- Glow modes want the OPPOSITE cooldown state for "On CD" vs the Ready
+    -- variants (mirrors CdReadyGlowStyle's cse handling in CdmHooks.lua).
+    local isOnCdGlow = (eff == "glowOnCD")
+    local wantsGlow = isOnCdGlow and onCD or (not isOnCdGlow and not onCD)
+    if wantsGlow then
+        local style = ns.CdReadyGlowStyle(eff, cas)
+        local styleEntry = ns.GLOW_STYLES[style]
+        local ov = (styleEntry and styleEntry.solidFill) and fd.blackoutOverlay or fd.glowOverlay
         -- Re-assert against the overlay's REAL state (overlay._glowActive), not
-        -- our flag alone. fd.glowOverlay is shared with the proc-glow and
+        -- our flag alone. The overlay is shared with the proc-glow and
         -- appearance passes, and twelve of the thirteen sites that stop it never
         -- tell this engine -- so the flag said "lit" while the overlay was dark
         -- and a ready preset stayed unglowed until the next re-arm. Only ever
         -- starts a glow when nothing is running, so it cannot stomp another
         -- owner's.
-        if not fd._presetCdGlowOn or not glow._glowActive then
-            local style = ns.CdReadyGlowStyle(eff, cas)
-            ns.StartNativeGlow(glow, style, ns.CdReadyGlowColor(style, cas))
+        if not fd._presetCdGlowOn or not (ov and ov._glowActive) then
+            local cr, cg, cb = ns.CdReadyGlowColor(style, cas)
+            ns.StartCdGlow(fd, style, cr, cg, cb, { alpha = ns.CdReadyGlowAlpha(cas) })
             fd._presetCdGlowOn = true
         end
     elseif fd._presetCdGlowOn then
-        ns.StopNativeGlow(glow)
+        ns.StopCdGlow(fd)
         fd._presetCdGlowOn = false
     end
 end
@@ -1256,8 +1262,8 @@ RestoreAllCdState = function()
                     fc._cdStateHidden = false
                     if ns.SetCdStateShiftHidden then ns.SetCdStateShiftHidden(fc, false) end
                 end
-                if fd._presetCdGlowOn and fd.glowOverlay then
-                    ns.StopNativeGlow(fd.glowOverlay)
+                if fd._presetCdGlowOn and (fd.glowOverlay or fd.blackoutOverlay) then
+                    ns.StopCdGlow(fd)
                     fd._presetCdGlowOn = false
                 end
                 fd._presetCdTouched = nil

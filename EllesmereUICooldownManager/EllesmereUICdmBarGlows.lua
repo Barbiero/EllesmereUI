@@ -425,6 +425,17 @@ local function UpdateOverlayVisuals()
                         cg = entry.glowColor.g or 0.788
                         cb = entry.glowColor.b or 0.137
                     end
+                    -- Blackout must sit BELOW the button's cooldown swipe/countdown
+                    -- (same fix as the per-icon Cooldown State glow); every other
+                    -- style stays above it at the normal level.
+                    local styleEntry = ns.GLOW_STYLES and ns.GLOW_STYLES[style]
+                    if styleEntry and styleEntry.solidFill then
+                        local cdWidget = glowParent.Cooldown or glowParent.cooldown
+                        overlay:SetFrameLevel(cdWidget and math.max(1, cdWidget:GetFrameLevel() - 1)
+                            or glowParent:GetFrameLevel() + 1)
+                    else
+                        overlay:SetFrameLevel(glowParent:GetFrameLevel() + 15)
+                    end
                     if gateSt then
                         -- Both gate masks travel as data (mask2 is nil unless the
                         -- operator needs the upper gate): the Show Glows Only in
