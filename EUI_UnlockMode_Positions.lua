@@ -1,3 +1,19 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnlockMode_Positions.lua
+--  Ghost overlays, override anchors, saved positions, grow-direction
+--  positioning, bar frame resolution, apply saved positions on login,
+--  Edit Mode anchor guard.
+--  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
+-------------------------------------------------------------------------------
+EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
+EllesmereUI._unlockParts.Positions = function(UM)
+local ns, EAB, PP, FONT_PATH = UM.ns, UM.EAB, UM.PP, UM.FONT_PATH
+local BAR_LOOKUP, registeredElements, registeredOrder, RebuildRegisteredOrder = UM.BAR_LOOKUP, UM.registeredElements, UM.registeredOrder, UM.RebuildRegisteredOrder
+local movers, pendingPositions, GetBarGrowDirActual, GetAnchorDB = UM.movers, UM.pendingPositions, UM.GetBarGrowDirActual, UM.GetAnchorDB
+local GetAnchorInfo, MatchH, ScheduleAnchorBatch, ApplyAllWidthHeightMatches = UM.GetAnchorInfo, UM.MatchH, UM.ScheduleAnchorBatch, UM.ApplyAllWidthHeightMatches
+local HookFrameSizeChanged, FadeOverlayForSelectElement, CancelPickMode = UM.HookFrameSizeChanged, UM.FadeOverlayForSelectElement, UM.CancelPickMode
+
 -------------------------------------------------------------------------------
 --  Ghost overlay set (unlock mode only), shared by fallback and override
 --  anchors: draggable 1:1 mover-overlay copies at 75% opacity sitting where
@@ -2805,4 +2821,8 @@ if not EAB then
             end
         end)
     end)
+end
+
+UM.ReapplyAllAnchors, UM.ConvertToCenterPos, UM.LoadBarPosition, UM.ClearBarPosition = ReapplyAllAnchors, ConvertToCenterPos, LoadBarPosition, ClearBarPosition
+UM.InstallAnchorGuard = InstallAnchorGuard
 end

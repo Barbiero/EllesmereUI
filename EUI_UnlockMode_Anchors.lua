@@ -1,3 +1,16 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnlockMode_Anchors.lua
+--  Anchor / match engine: anchor and size-match DB helpers, match status
+--  API, link pruning and re-keying, NotifyElementResized, OnSizeChanged
+--  hooks, combat-parked positioning, fallback anchors.
+--  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
+-------------------------------------------------------------------------------
+EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
+EllesmereUI._unlockParts.Anchors = function(UM)
+local ns, floor, PP, registeredElements = UM.ns, UM.floor, UM.PP, UM.registeredElements
+local movers, pendingPositions, SELECT_ELEMENT_ALPHA, SELECT_ELEMENT_FADE = UM.movers, UM.pendingPositions, UM.SELECT_ELEMENT_ALPHA, UM.SELECT_ELEMENT_FADE
+
 -------------------------------------------------------------------------------
 --  Anchor / Match DB helpers
 --  EllesmereUIDB.unlockAnchors = { [childKey] = { target=key, side="LEFT"|"RIGHT"|"TOP"|"BOTTOM" } }
@@ -2015,4 +2028,10 @@ do
             end
         end)
     end
+end
+
+UM.GetBarGrowDirActual, UM.GetBarGrowDir, UM.GetAnchorDB, UM.GetAnchorInfo = GetBarGrowDirActual, GetBarGrowDir, GetAnchorDB, GetAnchorInfo
+UM.SetAnchorInfo, UM.ClearAnchorInfo, UM.IsAnchored, UM.MatchH = SetAnchorInfo, ClearAnchorInfo, IsAnchored, MatchH
+UM.ValidateStoredLinks, UM.ScheduleAnchorBatch, UM.ApplyAllWidthHeightMatches, UM.HookFrameSizeChanged = ValidateStoredLinks, ScheduleAnchorBatch, ApplyAllWidthHeightMatches, HookFrameSizeChanged
+UM.FadeOverlayForSelectElement, UM.CancelPickMode, UM.FlashRedBorder, UM.RejectH = FadeOverlayForSelectElement, CancelPickMode, FlashRedBorder, RejectH
 end

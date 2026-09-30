@@ -1,3 +1,21 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnlockMode_Tools.lua
+--  Unlock Mode tools: accent color, grid overlay, alignment guides, snap,
+--  selection and arrow-key nudge, action bar visual size, mover overlay
+--  helpers, Blizzard-owned info overlays.
+--  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
+-------------------------------------------------------------------------------
+EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
+EllesmereUI._unlockParts.Tools = function(UM)
+local ns, EAB, floor, abs = UM.ns, UM.EAB, UM.floor, UM.abs
+local min, max, sqrt, sin = UM.min, UM.max, UM.sqrt, UM.sin
+local PP, FONT_PATH, GRID_SPACING, SNAP_THRESH = UM.PP, UM.FONT_PATH, UM.GRID_SPACING, UM.SNAP_THRESH
+local MOVER_ALPHA, MOVER_HOVER, BAR_LOOKUP, registeredElements = UM.MOVER_ALPHA, UM.MOVER_HOVER, UM.BAR_LOOKUP, UM.registeredElements
+local guidePool, movers, pendingPositions, GridBaseAlpha = UM.guidePool, UM.movers, UM.pendingPositions, UM.GridBaseAlpha
+local GridCenterAlpha, _blizzOwnedOverlays, GetAnchorDB, GetAnchorInfo = UM.GridCenterAlpha, UM._blizzOwnedOverlays, UM.GetAnchorDB, UM.GetAnchorInfo
+local FadeOverlayForSelectElement, CancelPickMode, LoadBarPosition = UM.FadeOverlayForSelectElement, UM.CancelPickMode, UM.LoadBarPosition
+
 -------------------------------------------------------------------------------
 --  Accent color helper (reads live from EllesmereUI)
 -------------------------------------------------------------------------------
@@ -1325,4 +1343,10 @@ local function HideBlizzOwnedOverlays()
         if ov._forceCollapse then ov._forceCollapse() end
         ov:Hide()
     end
+end
+
+UM.GetAccent, UM.CreateGrid, UM.ClearSnapHighlight, UM.ShowSnapHighlight = GetAccent, CreateGrid, ClearSnapHighlight, ShowSnapHighlight
+UM.HideAllGuidesAndHighlight, UM.ShowAlignmentGuides, UM.SnapPosition, UM.SelectMover = HideAllGuidesAndHighlight, ShowAlignmentGuides, SnapPosition, SelectMover
+UM.DeselectMover, UM.ApplyDarkOverlays, UM.SetupArrowKeyFrame, UM.GetActionBarVisualSize = DeselectMover, ApplyDarkOverlays, SetupArrowKeyFrame, GetActionBarVisualSize
+UM.SortMoverFrameLevels, UM.ShowBlizzOwnedOverlays, UM.HideBlizzOwnedOverlays = SortMoverFrameLevels, ShowBlizzOwnedOverlays, HideBlizzOwnedOverlays
 end

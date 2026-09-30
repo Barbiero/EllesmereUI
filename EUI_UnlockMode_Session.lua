@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnlockMode_Session.lua
+--  Unlock Mode session: top banner HUD, save / revert, spec overrides,
+--  open / close with their animations, the one-time how-to-use tip.
+--  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
+-------------------------------------------------------------------------------
+EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
+EllesmereUI._unlockParts.Session = function(UM)
+local ns, EAB, min, max = UM.ns, UM.EAB, UM.min, UM.max
+local sin, FONT_PATH, LOCK_INNER, LOCK_OUTER = UM.sin, UM.FONT_PATH, UM.LOCK_INNER, UM.LOCK_OUTER
+local LOCK_TOP, MOVER_ALPHA, GEAR_ROTATION, ALL_BAR_ORDER = UM.LOCK_TOP, UM.MOVER_ALPHA, UM.GEAR_ROTATION, UM.ALL_BAR_ORDER
+local registeredElements, registeredOrder, RebuildRegisteredOrder, movers = UM.registeredElements, UM.registeredOrder, UM.RebuildRegisteredOrder, UM.movers
+local lockAnimFrame, pendingPositions, snapshotPositions, snapshotAnchors = UM.lockAnimFrame, UM.pendingPositions, UM.snapshotPositions, UM.snapshotAnchors
+local snapshotSizes, snapshotWidthMatch, snapshotHeightMatch, snapshotGrowDirs = UM.snapshotSizes, UM.snapshotWidthMatch, UM.snapshotHeightMatch, UM.snapshotGrowDirs
+local GridHudAlpha, GridLabelText, CycleGridMode, _blizzOwnedOverlays = UM.GridHudAlpha, UM.GridLabelText, UM.CycleGridMode, UM._blizzOwnedOverlays
+local GetAnchorDB, MatchH, ValidateStoredLinks, FadeOverlayForSelectElement = UM.GetAnchorDB, UM.MatchH, UM.ValidateStoredLinks, UM.FadeOverlayForSelectElement
+local CancelPickMode, ReapplyAllAnchors, ConvertToCenterPos, ClearBarPosition = UM.CancelPickMode, UM.ReapplyAllAnchors, UM.ConvertToCenterPos, UM.ClearBarPosition
+local InstallAnchorGuard, GetAccent, CreateGrid, HideAllGuidesAndHighlight = UM.InstallAnchorGuard, UM.GetAccent, UM.CreateGrid, UM.HideAllGuidesAndHighlight
+local SelectMover, DeselectMover, ApplyDarkOverlays, SetupArrowKeyFrame = UM.SelectMover, UM.DeselectMover, UM.ApplyDarkOverlays, UM.SetupArrowKeyFrame
+local SortMoverFrameLevels, ShowBlizzOwnedOverlays, HideBlizzOwnedOverlays, CreateMover = UM.SortMoverFrameLevels, UM.ShowBlizzOwnedOverlays, UM.HideBlizzOwnedOverlays, UM.CreateMover
+
 -------------------------------------------------------------------------------
 --  Top Banner Bar: single pre-rendered banner image (1144x120), displayed
 --  pixel-perfect at native resolution, flush with top of screen. Grid + magnet
@@ -2620,4 +2642,5 @@ function ns.OpenUnlockMode()
         -- Show one-time toolbar tip (after animation settles)
         ns.ShowUnlockTip()
     end)
+end
 end

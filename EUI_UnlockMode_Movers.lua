@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnlockMode_Movers.lua
+--  CreateMover: the draggable mover built for each registered element.
+--  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
+-------------------------------------------------------------------------------
+EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
+EllesmereUI._unlockParts.Movers = function(UM)
+local ns, EAB, floor, abs = UM.ns, UM.EAB, UM.floor, UM.abs
+local min, max, round, DeferMoverSync = UM.min, UM.max, UM.round, UM.DeferMoverSync
+local FONT_PATH, MOVER_ALPHA, MOVER_HOVER, MOVER_DRAG = UM.FONT_PATH, UM.MOVER_ALPHA, UM.MOVER_HOVER, UM.MOVER_DRAG
+local BAR_LOOKUP, ALL_BAR_ORDER, GetVisibilityOnly, registeredElements = UM.BAR_LOOKUP, UM.ALL_BAR_ORDER, UM.GetVisibilityOnly, UM.registeredElements
+local registeredOrder, RebuildRegisteredOrder, movers, pendingPositions = UM.registeredOrder, UM.RebuildRegisteredOrder, UM.movers, UM.pendingPositions
+local GetBarGrowDir, GetAnchorDB, GetAnchorInfo, SetAnchorInfo = UM.GetBarGrowDir, UM.GetAnchorDB, UM.GetAnchorInfo, UM.SetAnchorInfo
+local ClearAnchorInfo, IsAnchored, MatchH, FadeOverlayForSelectElement = UM.ClearAnchorInfo, UM.IsAnchored, UM.MatchH, UM.FadeOverlayForSelectElement
+local CancelPickMode, FlashRedBorder, RejectH, ReapplyAllAnchors = UM.CancelPickMode, UM.FlashRedBorder, UM.RejectH, UM.ReapplyAllAnchors
+local LoadBarPosition, GetAccent, ClearSnapHighlight, ShowSnapHighlight = UM.LoadBarPosition, UM.GetAccent, UM.ClearSnapHighlight, UM.ShowSnapHighlight
+local HideAllGuidesAndHighlight, ShowAlignmentGuides, SnapPosition, SelectMover = UM.HideAllGuidesAndHighlight, UM.ShowAlignmentGuides, UM.SnapPosition, UM.SelectMover
+local DeselectMover, GetActionBarVisualSize, SortMoverFrameLevels = UM.DeselectMover, UM.GetActionBarVisualSize, UM.SortMoverFrameLevels
+
 local _mouseHeld = false       -- true while left mouse button is held down anywhere
 
 local function CreateMover(barKey)
@@ -4379,4 +4399,7 @@ do
             ReapplyAllAnchors()
         end
     end
+end
+
+UM.CreateMover = CreateMover
 end

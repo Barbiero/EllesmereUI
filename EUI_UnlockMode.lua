@@ -688,6 +688,30 @@ EllesmereUI._unlockHoverSpeedThresh = 80 * 80 -- squared px/sec threshold (avoid
 EllesmereUI._unlockHoverIntentDelay = 0.12 -- seconds to wait after settling before expanding
 
 -------------------------------------------------------------------------------
+--  Split parts (EUI_UnlockMode_*.lua): share the stable names above through
+--  UM, then run the parts here, in their original order.
+-------------------------------------------------------------------------------
+UM.ns, UM.EAB, UM.floor, UM.abs = ns, EAB, floor, abs
+UM.min, UM.max, UM.sqrt, UM.sin = min, max, sqrt, sin
+UM.round, UM.PP, UM.DeferMoverSync, UM.FONT_PATH = round, PP, DeferMoverSync, FONT_PATH
+UM.LOCK_INNER, UM.LOCK_OUTER, UM.LOCK_TOP, UM.GRID_SPACING = LOCK_INNER, LOCK_OUTER, LOCK_TOP, GRID_SPACING
+UM.SNAP_THRESH, UM.MOVER_ALPHA, UM.MOVER_HOVER, UM.MOVER_DRAG = SNAP_THRESH, MOVER_ALPHA, MOVER_HOVER, MOVER_DRAG
+UM.GEAR_ROTATION, UM.BAR_LOOKUP, UM.ALL_BAR_ORDER, UM.GetVisibilityOnly = GEAR_ROTATION, BAR_LOOKUP, ALL_BAR_ORDER, GetVisibilityOnly
+UM.registeredElements, UM.registeredOrder, UM.RebuildRegisteredOrder, UM.guidePool = registeredElements, registeredOrder, RebuildRegisteredOrder, guidePool
+UM.movers, UM.lockAnimFrame, UM.pendingPositions, UM.snapshotPositions = movers, lockAnimFrame, pendingPositions, snapshotPositions
+UM.snapshotAnchors, UM.snapshotSizes, UM.snapshotWidthMatch, UM.snapshotHeightMatch = snapshotAnchors, snapshotSizes, snapshotWidthMatch, snapshotHeightMatch
+UM.snapshotGrowDirs, UM.GridBaseAlpha, UM.GridCenterAlpha, UM.GridHudAlpha = snapshotGrowDirs, GridBaseAlpha, GridCenterAlpha, GridHudAlpha
+UM.GridLabelText, UM.CycleGridMode, UM._blizzOwnedOverlays, UM.SELECT_ELEMENT_ALPHA = GridLabelText, CycleGridMode, _blizzOwnedOverlays, SELECT_ELEMENT_ALPHA
+UM.SELECT_ELEMENT_FADE = SELECT_ELEMENT_FADE
+EllesmereUI._unlockParts.Anchors(UM)
+EllesmereUI._unlockParts.Positions(UM)
+EllesmereUI._unlockParts.Tools(UM)
+EllesmereUI._unlockParts.Movers(UM)
+EllesmereUI._unlockParts.Session(UM)
+local HideAllGuidesAndHighlight, DeselectMover = UM.HideAllGuidesAndHighlight, UM.DeselectMover
+local SortMoverFrameLevels, HideBlizzOwnedOverlays = UM.SortMoverFrameLevels, UM.HideBlizzOwnedOverlays
+
+-------------------------------------------------------------------------------
 --  Close Unlock Mode — routes through save/discard logic
 -------------------------------------------------------------------------------
 function ns.CloseUnlockMode(afterFn)

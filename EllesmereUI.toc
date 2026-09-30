@@ -63,6 +63,11 @@ EllesmereUI_Profiles.lua
 EllesmereUI_PartyMode.lua
 EUI_MacroFactory.lua
 EUI_UnlockMode.lua
+EUI_UnlockMode_Anchors.lua
+EUI_UnlockMode_Positions.lua
+EUI_UnlockMode_Tools.lua
+EUI_UnlockMode_Movers.lua
+EUI_UnlockMode_Session.lua
 EllesmereUI_Glows.lua
 EllesmereUI_ClassicArt.lua
 EllesmereUI_Range.lua
