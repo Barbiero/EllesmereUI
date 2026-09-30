@@ -1262,6 +1262,51 @@ function EllesmereUI.BuildBarTextureTables(includeExtras)
     return tex, names, order
 end
 
+-- Absorb bar style catalogue (Unit Frames absorbs, the Resource Bars health bar
+-- overlays): key -> file, the styles drawn as repeating tiles (every other style
+-- stretches; striped3 is a stretch texture, never add "striped"), the dropdown
+-- names and the shield / heal absorb orders. Readers copy the names and orders
+-- before appending the SharedMedia tail; never mutate these.
+EllesmereUI.ABSORB_STYLE_TEX = {
+    striped         = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped3.tga",
+    stripedReversed = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-5-reversed.png",
+    stripedThick    = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-thick.png",
+    stripedThickR   = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-thick-r.png",
+    clean           = "Interface\\Buttons\\WHITE8X8",
+    blizzard        = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\blizzard.tga",
+    largeOutlinedStripes  = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-habsorb-left.png",
+    largeOutlinedStripesR = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-habsorb-right.png",
+    largeStripes          = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-absorb-left.png",
+    largeStripesR         = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-absorb-right.png",
+    pixelsShield          = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield.tga",
+    pixelsShieldEdge      = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield-edge.tga",
+    pixelsShieldFill      = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield-fill.tga",
+}
+EllesmereUI.ABSORB_TILED_STYLES = {
+    stripedReversed = true, stripedThick = true, stripedThickR = true,
+    largeStripes = true, largeStripesR = true,
+    largeOutlinedStripes = true, largeOutlinedStripesR = true,
+    pixelsShieldFill = true,
+}
+EllesmereUI.ABSORB_STYLE_NAMES = {
+    none            = "None",
+    striped         = "Striped",
+    stripedReversed = "Striped Reversed",
+    stripedThick    = "Striped Thick",
+    stripedThickR   = "Striped Thick Reversed",
+    clean           = "Clean (Flat)",
+    blizzard        = "Blizzard",
+    largeOutlinedStripes  = "Large Outlined Stripes",    -- heal absorb only
+    largeOutlinedStripesR = "Large Outlined Stripes R",  -- heal absorb only
+    largeStripes          = "Large Stripes",
+    largeStripesR         = "Large Stripes R",
+    pixelsShield          = "Pixels Shield",
+    pixelsShieldEdge      = "Pixels Shield Edge",        -- shield only
+    pixelsShieldFill      = "Pixels Shield Fill",        -- shield only
+}
+EllesmereUI.ABSORB_STYLE_ORDER = { "none", "striped", "stripedReversed", "stripedThick", "stripedThickR", "clean", "blizzard", "largeStripes", "largeStripesR", "pixelsShield", "pixelsShieldEdge", "pixelsShieldFill" }
+EllesmereUI.HEAL_ABSORB_STYLE_ORDER = { "none", "striped", "stripedReversed", "stripedThick", "stripedThickR", "clean", "blizzard", "largeOutlinedStripes", "largeOutlinedStripesR", "largeStripes", "largeStripesR", "pixelsShield" }
+
 -- Numeric constants
 EllesmereUI.TEXT_WHITE_R = STYLE.TEXT_WHITE_R
 EllesmereUI.TEXT_WHITE_G = STYLE.TEXT_WHITE_G
@@ -2798,7 +2843,7 @@ end
 -------------------------------------------------------------------------------
 --  Slash commands
 -------------------------------------------------------------------------------
-EllesmereUI.VERSION = "9.3.4"
+EllesmereUI.VERSION = "9.3.5"
 
 -- Register this addon's version into a shared global table (taint-free at load time)
 if not _G._EUI_AddonVersions then _G._EUI_AddonVersions = {} end

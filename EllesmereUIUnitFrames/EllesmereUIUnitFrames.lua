@@ -5670,58 +5670,24 @@ end
 -- Shield texture. DO NOT change this path; it is the one that resolves.
 local ABSORB_SHIELD_TEX = "Interface\\AddOns\\EllesmereUIUnitFrames\\Media\\shield.tga"
 
--- Absorb bar style textures and alpha values.
-local ABSORB_STYLE_TEX = {
-    striped         = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped3.tga",
-    stripedReversed = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-5-reversed.png",
-    stripedThick    = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-thick.png",
-    stripedThickR   = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\striped-thick-r.png",
-    clean           = "Interface\\Buttons\\WHITE8X8",
-    blizzard        = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\blizzard.tga",
-    largeOutlinedStripes  = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-habsorb-left.png",
-    largeOutlinedStripesR = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-habsorb-right.png",
-    largeStripes          = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-absorb-left.png",
-    largeStripesR         = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\large-absorb-right.png",
-    pixelsShield          = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield.tga",
-    pixelsShieldEdge      = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield-edge.tga",
-    pixelsShieldFill      = "Interface\\AddOns\\EllesmereUI\\media\\textures\\shields\\pixels-shield-fill.tga",
-}
+-- Absorb bar style textures (the shared catalogue in EllesmereUI.lua, also
+-- read by the Resource Bars health bar) and alpha values.
+local ABSORB_STYLE_TEX = EllesmereUI.ABSORB_STYLE_TEX
 local ABSORB_STYLE_ALPHA = {
     striped         = 0.8,
     stripedReversed = 0.8,
     clean           = 0.3,
     blizzard        = 0.8,
 }
--- Styles drawn as repeating tiles; every other style stretches (striped3 is
--- a stretch texture: do NOT add "striped"). One set for the live shield and
--- heal-absorb bars and the options preview.
-ns.ABSORB_TILED_STYLES = {
-    stripedReversed = true, stripedThick = true, stripedThickR = true,
-    largeStripes = true, largeStripesR = true,
-    largeOutlinedStripes = true, largeOutlinedStripesR = true,
-    pixelsShieldFill = true,
-}
--- Absorb Style / Heal Absorb Style dropdown data, read by the Main Frames
--- rows and the Textures page tile so the lists cannot drift. Readers copy
--- them first: the SharedMedia tail is appended into the copies.
-ns.ABSORB_STYLE_NAMES = {
-    none            = "None",
-    striped         = "Striped",
-    stripedReversed = "Striped Reversed",
-    stripedThick    = "Striped Thick",
-    stripedThickR   = "Striped Thick Reversed",
-    clean           = "Clean (Flat)",
-    blizzard        = "Blizzard",
-    largeOutlinedStripes  = "Large Outlined Stripes",    -- heal-absorb only
-    largeOutlinedStripesR = "Large Outlined Stripes R",  -- heal-absorb only
-    largeStripes          = "Large Stripes",
-    largeStripesR         = "Large Stripes R",
-    pixelsShield          = "Pixels Shield",
-    pixelsShieldEdge      = "Pixels Shield Edge",        -- shield only
-    pixelsShieldFill      = "Pixels Shield Fill",        -- shield only
-}
-ns.ABSORB_STYLE_ORDER = { "none", "striped", "stripedReversed", "stripedThick", "stripedThickR", "clean", "blizzard", "largeStripes", "largeStripesR", "pixelsShield", "pixelsShieldEdge", "pixelsShieldFill" }
-ns.HEAL_ABSORB_STYLE_ORDER = { "none", "striped", "stripedReversed", "stripedThick", "stripedThickR", "clean", "blizzard", "largeOutlinedStripes", "largeOutlinedStripesR", "largeStripes", "largeStripesR", "pixelsShield" }
+-- Tiled styles (one set for the live shield and heal-absorb bars and the
+-- options preview) and the Absorb Style / Heal Absorb Style dropdown data
+-- read by the Main Frames rows and the Textures page tile, all from the
+-- shared catalogue. Readers copy the names and orders first: the
+-- SharedMedia tail is appended into the copies.
+ns.ABSORB_TILED_STYLES = EllesmereUI.ABSORB_TILED_STYLES
+ns.ABSORB_STYLE_NAMES = EllesmereUI.ABSORB_STYLE_NAMES
+ns.ABSORB_STYLE_ORDER = EllesmereUI.ABSORB_STYLE_ORDER
+ns.HEAL_ABSORB_STYLE_ORDER = EllesmereUI.HEAL_ABSORB_STYLE_ORDER
 
 -- Absorb-style key -> texture path. Built-ins come from ABSORB_STYLE_TEX; "sm:"
 -- SharedMedia keys (shared with the Bar Texture dropdown, appended into
