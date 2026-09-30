@@ -772,11 +772,14 @@ initFrame:SetScript("OnEvent", function(self)
     local activePreview
     local allPreviews = {}
 
-    local showCombatIndicatorPreview = false
-    local showHealAbsorbPreview      = false  -- eyeball toggle for the Heal Absorb Style preview
-    local showDispelOverlayPreview   = false  -- eyeball toggle for the player dispel overlay preview
+    -- Mutable state the page builders share. A table instead of locals so the
+    -- builders under UnitFrames_Options\ read and write the live values.
+    local optState = {}
+    optState.showCombatIndicatorPreview = false
+    optState.showHealAbsorbPreview      = false  -- eyeball toggle for the Heal Absorb Style preview
+    optState.showDispelOverlayPreview   = false  -- eyeball toggle for the player dispel overlay preview
     -- Preview hover-highlight hint text (shared across Single/Multi tabs)
-    local _ufPreviewHintFS_display     -- hint FontString for the Main Frames page
+    optState._ufPreviewHintFS_display = nil  -- hint FontString for the Main Frames page
     local _displayHeaderBaseH = 0      -- display header height WITHOUT hint
 
     local function IsPreviewHintDismissed()
@@ -792,7 +795,7 @@ initFrame:SetScript("OnEvent", function(self)
         local m = targets[key]
         if type(m) == "function" then m = m() end
         if not m or not m.section or not m.target then return end
-        if dismissHint then EllesmereUI.DismissPreviewHint(_ufPreviewHintFS_display, _displayHeaderBaseH, 29, 17) end
+        if dismissHint then EllesmereUI.DismissPreviewHint(optState._ufPreviewHintFS_display, _displayHeaderBaseH, 29, 17) end
         local sf = EllesmereUI._scrollFrame
         if not sf then return end
         local _, _, _, _, headerY = m.section:GetPoint(1)
@@ -880,14 +883,14 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     --  Individual Display unit selector
     ---------------------------------------------------------------------------
-    local selectedUnit = "player"
+    optState.selectedUnit = "player"
 
     -- External unit pre-select: direct setter + pending override consumed at page build.
-    EllesmereUI._setUnitFrameUnit = function(unit) selectedUnit = unit end
+    EllesmereUI._setUnitFrameUnit = function(unit) optState.selectedUnit = unit end
     EllesmereUI._consumePendingUnitSelect = function()
         local pending = EllesmereUI._pendingUnitSelect
         if pending then
-            selectedUnit = pending
+            optState.selectedUnit = pending
             EllesmereUI._pendingUnitSelect = nil
         end
     end
@@ -1550,8 +1553,8 @@ initFrame:SetScript("OnEvent", function(self)
         end
         return 136197, 0
     end
-    local _previewCastSpell  -- {icon, name, castTime} -- randomized on tab switch
-    local _previewCastFill   -- 0.4 0.9 fill for the cast bar
+    optState._previewCastSpell = nil  -- {icon, name, castTime} -- randomized on tab switch
+    optState._previewCastFill = nil   -- 0.4 0.9 fill for the cast bar
 
     -- Class-specific common proc/buff icons for player preview (icon IDs)
     local CLASS_BUFF_ICONS = {
@@ -1572,8 +1575,8 @@ initFrame:SetScript("OnEvent", function(self)
     local FALLBACK_BUFF_ICONS = { 135932, 135981, 136075, 136205, 135987 }
     local _previewBuffIcons = {}  -- 2 randomized buff icons for player preview
 
-    local _previewHealthPct = 0.70  -- randomized health percentage for preview
-    local _previewPowerPct = 0.85  -- randomized power percentage for preview
+    optState._previewHealthPct = 0.70  -- randomized health percentage for preview
+    optState._previewPowerPct = 0.85  -- randomized power percentage for preview
 
     local function RandomizePreviewCreatures()
         _previewCreatureNames.target       = PREVIEW_ENEMY_NAMES[math.random(#PREVIEW_ENEMY_NAMES)]
@@ -1606,10 +1609,10 @@ initFrame:SetScript("OnEvent", function(self)
             local fb = FALLBACK_CAST_SPELLS[1]
             chosen = { icon = 136197, name = fb.name, castTime = fb.castTime }
         end
-        _previewCastSpell = chosen
-        _previewCastFill = 0.40 + math.random() * 0.50
-        _previewHealthPct = 0.60 + math.random() * 0.30
-        _previewPowerPct = 0.50 + math.random() * 0.45
+        optState._previewCastSpell = chosen
+        optState._previewCastFill = 0.40 + math.random() * 0.50
+        optState._previewHealthPct = 0.60 + math.random() * 0.30
+        optState._previewPowerPct = 0.50 + math.random() * 0.45
         -- Two distinct buff icons for the player preview.
         local buffPool = CLASS_BUFF_ICONS[classToken] or FALLBACK_BUFF_ICONS
         local i1 = math.random(#buffPool)
@@ -1980,7 +1983,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- does on the live bar. The preview's health percent is a known fake,
             -- so this takes the clean-number twin of the engine curve rather than
             -- UnitHealthPercent.
-            local pvDynR, pvDynG, pvDynB = ns.UF_PreviewDynamicColor(settings, _previewHealthPct or 0.70)
+            local pvDynR, pvDynG, pvDynB = ns.UF_PreviewDynamicColor(settings, optState._previewHealthPct or 0.70)
             if pvDynR then hR, hG, hB = pvDynR, pvDynG, pvDynB end
             -- Class-colored background (designer shows the player's class), else custom.
             local bgClassCC
@@ -2008,7 +2011,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Cover only the empty (missing-health) portion so a reduced fill opacity
         -- shows the backdrop through the fill, not the bg color. The live-update
         -- pass below re-anchors this for reverse fill (matches live frames).
-        healthBgColor:SetPoint("TOPLEFT", health, "TOPLEFT", math.floor(frameW * (_previewHealthPct or 0.70) + 0.5), 0)
+        healthBgColor:SetPoint("TOPLEFT", health, "TOPLEFT", math.floor(frameW * (optState._previewHealthPct or 0.70) + 0.5), 0)
         healthBgColor:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
         healthBgColor:SetColorTexture(bgR, bgG, bgB, 1)
         healthBgColor:SetAlpha(bgA)
@@ -2030,7 +2033,7 @@ initFrame:SetScript("OnEvent", function(self)
         local healthFill = health:CreateTexture(nil, "ARTWORK")
         healthFill:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
         healthFill:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
-        healthFill:SetWidth(math.floor(frameW * (_previewHealthPct or 0.70) + 0.5))
+        healthFill:SetWidth(math.floor(frameW * (optState._previewHealthPct or 0.70) + 0.5))
         PV_FillColor(healthFill, nil, hR, hG, hB, (not isDarkTheme) and settings.gradientEnabled, settings.gradientColor, settings.gradientDir, hA)
         healthFill:SetAlpha(hA)
         pf._healthFill = healthFill
@@ -2158,7 +2161,7 @@ initFrame:SetScript("OnEvent", function(self)
                 else return _pvName() .. " | " .. lvl end
             elseif content == "both" or content == "bothdash" or content == "curhpshort" or content == "perhp" or content == "perhpnosign" or content == "perhpnum" or content == "perhpnumdash" then
                 local maxHP = UnitHealthMax("player") or 1
-                local pct = _previewHealthPct or 0.70
+                local pct = optState._previewHealthPct or 0.70
                 local curHP = math.floor(maxHP * pct)
                 if content == "curhpshort" then return _pvAbbrev(curHP)
                 elseif content == "perhp" then return _pvPct(pct) .. "%"
@@ -2168,22 +2171,22 @@ initFrame:SetScript("OnEvent", function(self)
                 elseif content == "bothdash" then return _pvAbbrev(curHP) .. " - " .. _pvPct(pct) .. "%"
                 else return _pvAbbrev(curHP) .. " | " .. _pvPct(pct) .. "%" end
             elseif content == "perpp" then
-                local ppPct = _previewPowerPct or 0.85
+                local ppPct = optState._previewPowerPct or 0.85
                 return math.floor(ppPct * 100) .. "%"
             elseif content == "curpp" then
                 local maxPP = UnitPowerMax("player") or 100
-                local ppPct = _previewPowerPct or 0.85
+                local ppPct = optState._previewPowerPct or 0.85
                 return ns.AbbreviateNumbers(math.floor(maxPP * ppPct))
             elseif content == "curhp_curpp" then
                 local maxHP = UnitHealthMax("player") or 1
-                local pct = _previewHealthPct or 0.70
+                local pct = optState._previewHealthPct or 0.70
                 local curHP = math.floor(maxHP * pct)
                 local maxPP = UnitPowerMax("player") or 100
-                local ppPct2 = _previewPowerPct or 0.85
+                local ppPct2 = optState._previewPowerPct or 0.85
                 return _pvAbbrev(curHP) .. " | " .. ns.AbbreviateNumbers(math.floor(maxPP * ppPct2))
             elseif content == "perhp_perpp" then
-                local pct = _previewHealthPct or 0.70
-                local ppPct3 = _previewPowerPct or 0.85
+                local pct = optState._previewHealthPct or 0.70
+                local ppPct3 = optState._previewPowerPct or 0.85
                 return _pvPct(pct) .. "% | " .. math.floor(ppPct3 * 100) .. "%"
             elseif content == "absorb" then
                 local maxHP = UnitHealthMax("player") or 1
@@ -2340,7 +2343,7 @@ initFrame:SetScript("OnEvent", function(self)
             local powerFill = power:CreateTexture(nil, "ARTWORK")
             powerFill:SetPoint("TOPLEFT", power, "TOPLEFT", 0, 0)
             powerFill:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", 0, 0)
-            powerFill:SetWidth(math.floor(frameW * (_previewPowerPct or 0.85) + 0.5))
+            powerFill:SetWidth(math.floor(frameW * (optState._previewPowerPct or 0.85) + 0.5))
             pf._powerFill = powerFill
 
             local isPowerColored = settings.powerPercentPowerColor ~= false
@@ -2497,15 +2500,15 @@ initFrame:SetScript("OnEvent", function(self)
             castFill = castbar:CreateTexture(nil, "ARTWORK")
             PP.Point(castFill, "TOPLEFT", castbar, "TOPLEFT", 1, 0)
             PP.Point(castFill, "BOTTOMLEFT", castbar, "BOTTOMLEFT", 1, 1)
-            PP.Width(castFill, math.max(0, pvBarW - 2) * (_previewCastFill or 0.6))
+            PP.Width(castFill, math.max(0, pvBarW - 2) * (optState._previewCastFill or 0.6))
             -- Initial placeholder; real color + bar texture applied in the Update closure.
             castFill:SetColorTexture(0.114, 0.655, 0.514, 1)
 
             -- Cast spell name and icon -- class spell for player, generic for enemies
             local castSpellName, castSpellIcon
             if unitKey == "player" then
-                castSpellName = _previewCastSpell and _previewCastSpell.name or "Spell Name"
-                castSpellIcon = _previewCastSpell and _previewCastSpell.icon or 136197
+                castSpellName = optState._previewCastSpell and optState._previewCastSpell.name or "Spell Name"
+                castSpellIcon = optState._previewCastSpell and optState._previewCastSpell.icon or 136197
             else
                 castSpellName = "Spell Name"
                 castSpellIcon = 136197  -- Shadow Bolt icon as generic
@@ -2531,8 +2534,8 @@ initFrame:SetScript("OnEvent", function(self)
             castTimeFS:SetWordWrap(false)
             castTimeFS:SetMaxLines(1)
             castTimeFS:SetTextColor(1, 1, 1)
-            local spellCastTime = (_previewCastSpell and _previewCastSpell.castTime) or 3.0
-            castTimeFS:SetText(string.format("%.1f", spellCastTime * (1 - (_previewCastFill or 0.6))))
+            local spellCastTime = (optState._previewCastSpell and optState._previewCastSpell.castTime) or 3.0
+            castTimeFS:SetText(string.format("%.1f", spellCastTime * (1 - (optState._previewCastFill or 0.6))))
 
             if unitKey ~= "player" then
                 castTargetFS = cbTextOvr:CreateFontString(nil, "OVERLAY")
@@ -3194,8 +3197,8 @@ initFrame:SetScript("OnEvent", function(self)
         -- bar keeps its EUI placement below the frame and takes the stock chrome.
         local function ApplyBlizzPreview(s, G, mirror, extras, ch, drop)
             local lvl = pf:GetFrameLevel()
-            local pct = _previewHealthPct or 0.70
-            local ppct = _previewPowerPct or 0.85
+            local pct = optState._previewHealthPct or 0.70
+            local ppct = optState._previewPowerPct or 0.85
             local isMini = G.small and true or false
 
             -- Art box: the stock box, hung so its transparent top rows sit above
@@ -3922,7 +3925,7 @@ initFrame:SetScript("OnEvent", function(self)
                     healthFill:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
                     healthFill:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
                 end
-                PP.Height(healthFill, math.floor(hh * (_previewHealthPct or 0.70) + 0.5))
+                PP.Height(healthFill, math.floor(hh * (optState._previewHealthPct or 0.70) + 0.5))
             else
                 if s.healthReverseFill then
                     healthFill:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
@@ -3931,7 +3934,7 @@ initFrame:SetScript("OnEvent", function(self)
                     healthFill:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
                     healthFill:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
                 end
-                PP.Width(healthFill, math.floor(fw * (_previewHealthPct or 0.70) + 0.5))
+                PP.Width(healthFill, math.floor(fw * (optState._previewHealthPct or 0.70) + 0.5))
             end
 
             -- Live-update dark mode colors
@@ -3964,7 +3967,7 @@ initFrame:SetScript("OnEvent", function(self)
                     end
                     -- Dynamic Health Color overrides the flat sources above (see the
                     -- build-time twin); resolved at the preview's fake health percent.
-                    local uDynR, uDynG, uDynB = ns.UF_PreviewDynamicColor(s, _previewHealthPct or 0.70)
+                    local uDynR, uDynG, uDynB = ns.UF_PreviewDynamicColor(s, optState._previewHealthPct or 0.70)
                     if uDynR then uHR, uHG, uHB = uDynR, uDynG, uDynB end
                     -- Class-colored background (designer shows the player's class), else custom.
                     local uBgClassCC
@@ -3989,7 +3992,7 @@ initFrame:SetScript("OnEvent", function(self)
                 healthBgColor:ClearAllPoints()
                 do
                     if s.healthVerticalFill then
-                        local hpH = math.floor(hh * (_previewHealthPct or 0.70) + 0.5)
+                        local hpH = math.floor(hh * (optState._previewHealthPct or 0.70) + 0.5)
                         if s.healthReverseFill then
                             healthBgColor:SetPoint("TOPLEFT", health, "TOPLEFT", 0, -hpH)
                             healthBgColor:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
@@ -3998,7 +4001,7 @@ initFrame:SetScript("OnEvent", function(self)
                             healthBgColor:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, hpH)
                         end
                     else
-                        local hpW = math.floor(fw * (_previewHealthPct or 0.70) + 0.5)
+                        local hpW = math.floor(fw * (optState._previewHealthPct or 0.70) + 0.5)
                         if s.healthReverseFill then
                             healthBgColor:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
                             healthBgColor:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", -hpW, 0)
@@ -4106,7 +4109,7 @@ initFrame:SetScript("OnEvent", function(self)
                         pf._powerFill:SetPoint("TOPLEFT", power, "TOPLEFT", 0, 0)
                         pf._powerFill:SetPoint("BOTTOMLEFT", power, "BOTTOMLEFT", 0, 0)
                     end
-                    PP.Width(pf._powerFill, math.floor(pvPw * (_previewPowerPct or 0.85) + 0.5))
+                    PP.Width(pf._powerFill, math.floor(pvPw * (optState._previewPowerPct or 0.85) + 0.5))
                 end
 
                 -- Power bar opacity: the fill's region alpha is set AFTER PV_FillColor
@@ -4237,7 +4240,7 @@ initFrame:SetScript("OnEvent", function(self)
                             PP.Point(ppPreviewFS, fEdge, health, hEdge, ppOx, ppOy)
                         end
                     end
-                    local ppPctVal = _previewPowerPct or 0.85
+                    local ppPctVal = optState._previewPowerPct or 0.85
                     local ppPctRaw = math.floor(ppPctVal * 100)
                     local ppSuffix = (s.powerShowPercent == false) and "" or "%"
                     local ppCurFake = ns.AbbreviateNumbers(18200)
@@ -4385,7 +4388,7 @@ initFrame:SetScript("OnEvent", function(self)
                             PP.Point(castFill, "TOPLEFT", castbar, "TOPLEFT", 1, 0)
                             PP.Point(castFill, "BOTTOMLEFT", castbar, "BOTTOMLEFT", 1, 1)
                         end
-                        castFill:SetWidth(math.floor(math.max(0, ciBarW - 2) * (_previewCastFill or 0.6) + 0.5))
+                        castFill:SetWidth(math.floor(math.max(0, ciBarW - 2) * (optState._previewCastFill or 0.6) + 0.5))
                         -- Update fill color from per-unit settings (class colored only for player)
                         local fillC
                         if unitKey == "player" and s.castbarClassColored then
@@ -4425,7 +4428,7 @@ initFrame:SetScript("OnEvent", function(self)
                             castIconFrame:Hide()
                         end
                         if castIconFrame._iconTex then
-                            local spellIcon = (unitKey == "player") and (_previewCastSpell and _previewCastSpell.icon or 136197) or 136197
+                            local spellIcon = (unitKey == "player") and (optState._previewCastSpell and optState._previewCastSpell.icon or 136197) or 136197
                             castIconFrame._iconTex:SetTexture(spellIcon)
                         end
                     end
@@ -4441,7 +4444,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local pvTimerW   = (s.castDurationSize or 10) * 2.2
                     local pvTextW    = pvHasW and (pvBarW * 0.42) or 0
                     if castNameFS2 then
-                        local spellName = (unitKey == "player") and (_previewCastSpell and _previewCastSpell.name or "Spell Name") or "Spell Name"
+                        local spellName = (unitKey == "player") and (optState._previewCastSpell and optState._previewCastSpell.name or "Spell Name") or "Spell Name"
                         castNameFS2:SetText(spellName)
                         castNameFS2:SetFont(PREVIEW_FONT, s.castSpellNameSize or 11, GetUFOptOutline())
                         local snC = s.castSpellNameColor or { r=1, g=1, b=1 }
@@ -4458,8 +4461,8 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
                     if castTimeFS then
-                        local spCastTime = (_previewCastSpell and _previewCastSpell.castTime) or 3.0
-                        castTimeFS:SetText(string.format("%.1f", spCastTime * (1 - (_previewCastFill or 0.6))))
+                        local spCastTime = (optState._previewCastSpell and optState._previewCastSpell.castTime) or 3.0
+                        castTimeFS:SetText(string.format("%.1f", spCastTime * (1 - (optState._previewCastFill or 0.6))))
                         castTimeFS:SetFont(PREVIEW_FONT, s.castDurationSize or 10, GetUFOptOutline())
                         local dtC = s.castDurationColor or { r=1, g=1, b=1 }
                         castTimeFS:SetTextColor(dtC.r, dtC.g, dtC.b)
@@ -4640,7 +4643,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- Absorb bars (player/target/focus): the Heal Absorb Style eyeball
             -- replaces the shield absorb with the heal absorb. Both honor their
             -- placement cog (absorbEdgeMode / healAbsorbEdgeMode).
-            local _healPrev = showHealAbsorbPreview
+            local _healPrev = optState.showHealAbsorbPreview
             -- Only replace when there IS a heal absorb to show; with style "none"
             -- keep the shield preview instead of blanking the absorb area.
             local _healWillShow = _healPrev and (s.healAbsorbStyle or "clean") ~= "none"
@@ -4735,7 +4738,7 @@ initFrame:SetScript("OnEvent", function(self)
             if pf._pvPredMy then
                 if ns._ufShowHealPredPreview and s.healPrediction == true then
                     local over = (tonumber(s.healPredOverheal) or 0) / 100
-                    local missing = 1 - (_previewHealthPct or 0.70)
+                    local missing = 1 - (optState._previewHealthPct or 0.70)
                     local total = (over > 0) and (missing + over) or (missing * 0.85)
                     local alpha = (s.healPredOpacity or 60) / 100
                     local mc = s.healPredColor or ns.UF_HEAL_PRED_MY or { r = 102/255, g = 243/255, b = 102/255 }
@@ -4793,7 +4796,7 @@ initFrame:SetScript("OnEvent", function(self)
 
             if dispelOverlayPreview then
                 local mode = db.profile.dispelOverlay or "none"
-                if showDispelOverlayPreview and mode ~= "none" then
+                if optState.showDispelOverlayPreview and mode ~= "none" then
                     local c = db.profile.dispelColorMagic or { r = 0.349, g = 0.475, b = 1.0 }
                     local alpha = (db.profile.dispelOverlayOpacity or 100) / 100
                     dispelOverlayPreview:ClearAllPoints()
@@ -4819,7 +4822,7 @@ initFrame:SetScript("OnEvent", function(self)
                 -- frame border, drawn over the preview border in its own style.
                 -- Built on first use; overlay None still previews it.
                 local cbPv = pf._pvDispelBorder
-                if showDispelOverlayPreview and db.profile.dispelCustomBorder == true
+                if optState.showDispelOverlayPreview and db.profile.dispelCustomBorder == true
                     and ns.UF_CustomBorderOn(s) then
                     if not cbPv then
                         cbPv = CreateFrame("Frame", nil, pf)
@@ -5453,7 +5456,7 @@ initFrame:SetScript("OnEvent", function(self)
             local parentTH = th * combinedScale
             local cpBottomScaled = cpBottomH * combinedScale
             local hintH = 0
-            if _ufPreviewHintFS_display and _ufPreviewHintFS_display:IsShown() then hintH = 29 end
+            if optState._ufPreviewHintFS_display and optState._ufPreviewHintFS_display:IsShown() then hintH = 29 end
             local fixedH = pf._headerFixedH or 0
             if fixedH > 0 then
                 -- The preview slid down by auraTopOv, so the section must grow by it
@@ -5469,7 +5472,7 @@ initFrame:SetScript("OnEvent", function(self)
 
             -- Combat indicator preview
             if combatInd then
-                if showCombatIndicatorPreview and s.combatIndicatorStyle and s.combatIndicatorStyle ~= "none" then
+                if optState.showCombatIndicatorPreview and s.combatIndicatorStyle and s.combatIndicatorStyle ~= "none" then
                     local ciStyle = s.combatIndicatorStyle or "class"
                     local ciColor = s.combatIndicatorColor or "custom"
                     local ciSz = s.combatIndicatorSize or 22
@@ -6104,17 +6107,17 @@ initFrame:SetScript("OnEvent", function(self)
         --  Unified Get / Set / DB abstraction
         ---------------------------------------------------------------
         local function SGet(key)
-            return UNIT_DB_MAP[selectedUnit]()[key]
+            return UNIT_DB_MAP[optState.selectedUnit]()[key]
         end
         local function SSet(key, val)
-            UNIT_DB_MAP[selectedUnit]()[key] = val
+            UNIT_DB_MAP[optState.selectedUnit]()[key] = val
             ReloadAndUpdate()
         end
         local function SDB()
-            return UNIT_DB_MAP[selectedUnit]()
+            return UNIT_DB_MAP[optState.selectedUnit]()
         end
         local function SVal(key, default)
-            local v = UNIT_DB_MAP[selectedUnit]()[key]
+            local v = UNIT_DB_MAP[optState.selectedUnit]()[key]
             if v ~= nil then return v end
             return default
         end
@@ -6126,7 +6129,7 @@ initFrame:SetScript("OnEvent", function(self)
             local slots = { "leftTextContent", "rightTextContent", "centerTextContent", "extraTextContent" }
             local levelText = { level = true, levelname = true, namelevel = true }
             SShowsLevel = function()
-                local d = UNIT_DB_MAP[selectedUnit]()
+                local d = UNIT_DB_MAP[optState.selectedUnit]()
                 for i = 1, #slots do
                     if levelText[d[slots[i]]] then return true end
                 end
@@ -6135,14 +6138,14 @@ initFrame:SetScript("OnEvent", function(self)
         end
         -- Set that also writes to the current unit (for UNIT_SUPPORTS keys)
         local function SSetSupported(key, val)
-            UNIT_DB_MAP[selectedUnit]()[key] = val
+            UNIT_DB_MAP[optState.selectedUnit]()[key] = val
             ReloadAndUpdate(); UpdatePreview()
         end
         local function SGetSupported(key)
-            return UNIT_DB_MAP[selectedUnit]()[key]
+            return UNIT_DB_MAP[optState.selectedUnit]()[key]
         end
         local function SValSupported(key, default)
-            local v = UNIT_DB_MAP[selectedUnit]()[key]
+            local v = UNIT_DB_MAP[optState.selectedUnit]()[key]
             if v == nil then return default end
             return v
         end
@@ -6150,7 +6153,7 @@ initFrame:SetScript("OnEvent", function(self)
         local function SVisible(key)
             local sup = UNIT_SUPPORTS[key]
             if not sup then return true end
-            return sup[selectedUnit] == true
+            return sup[optState.selectedUnit] == true
         end
         -- Dim a row region and add a tooltip when the current unit doesn't support
         -- the key; unsupportedTip (optional) shows over the dimmed row.
@@ -6182,7 +6185,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         parent._showRowDivider = true
 
-        row, h = BuildApplyAllRow(parent, y, GROUP_UNIT_ORDER, selectedUnit); y = y - h
+        row, h = BuildApplyAllRow(parent, y, GROUP_UNIT_ORDER, optState.selectedUnit); y = y - h
 
         -------------------------------------------------------------------
         --  DISPLAY
@@ -6195,7 +6198,7 @@ initFrame:SetScript("OnEvent", function(self)
         do
             local sn = portraitArtValues["class"].subnav
             sn.onSelect = function(styleKey)
-                local d = UNIT_DB_MAP[selectedUnit]()
+                local d = UNIT_DB_MAP[optState.selectedUnit]()
                 d.portraitMode = "class"
                 d.classThemeStyle = styleKey
                 d.showPortrait = true
@@ -6261,7 +6264,7 @@ initFrame:SetScript("OnEvent", function(self)
         end
         local visRow
         visRow, h = EllesmereUI.BuildVisibilityRow(W, parent, y,
-            { getStore = function() return UNIT_DB_MAP[selectedUnit]() end,
+            { getStore = function() return UNIT_DB_MAP[optState.selectedUnit]() end,
               legacyKey = "barVisibility",
               caps = { partyIncludesRaid = false, luaDragonriding = true },
               refreshPageArg = true,
@@ -6274,7 +6277,7 @@ initFrame:SetScript("OnEvent", function(self)
                   s.barVisibility = mode
               end,
               onChanged = function()
-                  local s = UNIT_DB_MAP[selectedUnit]()
+                  local s = UNIT_DB_MAP[optState.selectedUnit]()
                   SyncUnitVisBooleans(s)
                   if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
                   ReloadAndUpdate()
@@ -6283,7 +6286,7 @@ initFrame:SetScript("OnEvent", function(self)
                   -- value decides: an override replaces the shared scalar, so an override
                   -- of Always on a unit whose shared value is "never" un-hides it too.
                   local visOv = EllesmereUI.VisOverrideValue(s)
-                  if (visOv or s.barVisibility or "always") ~= "never" then PromptReloadIfUnspawned({ selectedUnit }) end
+                  if (visOv or s.barVisibility or "always") ~= "never" then PromptReloadIfUnspawned({ optState.selectedUnit }) end
               end,
               onOptionChanged = function()
                   if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
@@ -6306,9 +6309,9 @@ initFrame:SetScript("OnEvent", function(self)
         -- dropdown ("Never Show"). Fade dims the frame via ns.ResolveFrameAlpha in
         -- UpdateFrameVisibility (reacts to the regen path); reuses CDM fade strings
         -- for consistency. Fade rows appear only for the EllesmereUI source.
-        local _visSrcIsEui = ns.GetUnitFrameSource(selectedUnit) == "eui"
+        local _visSrcIsEui = ns.GetUnitFrameSource(optState.selectedUnit) == "eui"
         if not EllesmereUI._prebuilding then
-        AttachFrameSourceCog(visRow._leftRegion, selectedUnit, {
+        AttachFrameSourceCog(visRow._leftRegion, optState.selectedUnit, {
             title = _visSrcIsEui and "Frame Source & Visibility" or "Frame Source",
             cogTooltip = _visSrcIsEui and "Frame Source & Visibility" or "Frame Source",
             extraRows = _visSrcIsEui and {
@@ -6344,7 +6347,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Visibility row (hosts the Frame Source cog + "Never Show" way back), grey
         -- it for Blizzard source, and show a one-line notice in place of settings.
         if not EllesmereUI._prebuilding then
-            local srcNow = ns.GetUnitFrameSource(selectedUnit)
+            local srcNow = ns.GetUnitFrameSource(optState.selectedUnit)
             if srcNow ~= "eui" then
                 -- The right slot used to hold this unit's Visibility Options and was hidden
                 -- here because it is meaningless for a Blizzard frame. It now holds the
@@ -6377,7 +6380,7 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = visRow._leftRegion
             local function CopyVisToUnit(key)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local dst = UNIT_DB_MAP[key]()
                 if dst == src then return end
                 EllesmereUI.VisFullCopy(dst, src, "barVisibility", nil, function(t, mode)
@@ -6389,7 +6392,7 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Visibility to all Frames",
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if not EllesmereUI.VisFullEquals(src, "barVisibility", UNIT_DB_MAP[key](), "barVisibility") then return false end
                     end
@@ -6401,21 +6404,21 @@ initFrame:SetScript("OnEvent", function(self)
                     end
                     if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage(true)
-                    local v = UNIT_DB_MAP[selectedUnit]().barVisibility or "always"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().barVisibility or "always"
                     if v ~= "never" then PromptReloadIfUnspawned(GROUP_UNIT_ORDER) end
                 end,
                 flashTargets = function() return { rgn } end,
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
                         for _, key in ipairs(checkedKeys) do
                             CopyVisToUnit(key)
                         end
                         if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage(true)
-                        local v = UNIT_DB_MAP[selectedUnit]().barVisibility or "always"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().barVisibility or "always"
                         if v ~= "never" then PromptReloadIfUnspawned(checkedKeys) end
                     end,
                 },
@@ -6453,10 +6456,10 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = barTexRow._leftRegion
             local function ApplyTexTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local tex = src.healthBarTexture or db.profile.healthBarTexture or "none"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         UNIT_DB_MAP[key]().healthBarTexture = tex
                     end
                 end
@@ -6468,7 +6471,7 @@ initFrame:SetScript("OnEvent", function(self)
                 onClick = function() ApplyTexTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
                     local g = db.profile.healthBarTexture or "none"
-                    local srcTex = UNIT_DB_MAP[selectedUnit]().healthBarTexture or g
+                    local srcTex = UNIT_DB_MAP[optState.selectedUnit]().healthBarTexture or g
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().healthBarTexture or g) ~= srcTex then return false end
                     end
@@ -6478,7 +6481,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyTexTo(checkedKeys) end,
                 },
             })
@@ -6613,7 +6616,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local ba = SGet("borderAlpha")
                     local ps = SGet("borderPowerSeam")
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then
+                        if key ~= optState.selectedUnit then
                             UNIT_DB_MAP[key]().borderTexture = bt
                             UNIT_DB_MAP[key]().borderTextureOffset = ox
                             UNIT_DB_MAP[key]().borderTextureOffsetY = oy
@@ -6650,7 +6653,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
                         local bt = SGet("borderTexture") or "solid"
                         local ox = SGet("borderTextureOffset")
@@ -6696,7 +6699,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local sx = SGet("borderTextureShiftX")
                     local sy = SGet("borderTextureShiftY")
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then
+                        if key ~= optState.selectedUnit then
                             UNIT_DB_MAP[key]().borderSize = bs
                             -- Verbatim (string / false / nil): the value only counts beside the same step and texture.
                             do
@@ -6736,7 +6739,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
                         local bs = SVal("borderSize", 1)
                         local bpx = SGet("borderSizePx")
@@ -6789,8 +6792,8 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, SVal("borderAlpha", 1)
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().borderColor = { r=r, g=g, b=b }
-                    UNIT_DB_MAP[selectedUnit]().borderAlpha = a
+                    UNIT_DB_MAP[optState.selectedUnit]().borderColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().borderAlpha = a
                     ReloadAndUpdate()
                 end,
                 true, 20)
@@ -6902,9 +6905,9 @@ initFrame:SetScript("OnEvent", function(self)
                 return UNIT_DB_MAP[key]().frameStrata or db.profile.frameStrata or "MEDIUM"
             end
             local function ApplyStrataTo(keys)
-                local strata = CurStrata(selectedUnit)
+                local strata = CurStrata(optState.selectedUnit)
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         UNIT_DB_MAP[key]().frameStrata = strata
                     end
                 end
@@ -6915,7 +6918,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Frame Strata to all Frames",
                 onClick = function() ApplyStrataTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local cur = CurStrata(selectedUnit)
+                    local cur = CurStrata(optState.selectedUnit)
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if CurStrata(key) ~= cur then return false end
                     end
@@ -6925,7 +6928,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyStrataTo(checkedKeys) end,
                 },
             })
@@ -7008,7 +7011,7 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rightRgn = decRow._rightRegion
             if rightRgn._control then rightRgn._control:Hide() end
-            local isPlayer = (selectedUnit == "player")
+            local isPlayer = (optState.selectedUnit == "player")
             local hbItems = { { key = "highlight", label = "Highlight" } }
             if isPlayer then
                 hbItems[#hbItems + 1] = {
@@ -7117,7 +7120,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Threat % text (WoW Forever only): one profile-wide setting for both
         -- frames, drawn on the EllesmereUI frames only. Built before the
         -- half-empty Blizz header row so its blank stays the last slot.
-        if EllesmereUI.IS_FOREVER and (selectedUnit == "target" or selectedUnit == "focus") then
+        if EllesmereUI.IS_FOREVER and (optState.selectedUnit == "target" or optState.selectedUnit == "focus") then
             local NO_FRAMES = "This option requires an EllesmereUI Target or Focus frame."
             local function noFrames() return not (frames.target or frames.focus) end
             local function pctOff() return noFrames() or not db.profile.threatPctEnabled end
@@ -7171,7 +7174,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Blizzard Style, target frame: the coloured strip behind the name,
         -- or an uncoloured header matching the player frame.
-        if selectedUnit == "target" and EllesmereUI.BlizzStyle.Active("unitframes") == "blizzard" then
+        if optState.selectedUnit == "target" and EllesmereUI.BlizzStyle.Active("unitframes") == "blizzard" then
             _, h = W:DualRow(parent, y,
                 { type="toggle", text="Blizz Colored Target Header",
                   tooltip="Colors the strip behind the target's name by its reaction.",
@@ -7216,17 +7219,17 @@ initFrame:SetScript("OnEvent", function(self)
                   SSet("portraitStyle", v)
                   -- Auto-set shape to "none" when entering detached + 3D
                   if v == "detached" and SVal("portraitMode", "2d") == "3d" then
-                      UNIT_DB_MAP[selectedUnit]().detachedPortraitShape = "none"
+                      UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape = "none"
                   end
                   -- Reset detached-only settings when leaving detached mode
                   if v ~= "detached" then
-                      UNIT_DB_MAP[selectedUnit]().portraitSize = 0
-                      local side = UNIT_DB_MAP[selectedUnit]().portraitSide
+                      UNIT_DB_MAP[optState.selectedUnit]().portraitSize = 0
+                      local side = UNIT_DB_MAP[optState.selectedUnit]().portraitSide
                       if side == "top" or side == "insideleft" or side == "insideright" or side == "insidecenter" then
-                          UNIT_DB_MAP[selectedUnit]().portraitSide = "left"
+                          UNIT_DB_MAP[optState.selectedUnit]().portraitSide = "left"
                       end
                   end
-                  UNIT_DB_MAP[selectedUnit]().showPortrait = (v ~= "none")
+                  UNIT_DB_MAP[optState.selectedUnit]().showPortrait = (v ~= "none")
                   UpdatePreview()
                   if v ~= prevStyle then
                       EllesmereUI:RefreshPage(true)
@@ -7253,30 +7256,30 @@ initFrame:SetScript("OnEvent", function(self)
               end,
               setValue=function(v)
                   if v == "3d" and SVal("portraitMode", "2d") ~= "3d" and ns.UF_Ask3DPortraits(function()
-                          UNIT_DB_MAP[selectedUnit]().portraitMode = "3d"
-                          UNIT_DB_MAP[selectedUnit]().showPortrait = true
-                          if UNIT_DB_MAP[selectedUnit]().portraitStyle == "detached" then
-                              UNIT_DB_MAP[selectedUnit]().detachedPortraitShape = "none"
+                          UNIT_DB_MAP[optState.selectedUnit]().portraitMode = "3d"
+                          UNIT_DB_MAP[optState.selectedUnit]().showPortrait = true
+                          if UNIT_DB_MAP[optState.selectedUnit]().portraitStyle == "detached" then
+                              UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape = "none"
                           end
                           ReloadAndUpdate(); UpdatePreview()
                           EllesmereUI:RefreshPage(true)
                       end) then
                       return
                   end
-                  UNIT_DB_MAP[selectedUnit]().portraitMode = v
-                  UNIT_DB_MAP[selectedUnit]().showPortrait = true
+                  UNIT_DB_MAP[optState.selectedUnit]().portraitMode = v
+                  UNIT_DB_MAP[optState.selectedUnit]().showPortrait = true
                   -- Auto-set shape to "none" when entering 3D + detached
-                  if v == "3d" and UNIT_DB_MAP[selectedUnit]().portraitStyle == "detached" then
-                      UNIT_DB_MAP[selectedUnit]().detachedPortraitShape = "none"
+                  if v == "3d" and UNIT_DB_MAP[optState.selectedUnit]().portraitStyle == "detached" then
+                      UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape = "none"
                   end
                   -- 3D-only options: reset when leaving 3D
                   if v ~= "3d" then
-                      if UNIT_DB_MAP[selectedUnit]().detachedPortraitShape == "none" then
-                          UNIT_DB_MAP[selectedUnit]().detachedPortraitShape = "portrait"
+                      if UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape == "none" then
+                          UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape = "portrait"
                       end
-                      local side = UNIT_DB_MAP[selectedUnit]().portraitSide
+                      local side = UNIT_DB_MAP[optState.selectedUnit]().portraitSide
                       if side == "insideleft" or side == "insideright" or side == "insidecenter" then
-                          UNIT_DB_MAP[selectedUnit]().portraitSide = "left"
+                          UNIT_DB_MAP[optState.selectedUnit]().portraitSide = "left"
                       end
                   end
                   ReloadAndUpdate(); UpdatePreview()
@@ -7288,9 +7291,9 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Portrait Mode to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitStyle or "attached"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitStyle or "attached"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then
+                        if key ~= optState.selectedUnit then
                             UNIT_DB_MAP[key]().portraitStyle = v
                             UNIT_DB_MAP[key]().showPortrait = (v ~= "none")
                         end
@@ -7298,7 +7301,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitStyle or "attached"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitStyle or "attached"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().portraitStyle or "attached") ~= v then return false end
                     end
@@ -7308,9 +7311,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().portraitStyle or "attached"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().portraitStyle or "attached"
                         for _, key in ipairs(checkedKeys) do
                             UNIT_DB_MAP[key]().portraitStyle = v
                             UNIT_DB_MAP[key]().showPortrait = (v ~= "none")
@@ -7365,14 +7368,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Art Style to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitMode
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitMode
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().portraitMode = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().portraitMode = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitMode or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitMode or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().portraitMode or "none") ~= v then return false end
                     end
@@ -7382,9 +7385,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().portraitMode
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().portraitMode
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().portraitMode = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -7448,7 +7451,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = ApplyNonPlayer,
                 },
             })
@@ -7502,14 +7505,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Portrait Size to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitSize or 0
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSize or 0
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().portraitSize = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().portraitSize = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitSize or 0
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSize or 0
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().portraitSize or 0) ~= v then return false end
                     end
@@ -7519,9 +7522,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().portraitSize or 0
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSize or 0
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().portraitSize = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -7563,7 +7566,7 @@ initFrame:SetScript("OnEvent", function(self)
                       get=function() return SVal("portraitMirror", false) end,
                       set=function(v)
                           SDB().portraitMirror = v
-                          ns.UF_RefreshPortraitMirror(selectedUnit)
+                          ns.UF_RefreshPortraitMirror(optState.selectedUnit)
                           UpdatePreview()
                       end },
                 },
@@ -7575,14 +7578,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Portrait Position to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitSide or "left"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSide or "left"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().portraitSide = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().portraitSide = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().portraitSide or "left"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSide or "left"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().portraitSide or "left") ~= v then return false end
                     end
@@ -7592,9 +7595,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().portraitSide or "left"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().portraitSide or "left"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().portraitSide = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -7644,7 +7647,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return c.r, c.g, c.b
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().detachedPortraitBorderColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitBorderColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end,
                   onClick = function(self)
@@ -7763,14 +7766,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Portrait Shape to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().detachedPortraitShape or "portrait"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape or "portrait"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().detachedPortraitShape = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().detachedPortraitShape = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().detachedPortraitShape or "portrait"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape or "portrait"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().detachedPortraitShape or "portrait") ~= v then return false end
                     end
@@ -7780,9 +7783,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().detachedPortraitShape or "portrait"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().detachedPortraitShape or "portrait"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().detachedPortraitShape = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -7800,13 +7803,13 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Shape Border to all Frames",
                 onClick = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local bc = src.detachedPortraitBorderColor
                     local bo = src.detachedPortraitBorderOpacity
                     local bs = src.detachedPortraitBorderSize
                     local cc = src.detachedPortraitClassColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then
+                        if key ~= optState.selectedUnit then
                             local d = UNIT_DB_MAP[key]()
                             if bc then d.detachedPortraitBorderColor = { r=bc.r, g=bc.g, b=bc.b }
                             else d.detachedPortraitBorderColor = nil end
@@ -7819,7 +7822,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local cc = src.detachedPortraitClassColor
                     if cc == nil then cc = true end
                     local bs = src.detachedPortraitBorderSize or 7
@@ -7842,9 +7845,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local src = UNIT_DB_MAP[selectedUnit]()
+                        local src = UNIT_DB_MAP[optState.selectedUnit]()
                         local bc = src.detachedPortraitBorderColor
                         local bo = src.detachedPortraitBorderOpacity
                         local bs = src.detachedPortraitBorderSize
@@ -7875,9 +7878,9 @@ initFrame:SetScript("OnEvent", function(self)
         -- "wingless" Elite/Rare Indicator style shows that style's values), and
         -- every setter pins that view first (ns.UF_PinLegacyDragon).
         if SVal("portraitStyle", "attached") ~= "none" then
-            local playerDragon = selectedUnit == "player"
+            local playerDragon = optState.selectedUnit == "player"
             local dragonName = playerDragon and "Player Frame Dragon" or "Elite Enemy Dragon"
-            local function DVal(k) return ns.UF_DragonSettings(selectedUnit, SDB())[k] end
+            local function DVal(k) return ns.UF_DragonSettings(optState.selectedUnit, SDB())[k] end
             local function DSet(key, v)
                 ns.UF_PinLegacyDragon(SDB())
                 SSet(key, v)
@@ -7951,8 +7954,8 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Row 1: Bar Height + Bar Width
         local sharedSizeRow
-        local ufhDis, ufhTip, ufhRaw = EllesmereUI.MatchGuard(selectedUnit, "Height")
-        local ufwDis, ufwTip, ufwRaw = EllesmereUI.MatchGuard(selectedUnit, "Width")
+        local ufhDis, ufhTip, ufhRaw = EllesmereUI.MatchGuard(optState.selectedUnit, "Height")
+        local ufwDis, ufwTip, ufwRaw = EllesmereUI.MatchGuard(optState.selectedUnit, "Width")
         sharedSizeRow, h = W:DualRow(parent, y,
             EllesmereUI.BlizzStyle.Gate("unitframes", { type="slider", text="Health Bar Height", min=15, max=100, step=1,
               disabled=ufhDis, disabledTooltip=ufhTip, rawTooltip=ufhRaw,
@@ -7983,14 +7986,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Health Bar Height to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().healthHeight or 46
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().healthHeight or 46
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().healthHeight = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().healthHeight = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().healthHeight or 46
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().healthHeight or 46
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().healthHeight or 46) ~= v then return false end
                     end
@@ -8000,9 +8003,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().healthHeight or 46
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().healthHeight or 46
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().healthHeight = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -8035,14 +8038,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Bar Width to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().frameWidth or 181
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().frameWidth or 181
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().frameWidth = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().frameWidth = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().frameWidth or 181
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().frameWidth or 181
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().frameWidth or 181) ~= v then return false end
                     end
@@ -8052,9 +8055,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().frameWidth or 181
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().frameWidth or 181
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().frameWidth = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -8076,7 +8079,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return 0.20, 0.20, 0.80
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().gradientColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().gradientColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end },
                 { tooltip = "Custom Colored Fill",
@@ -8094,7 +8097,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return 37/255, 193/255, 29/255
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().customFillColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().customFillColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end,
                   onClick = function(self)
@@ -8103,7 +8106,7 @@ initFrame:SetScript("OnEvent", function(self)
                           -- customFillColor the runtime falls back to oUF's class/reaction
                           -- color (bar looks unchanged until dragged); never overwrites an existing custom color.
                           if SGet("customFillColor") == nil then
-                              UNIT_DB_MAP[selectedUnit]().customFillColor = { r = 37/255, g = 193/255, b = 29/255 }
+                              UNIT_DB_MAP[optState.selectedUnit]().customFillColor = { r = 37/255, g = 193/255, b = 29/255 }
                           end
                           SSet("healthClassColored", false)
                           UpdatePreview()
@@ -8178,7 +8181,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return 17/255, 17/255, 17/255
             end
             local bgSwSet = function(r, g, b)
-                UNIT_DB_MAP[selectedUnit]().customBgColor = { r=r, g=g, b=b }
+                UNIT_DB_MAP[optState.selectedUnit]().customBgColor = { r=r, g=g, b=b }
                 ReloadAndUpdate(); UpdatePreview()
             end
             local bgSw, bgSwUpdate = EllesmereUI.BuildColorSwatch(rgn, rgn:GetFrameLevel() + 5, bgSwGet, bgSwSet, false, 20)
@@ -8205,12 +8208,12 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedHealthColorRow._rightRegion
             local function ApplyBgTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local bc = src.customBgColor or { r=17/255, g=17/255, b=17/255 }
                 local bgA = src.customBgAlpha or 100
                 local bgClass = src.bgClassColored or false
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.customBgColor = { r=bc.r, g=bc.g, b=bc.b }
                         d.customBgAlpha = bgA
@@ -8224,7 +8227,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Bar Background to all Frames",
                 onClick = function() ApplyBgTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local function colEq(a, b)
                         if a == nil and b == nil then return true end
                         if a == nil or b == nil then return false end
@@ -8242,7 +8245,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyBgTo(checkedKeys) end,
                 },
             })
@@ -8254,7 +8257,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- swatches on this row, so they travel with the rest of Bar Color.
             local DYN_STOP_KEYS = { "dynamicColor100", "dynamicColor50", "dynamicColor0" }
             local function ApplyColorTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local cc = src.healthClassColored or false
                 local fc = src.customFillColor
                 local gEn = src.gradientEnabled or false
@@ -8262,7 +8265,7 @@ initFrame:SetScript("OnEvent", function(self)
                 local gc = src.gradientColor
                 local dynMode = src.healthColorMode or "none"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.healthClassColored = cc
                         if fc then d.customFillColor = { r=fc.r, g=fc.g, b=fc.b }
@@ -8285,7 +8288,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Bar Color to all Frames",
                 onClick = function() ApplyColorTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local function colEq(a, b)
                         if a == nil and b == nil then return true end
                         if a == nil or b == nil then return false end
@@ -8309,7 +8312,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyColorTo(checkedKeys) end,
                 },
             })
@@ -8372,7 +8375,7 @@ initFrame:SetScript("OnEvent", function(self)
                         return c.r, c.g, c.b, 1
                     end,
                     function(r, g, b)
-                        UNIT_DB_MAP[selectedUnit]()[dd.key] = { r=r, g=g, b=b }
+                        UNIT_DB_MAP[optState.selectedUnit]()[dd.key] = { r=r, g=g, b=b }
                         ReloadAndUpdate(); UpdatePreview()
                     end, false, 18)
                 sw:SetPoint("RIGHT", prevAnchor, "LEFT", -8, 0)
@@ -8430,14 +8433,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Bar Opacity to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().healthBarOpacity or 90
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().healthBarOpacity or 90
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().healthBarOpacity = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().healthBarOpacity = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().healthBarOpacity or 90
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().healthBarOpacity or 90
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().healthBarOpacity or 90) ~= v then return false end
                     end
@@ -8447,9 +8450,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().healthBarOpacity or 90
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().healthBarOpacity or 90
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().healthBarOpacity = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -8460,7 +8463,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Row 4: Left Text + Right Text
         local sharedTextRow
         sharedTextRow, h = W:DualRow(parent, y,
-            { type="dropdown", text="Left Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
+            { type="dropdown", text="Left Text", values=healthTextValues, order=(optState.selectedUnit == "player" and healthTextOrderPlayer) or ((optState.selectedUnit == "target" or optState.selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("leftTextContent", "name") end,
               setValue=function(v)
                   local hadLevel = SShowsLevel()
@@ -8472,7 +8475,7 @@ initFrame:SetScript("OnEvent", function(self)
                   UpdatePreview(); EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end,
             },
-            { type="dropdown", text="Right Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
+            { type="dropdown", text="Right Text", values=healthTextValues, order=(optState.selectedUnit == "player" and healthTextOrderPlayer) or ((optState.selectedUnit == "target" or optState.selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("rightTextContent", "both") end,
               setValue=function(v)
                   local hadLevel = SShowsLevel()
@@ -8488,10 +8491,10 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedTextRow._leftRegion
             local function ApplyLeftTextTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local v = src.leftTextContent or "name"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.leftTextContent = ((v == "absorb" or v == "absorbshort" or v == "healabsorb" or v == "healabsorbshort" or v == "group") and key ~= "player") and "none" or v
                         d.leftTextClassColor = src.leftTextClassColor
@@ -8508,7 +8511,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Left Text to all Frames",
                 onClick = function() ApplyLeftTextTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local v = src.leftTextContent or "name"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local d = UNIT_DB_MAP[key]()
@@ -8529,7 +8532,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyLeftTextTo(checkedKeys) end,
                 },
             })
@@ -8674,10 +8677,10 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedTextRow._rightRegion
             local function ApplyRightTextTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local v = src.rightTextContent or "both"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.rightTextContent = ((v == "absorb" or v == "absorbshort" or v == "healabsorb" or v == "healabsorbshort" or v == "group") and key ~= "player") and "none" or v
                         d.rightTextClassColor = src.rightTextClassColor
@@ -8694,7 +8697,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Right Text to all Frames",
                 onClick = function() ApplyRightTextTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local v = src.rightTextContent or "both"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local d = UNIT_DB_MAP[key]()
@@ -8715,7 +8718,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyRightTextTo(checkedKeys) end,
                 },
             })
@@ -8856,7 +8859,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Row 5: Center Text
         local sharedCenterTextRow
         sharedCenterTextRow, h = W:DualRow(parent, y,
-            { type="dropdown", text="Center Text", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
+            { type="dropdown", text="Center Text", values=healthTextValues, order=(optState.selectedUnit == "player" and healthTextOrderPlayer) or ((optState.selectedUnit == "target" or optState.selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("centerTextContent", "none") end,
               setValue=function(v)
                   local hadLevel = SShowsLevel()
@@ -8864,7 +8867,7 @@ initFrame:SetScript("OnEvent", function(self)
                   ReloadAndUpdate(); UpdatePreview()
                   EllesmereUI:RefreshPage(SShowsLevel() ~= hadLevel)
               end },
-            { type="dropdown", text="Extra Text (full length)", values=healthTextValues, order=(selectedUnit == "player" and healthTextOrderPlayer) or ((selectedUnit == "target" or selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
+            { type="dropdown", text="Extra Text (full length)", values=healthTextValues, order=(optState.selectedUnit == "player" and healthTextOrderPlayer) or ((optState.selectedUnit == "target" or optState.selectedUnit == "focus") and healthTextOrderTargetFocus) or healthTextOrder,
               getValue=function() return SVal("extraTextContent", "none") end,
               setValue=function(v)
                   local hadLevel = SShowsLevel()
@@ -8876,10 +8879,10 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedCenterTextRow._leftRegion
             local function ApplyCenterTextTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local v = src.centerTextContent or "none"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.centerTextContent = ((v == "absorb" or v == "absorbshort" or v == "healabsorb" or v == "healabsorbshort" or v == "group") and key ~= "player") and "none" or v
                         d.centerTextClassColor = src.centerTextClassColor
@@ -8896,7 +8899,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Center Text to all Frames",
                 onClick = function() ApplyCenterTextTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local v = src.centerTextContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local d = UNIT_DB_MAP[key]()
@@ -8917,7 +8920,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyCenterTextTo(checkedKeys) end,
                 },
             })
@@ -9046,10 +9049,10 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedCenterTextRow._rightRegion
             local function ApplyExtraTextTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local v = src.extraTextContent or "none"
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.extraTextContent = ((v == "absorb" or v == "absorbshort" or v == "healabsorb" or v == "healabsorbshort" or v == "group") and key ~= "player") and "none" or v
                         d.extraTextClassColor = src.extraTextClassColor
@@ -9067,7 +9070,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Extra Text to all Frames",
                 onClick = function() ApplyExtraTextTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local v = src.extraTextContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local d = UNIT_DB_MAP[key]()
@@ -9089,7 +9092,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyExtraTextTo(checkedKeys) end,
                 },
             })
@@ -9269,7 +9272,7 @@ initFrame:SetScript("OnEvent", function(self)
                         -- The player's own level never takes a difficulty colour.
                         { type="toggle", label="Difficulty Color",
                           tooltip="Colors an attackable unit's level by difficulty, as the default UI does.",
-                          disabled=function() return selectedUnit == "player" end,
+                          disabled=function() return optState.selectedUnit == "player" end,
                           disabledTooltip="This option does not apply to the player frame.",
                           get=function() return SVal("blizzLevelDifficultyColor", true) end,
                           set=function(v) SSet("blizzLevelDifficultyColor", v); UpdatePreview() end },
@@ -9338,12 +9341,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Power Bar Height to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerHeight or 6
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerHeight or 6
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().powerHeight = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerHeight or 6
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerHeight or 6
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerHeight or 6) ~= v then return false end
                     end
@@ -9353,9 +9356,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().powerHeight or 6
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().powerHeight or 6
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().powerHeight = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -9380,12 +9383,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Bar Position to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerPosition or "below"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerPosition or "below"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().powerPosition = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerPosition or "below"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerPosition or "below"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerPosition or "below") ~= v then return false end
                     end
@@ -9395,9 +9398,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().powerPosition or "below"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().powerPosition or "below"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().powerPosition = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -9451,12 +9454,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Power Text Format to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerTextFormat or "perpp"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerTextFormat or "perpp"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().powerTextFormat = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerTextFormat or "perpp"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerTextFormat or "perpp"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerTextFormat or "perpp") ~= v then return false end
                     end
@@ -9466,9 +9469,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().powerTextFormat or "perpp"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().powerTextFormat or "perpp"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().powerTextFormat = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -9482,14 +9485,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Bar Opacity to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerBarOpacity or 100
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerBarOpacity or 100
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().powerBarOpacity = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().powerBarOpacity = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerBarOpacity or 100
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerBarOpacity or 100
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerBarOpacity or 100) ~= v then return false end
                     end
@@ -9499,9 +9502,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().powerBarOpacity or 100
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().powerBarOpacity or 100
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().powerBarOpacity = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -9523,7 +9526,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return 0.20, 0.20, 0.80
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().powerGradientColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().powerGradientColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end },
                 { tooltip = "Custom Colored Fill",
@@ -9534,7 +9537,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return 0, 0, 1
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().customPowerFillColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().customPowerFillColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end,
                   onClick = function(self)
@@ -9604,7 +9607,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return 17/255, 17/255, 17/255
             end
             local bgSwSet = function(r, g, b)
-                UNIT_DB_MAP[selectedUnit]().customPowerBgColor = { r=r, g=g, b=b }
+                UNIT_DB_MAP[optState.selectedUnit]().customPowerBgColor = { r=r, g=g, b=b }
                 ReloadAndUpdate(); UpdatePreview()
             end
             local bgSw, bgSwUpdate = EllesmereUI.BuildColorSwatch(rgn, rgn:GetFrameLevel() + 5, bgSwGet, bgSwSet, false, 20)
@@ -9631,12 +9634,12 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedPowerRow3._rightRegion
             local function ApplyBgTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local bc = src.customPowerBgColor or { r=17/255, g=17/255, b=17/255 }
                 local bgA = src.customPowerBgAlpha or 100
                 local bgPwr = src.powerBgPowerColored or false
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.customPowerBgColor = { r=bc.r, g=bc.g, b=bc.b }
                         d.customPowerBgAlpha = bgA
@@ -9650,7 +9653,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Bar Background to all Frames",
                 onClick = function() ApplyBgTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local function colEq(a, b)
                         if a == nil and b == nil then return true end
                         if a == nil or b == nil then return false end
@@ -9668,7 +9671,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyBgTo(checkedKeys) end,
                 },
             })
@@ -9677,7 +9680,7 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = sharedPowerRow3._leftRegion
             local function ApplyColorTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local pc = src.powerPercentPowerColor
                 if pc == nil then pc = true end
                 local fc = src.customPowerFillColor
@@ -9685,7 +9688,7 @@ initFrame:SetScript("OnEvent", function(self)
                 local gDir = src.powerGradientDir or "HORIZONTAL"
                 local gc = src.powerGradientColor
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.powerPercentPowerColor = pc
                         if fc then d.customPowerFillColor = { r=fc.r, g=fc.g, b=fc.b }
@@ -9703,7 +9706,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Bar Color to all Frames",
                 onClick = function() ApplyColorTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local function colEq(a, b)
                         if a == nil and b == nil then return true end
                         if a == nil or b == nil then return false end
@@ -9727,7 +9730,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyColorTo(checkedKeys) end,
                 },
             })
@@ -9765,7 +9768,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return 1, 1, 1
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().powerTextColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().powerTextColor = { r=r, g=g, b=b }
                       ReloadAndUpdate(); UpdatePreview()
                   end,
                   onClick = function(self)
@@ -9791,7 +9794,7 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue = function() end,
                   onClick = function()
                       SSet("powerPercentTextPowerColor", true)
-                      UNIT_DB_MAP[selectedUnit]().powerTextColor = nil
+                      UNIT_DB_MAP[optState.selectedUnit]().powerTextColor = nil
                       UpdatePreview()
                       EllesmereUI:RefreshPage()
                   end,
@@ -9817,7 +9820,7 @@ initFrame:SetScript("OnEvent", function(self)
             -- offsets (EUI_UnitFrames_ForeverFormBar.lua); unset, they follow
             -- the power text's.
             local _, cpClass = UnitClass("player")
-            if EllesmereUI.IS_FOREVER == true and selectedUnit == "player" and cpClass == "DRUID" then
+            if EllesmereUI.IS_FOREVER == true and optState.selectedUnit == "player" and cpClass == "DRUID" then
                 local function NoFormBar() return not SVal("foreverFormBar", false) end
                 local function FormOffset(key, base)
                     local v = SVal(key, nil)
@@ -9848,12 +9851,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Power Text Position to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerPercentText or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerPercentText or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().powerPercentText = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerPercentText or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerPercentText or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerPercentText or "none") ~= v then return false end
                     end
@@ -9863,9 +9866,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().powerPercentText or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().powerPercentText or "none"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().powerPercentText = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -9879,7 +9882,7 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Color to all Frames",
                 onClick = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local v = src.powerPercentTextPowerColor or false
                     local tc = src.powerTextColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
@@ -9891,7 +9894,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().powerPercentTextPowerColor or false
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().powerPercentTextPowerColor or false
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().powerPercentTextPowerColor or false) ~= v then return false end
                     end
@@ -9901,9 +9904,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local src = UNIT_DB_MAP[selectedUnit]()
+                        local src = UNIT_DB_MAP[optState.selectedUnit]()
                         local v = src.powerPercentTextPowerColor or false
                         local tc = src.powerTextColor
                         for _, key in ipairs(checkedKeys) do
@@ -10056,8 +10059,8 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, SVal("powerBorderAlpha", 1)
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().powerBorderColor = { r=r, g=g, b=b }
-                    UNIT_DB_MAP[selectedUnit]().powerBorderAlpha = a
+                    UNIT_DB_MAP[optState.selectedUnit]().powerBorderColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().powerBorderAlpha = a
                     ReloadAndUpdate()
                 end,
                 true, 20)
@@ -10075,7 +10078,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Type, which keeps its height when hidden. Built with the engine
         -- (EllesmereUI_SpellCostPrediction.lua, nil off Forever) loaded: the
         -- color and the preview read its color rule.
-        if selectedUnit == "player" and EllesmereUI.SpellCostPrediction then
+        if optState.selectedUnit == "player" and EllesmereUI.SpellCostPrediction then
             local costRow
             costRow, h = W:DualRow(parent, y,
                 { type="toggle", text="Spell Cost Prediction",
@@ -10122,7 +10125,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end)
             end
         end
-        if selectedUnit == "player" and EllesmereUI.IS_FOREVER == true then
+        if optState.selectedUnit == "player" and EllesmereUI.IS_FOREVER == true then
             -- Mana Regen Spark (EllesmereUI_ManaRegenSpark.lua), the section's
             -- last row; warriors and rogues get no spark engine, so no row. A
             -- druid's Power Type shares it: one choice for every form, stored
@@ -10254,7 +10257,7 @@ initFrame:SetScript("OnEvent", function(self)
                         local dd = sharedPowerRow5._leftRegion and sharedPowerRow5._leftRegion._control
                         if dd and dd._invalidateMenu then dd._invalidateMenu() end
                     end
-                    if selectedUnit == "player" and s and classAlts[s] then
+                    if optState.selectedUnit == "player" and s and classAlts[s] then
                         sharedPowerRow5:Show()
                     else
                         sharedPowerRow5:Hide()
@@ -10291,7 +10294,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Height getter/setter: player -> playerCastbarHeight, target/focus -> castbarHeight
         local function GetCastbarHeight()
-            local u = selectedUnit
+            local u = optState.selectedUnit
             if u == "player" then
                 local v = UNIT_DB_MAP.player().playerCastbarHeight or 0
                 return (v <= 0) and 14 or v
@@ -10300,14 +10303,14 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
         local function SetCastbarHeight(v)
-            if selectedUnit == "player" then UNIT_DB_MAP.player().playerCastbarHeight = v
-            else UNIT_DB_MAP[selectedUnit]().castbarHeight = v end
+            if optState.selectedUnit == "player" then UNIT_DB_MAP.player().playerCastbarHeight = v
+            else UNIT_DB_MAP[optState.selectedUnit]().castbarHeight = v end
         end
 
         -- Player-only hint: this is the compact mini cast bar under the player frame;
         -- the full-size one belongs to Resource & Cast Bars, deep-linked here. The page
         -- fully rebuilds on unit change, so gating on selectedUnit re-evaluates per unit.
-        if selectedUnit == "player" then
+        if optState.selectedUnit == "player" then
             local ar, ag, ab = EllesmereUI.GetAccentColor()
             ar, ag, ab = ar or 12/255, ag or 210/255, ab or 157/255
             local accentHex = EllesmereUI.HexColor(ar, ag, ab)
@@ -10347,18 +10350,18 @@ initFrame:SetScript("OnEvent", function(self)
         -- the player hint stay visible while the cast bar is off; the rows below hide
         -- entirely. Height composes the castbar-off disable into the size-match guard.
         local sharedCastRow1
-        local cbKey = selectedUnit .. "Castbar"
+        local cbKey = optState.selectedUnit .. "Castbar"
         local cbhDis, cbhTip, cbhRaw = EllesmereUI.MatchGuard(cbKey, "Height",
-            function() return not GetCastbarEnabled(selectedUnit) end,
+            function() return not GetCastbarEnabled(optState.selectedUnit) end,
             "Show Cast Bar")
         sharedCastRow1, h = W:DualRow(parent, y,
             { type="toggle", text="Show Cast Bar",
-              getValue=function() return GetCastbarEnabled(selectedUnit) end,
+              getValue=function() return GetCastbarEnabled(optState.selectedUnit) end,
               -- DependentSetValue: rows below Row 1 hide while the cast bar is off,
               -- so the toggle flip forces the full rebuild.
               setValue=EllesmereUI.DependentSetValue(
-                  function() return GetCastbarEnabled(selectedUnit) end,
-                  function(v) SetCastbarEnabled(selectedUnit, v); ReloadAndUpdate(); UpdatePreview(); EllesmereUI:RefreshPage() end) },
+                  function() return GetCastbarEnabled(optState.selectedUnit) end,
+                  function(v) SetCastbarEnabled(optState.selectedUnit, v); ReloadAndUpdate(); UpdatePreview(); EllesmereUI:RefreshPage() end) },
             { type="slider", text="Height", min=1, max=40, step=1,
               disabled=cbhDis, disabledTooltip=cbhTip, rawTooltip=cbhRaw,
               getValue=GetCastbarHeight,
@@ -10395,7 +10398,7 @@ initFrame:SetScript("OnEvent", function(self)
                     EllesmereUI.RegisterWidgetRefresh(applySwState)
                 end
             end
-            if selectedUnit == "target" or selectedUnit == "focus" then
+            if optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
                 -- Inline swatches anchor right-to-left: Mid-Cast added first (rightmost),
                 -- then CD, then Interruptible, matching Nameplates' left-to-right order.
                 -- Mid-Cast greys unless its enable toggle in the cog is on.
@@ -10411,16 +10414,16 @@ initFrame:SetScript("OnEvent", function(self)
         -- Sync icon: Show Cast Bar + Fill Color (left region)
         if not EllesmereUI._prebuilding then
             local rgn = sharedCastRow1._leftRegion
-            local isKickUnit = selectedUnit == "target" or selectedUnit == "focus"
+            local isKickUnit = optState.selectedUnit == "target" or optState.selectedUnit == "focus"
             EllesmereUI.BuildSyncIcon({
                 region  = rgn,
                 tooltip = isKickUnit and "Apply Show Cast Bar and Cast Color to Target and Focus"
                     or "Apply Show Cast Bar and Fill Color to all Frames",
                 onClick = function()
-                    local v = GetCastbarEnabled(selectedUnit)
-                    local c = UNIT_DB_MAP[selectedUnit]().castbarFillColor
-                    local readyC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarInterruptReadyColor
-                    local unintC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarUninterruptibleColor
+                    local v = GetCastbarEnabled(optState.selectedUnit)
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castbarFillColor
+                    local readyC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarInterruptReadyColor
+                    local unintC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarUninterruptibleColor
                     local keys = isKickUnit and { "target", "focus" } or GROUP_UNIT_ORDER
                     for _, key in ipairs(keys) do
                         SetCastbarEnabled(key, v)
@@ -10431,10 +10434,10 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = GetCastbarEnabled(selectedUnit)
-                    local c = UNIT_DB_MAP[selectedUnit]().castbarFillColor
-                    local readyC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarInterruptReadyColor
-                    local unintC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarUninterruptibleColor
+                    local v = GetCastbarEnabled(optState.selectedUnit)
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castbarFillColor
+                    local readyC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarInterruptReadyColor
+                    local unintC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarUninterruptibleColor
                     local keys = isKickUnit and { "target", "focus" } or GROUP_UNIT_ORDER
                     for _, key in ipairs(keys) do
                         if GetCastbarEnabled(key) ~= v then return false end
@@ -10459,12 +10462,12 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = GetCastbarEnabled(selectedUnit)
-                        local c = UNIT_DB_MAP[selectedUnit]().castbarFillColor
-                        local readyC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarInterruptReadyColor
-                        local unintC = isKickUnit and UNIT_DB_MAP[selectedUnit]().castbarUninterruptibleColor
+                        local v = GetCastbarEnabled(optState.selectedUnit)
+                        local c = UNIT_DB_MAP[optState.selectedUnit]().castbarFillColor
+                        local readyC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarInterruptReadyColor
+                        local unintC = isKickUnit and UNIT_DB_MAP[optState.selectedUnit]().castbarUninterruptibleColor
                         for _, key in ipairs(checkedKeys) do
                             SetCastbarEnabled(key, v)
                             if c then UNIT_DB_MAP[key]().castbarFillColor = { r = c.r, g = c.g, b = c.b } end
@@ -10489,19 +10492,19 @@ initFrame:SetScript("OnEvent", function(self)
                 { type = "toggle", label = "Hide When Idle",
                   tooltip = "Only show the cast bar while a cast is in progress; hide it the rest of the time.",
                   get = function()
-                      local v = UNIT_DB_MAP[selectedUnit]().castbarHideWhenInactive
+                      local v = UNIT_DB_MAP[optState.selectedUnit]().castbarHideWhenInactive
                       if v == nil then return true end
                       return v
                   end,
                   set = function(v)
-                      UNIT_DB_MAP[selectedUnit]().castbarHideWhenInactive = v
+                      UNIT_DB_MAP[optState.selectedUnit]().castbarHideWhenInactive = v
                       ReloadAndUpdate(); UpdatePreview()
                   end },
                 { type = "slider", label = "Fill Opacity", min = 0, max = 100, step = 1,
                   tooltip = "Opacity of the cast bar fill; below 100 the world shows through the fill instead of the background.",
-                  get = function() return UNIT_DB_MAP[selectedUnit]().castFillOpacity or 100 end,
+                  get = function() return UNIT_DB_MAP[optState.selectedUnit]().castFillOpacity or 100 end,
                   set = function(v)
-                      UNIT_DB_MAP[selectedUnit]().castFillOpacity = v
+                      UNIT_DB_MAP[optState.selectedUnit]().castFillOpacity = v
                       ReloadAndUpdate(); UpdatePreview()
                   end },
                 -- Global (not per-frame, not synced): ONE db.profile key lifts every
@@ -10515,7 +10518,7 @@ initFrame:SetScript("OnEvent", function(self)
                       ReloadAndUpdate()
                   end },
             }
-            if selectedUnit == "target" or selectedUnit == "focus" then
+            if optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
                 cogRows[#cogRows + 1] = { type = "toggle", label = "Show Kick Ready Mid-Cast Tick",
                     tooltip = "Shows a small white tick mark on the cast bar at the point where the cast will be when your interrupt comes off cooldown.",
                     get = function()
@@ -10549,11 +10552,11 @@ initFrame:SetScript("OnEvent", function(self)
                 disabled = function() return EllesmereUI.BlizzStyle.Get("unitframes") end,
                 disabledTooltip = function() return EllesmereUI.BlizzStyle.Label("unitframes") end,
                 requireState = "disabled",
-                get = function() return UNIT_DB_MAP[selectedUnit]().castBorderCustom == true end,
+                get = function() return UNIT_DB_MAP[optState.selectedUnit]().castBorderCustom == true end,
                 set = function(v)
-                    UNIT_DB_MAP[selectedUnit]().castBorderCustom = v
+                    UNIT_DB_MAP[optState.selectedUnit]().castBorderCustom = v
                     ReloadAndUpdate()
-                    EllesmereUI.ReapplyMatchPads(selectedUnit .. "Castbar")
+                    EllesmereUI.ReapplyMatchPads(optState.selectedUnit .. "Castbar")
                     EllesmereUI:RefreshPage(true)
                 end }
             EllesmereUI.BuildInlineCog(rgn, {
@@ -10589,7 +10592,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
                         local v = GetCastbarHeight()
                         for _, key in ipairs(checkedKeys) do
@@ -10606,24 +10609,24 @@ initFrame:SetScript("OnEvent", function(self)
         -- on flips). Row locals are hoisted above the gate: the element-nav map
         -- references them, and an in-gate declaration would leave it reading nil globals.
         local castRow2, castTextRow, castTargetRow
-        if GetCastbarEnabled(selectedUnit) then
+        if GetCastbarEnabled(optState.selectedUnit) then
         -- Row 2: Show Icon | Bar Background (opacity slider + inline color swatch)
         local function GetShowIcon()
-            if selectedUnit == "player" then
+            if optState.selectedUnit == "player" then
                 local v = UNIT_DB_MAP.player().showPlayerCastIcon
                 if v == nil then return true end
                 return v
             else
-                local v = UNIT_DB_MAP[selectedUnit]().showCastIcon
+                local v = UNIT_DB_MAP[optState.selectedUnit]().showCastIcon
                 if v == nil then return true end
                 return v
             end
         end
         local function SetShowIcon(val)
-            if selectedUnit == "player" then
+            if optState.selectedUnit == "player" then
                 UNIT_DB_MAP.player().showPlayerCastIcon = val
             else
-                UNIT_DB_MAP[selectedUnit]().showCastIcon = val
+                UNIT_DB_MAP[optState.selectedUnit]().showCastIcon = val
             end
         end
         castRow2, h = W:DualRow(parent, y,
@@ -10632,7 +10635,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=function(v) SetShowIcon(v); ReloadAndUpdate(); UpdatePreview() end },
             { type="slider", text="Bar Background", min=0, max=100, step=1,
               getValue=function() return math.floor(SValSupported("castBgAlpha", 0.5) * 100 + 0.5) end,
-              setValue=function(v) UNIT_DB_MAP[selectedUnit]().castBgAlpha = v / 100; ReloadAndUpdate(); UpdatePreview() end });  y = y - h
+              setValue=function(v) UNIT_DB_MAP[optState.selectedUnit]().castBgAlpha = v / 100; ReloadAndUpdate(); UpdatePreview() end });  y = y - h
         -- Sync icon: Show Icon (left)
         if not EllesmereUI._prebuilding then
             local rgn = castRow2._leftRegion
@@ -10666,7 +10669,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
                         local v = GetShowIcon()
                         for _, key in ipairs(checkedKeys) do
@@ -10685,7 +10688,7 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = castRow2._leftRegion
             local function IconOnPortrait()
-                return ns.UF_CastIconOnPortrait(selectedUnit, UNIT_DB_MAP[selectedUnit]())
+                return ns.UF_CastIconOnPortrait(optState.selectedUnit, UNIT_DB_MAP[optState.selectedUnit]())
             end
             EllesmereUI.BuildInlineCog(rgn, {
                 title = "Cast Icon",
@@ -10694,9 +10697,9 @@ initFrame:SetScript("OnEvent", function(self)
                       tooltip = "Use the cast bar's border style, size and color around the icon.",
                       disabled = function() return EllesmereUI.BlizzStyle.Get("unitframes") or not GetShowIcon() or IconOnPortrait() end,
                       disabledTooltip = "This option requires Show Icon beside the cast bar and the EllesmereUI style.",
-                      get = function() return UNIT_DB_MAP[selectedUnit]().castIconBorder == true end,
+                      get = function() return UNIT_DB_MAP[optState.selectedUnit]().castIconBorder == true end,
                       set = function(v)
-                          UNIT_DB_MAP[selectedUnit]().castIconBorder = v
+                          UNIT_DB_MAP[optState.selectedUnit]().castIconBorder = v
                           ReloadAndUpdate(); UpdatePreview()
                       end },
                     { type = "toggle", label = "Make Icon Part of the Bar",
@@ -10711,16 +10714,16 @@ initFrame:SetScript("OnEvent", function(self)
                       requireState = "disabled",
                       get = function()
                           if EllesmereUI.BlizzStyle.Get("unitframes") then return true end
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               return UNIT_DB_MAP.player().playerCastbarIconInWidth ~= false
                           end
-                          return UNIT_DB_MAP[selectedUnit]().castbarIconInWidth ~= false
+                          return UNIT_DB_MAP[optState.selectedUnit]().castbarIconInWidth ~= false
                       end,
                       set = function(v)
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               UNIT_DB_MAP.player().playerCastbarIconInWidth = v
                           else
-                              UNIT_DB_MAP[selectedUnit]().castbarIconInWidth = v
+                              UNIT_DB_MAP[optState.selectedUnit]().castbarIconInWidth = v
                           end
                           ReloadAndUpdate(); UpdatePreview()
                       end },
@@ -10729,37 +10732,37 @@ initFrame:SetScript("OnEvent", function(self)
                     { type = "toggle", label = "Border Wraps Icon",
                       tooltip = "Draw the custom cast bar border around the icon and the bar together. An icon with an offset keeps its own border.",
                       disabled = function()
-                          local s = UNIT_DB_MAP[selectedUnit]()
+                          local s = UNIT_DB_MAP[optState.selectedUnit]()
                           return EllesmereUI.BlizzStyle.Get("unitframes") or s.castBorderCustom ~= true
-                              or not ns.UF_CastIconInWidth(selectedUnit, s)
+                              or not ns.UF_CastIconInWidth(optState.selectedUnit, s)
                       end,
                       disabledTooltip = "This option requires Custom Border Style, Show Icon and Make Icon Part of the Bar, with the EllesmereUI style.",
-                      get = function() return UNIT_DB_MAP[selectedUnit]().castBorderWrapIcon == true end,
+                      get = function() return UNIT_DB_MAP[optState.selectedUnit]().castBorderWrapIcon == true end,
                       set = function(v)
-                          UNIT_DB_MAP[selectedUnit]().castBorderWrapIcon = v
+                          UNIT_DB_MAP[optState.selectedUnit]().castBorderWrapIcon = v
                           ReloadAndUpdate(); UpdatePreview()
-                          EllesmereUI.ReapplyMatchPads(selectedUnit .. "Castbar")
+                          EllesmereUI.ReapplyMatchPads(optState.selectedUnit .. "Castbar")
                       end },
                     -- Solid draws a flat line; a textured style needs its own
                     -- divider art (ns.UF_CastIconSeamOK, the runtime's gate).
                     { type = "toggle", label = "Vertical Separator",
                       tooltip = "Draw a divider between the integrated icon and the bar, using the cast bar's border appearance.",
                       disabled = function()
-                          local s = UNIT_DB_MAP[selectedUnit]()
+                          local s = UNIT_DB_MAP[optState.selectedUnit]()
                           return EllesmereUI.BlizzStyle.Get("unitframes")
-                              or not ns.UF_CastIconInWidth(selectedUnit, s)
+                              or not ns.UF_CastIconInWidth(optState.selectedUnit, s)
                               or not ns.UF_CastIconSeamOK(s)
                       end,
                       disabledTooltip = function()
-                          local s = UNIT_DB_MAP[selectedUnit]()
-                          if EllesmereUI.BlizzStyle.Get("unitframes") or not ns.UF_CastIconInWidth(selectedUnit, s) then
+                          local s = UNIT_DB_MAP[optState.selectedUnit]()
+                          if EllesmereUI.BlizzStyle.Get("unitframes") or not ns.UF_CastIconInWidth(optState.selectedUnit, s) then
                               return "This option requires Show Icon and Make Icon Part of the Bar, with the EllesmereUI style."
                           end
                           return "This option requires Solid or a border style with divider art, and a Border Size above 0."
                       end,
-                      get = function() return UNIT_DB_MAP[selectedUnit]().castIconSeparator == true end,
+                      get = function() return UNIT_DB_MAP[optState.selectedUnit]().castIconSeparator == true end,
                       set = function(v)
-                          UNIT_DB_MAP[selectedUnit]().castIconSeparator = v
+                          UNIT_DB_MAP[optState.selectedUnit]().castIconSeparator = v
                           ReloadAndUpdate(); UpdatePreview()
                       end },
                     { type = "toggle", label = "Show Icon on Right",
@@ -10768,16 +10771,16 @@ initFrame:SetScript("OnEvent", function(self)
                       disabledTooltip = "Show Icon on Portrait",
                       requireState = "disabled",
                       get = function()
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               return UNIT_DB_MAP.player().playerCastbarIconRight == true
                           end
-                          return UNIT_DB_MAP[selectedUnit]().castbarIconRight == true
+                          return UNIT_DB_MAP[optState.selectedUnit]().castbarIconRight == true
                       end,
                       set = function(v)
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               UNIT_DB_MAP.player().playerCastbarIconRight = v
                           else
-                              UNIT_DB_MAP[selectedUnit]().castbarIconRight = v
+                              UNIT_DB_MAP[optState.selectedUnit]().castbarIconRight = v
                           end
                           ReloadAndUpdate(); UpdatePreview()
                       end },
@@ -10787,7 +10790,7 @@ initFrame:SetScript("OnEvent", function(self)
                       tooltip = "Shows the spell icon over the portrait while casting and lets the bar use the full width.",
                       disabled = function()
                           if EllesmereUI.BlizzStyle.Get("unitframes") or not GetShowIcon() then return true end
-                          local s = UNIT_DB_MAP[selectedUnit]()
+                          local s = UNIT_DB_MAP[optState.selectedUnit]()
                           return (s.portraitStyle or db.profile.portraitStyle or "attached") == "none"
                               or s.showPortrait == false
                               or (s.portraitMode or db.profile.portraitMode or "2d") == "none"
@@ -10799,16 +10802,16 @@ initFrame:SetScript("OnEvent", function(self)
                       rawTooltip = function() return not EllesmereUI.BlizzStyle.Get("unitframes") end,
                       requireState = "disabled",
                       get = function()
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               return UNIT_DB_MAP.player().playerCastbarIconOnPortrait == true
                           end
-                          return UNIT_DB_MAP[selectedUnit]().castbarIconOnPortrait == true
+                          return UNIT_DB_MAP[optState.selectedUnit]().castbarIconOnPortrait == true
                       end,
                       set = function(v)
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               UNIT_DB_MAP.player().playerCastbarIconOnPortrait = v
                           else
-                              UNIT_DB_MAP[selectedUnit]().castbarIconOnPortrait = v
+                              UNIT_DB_MAP[optState.selectedUnit]().castbarIconOnPortrait = v
                           end
                           ReloadAndUpdate(); UpdatePreview()
                       end },
@@ -10817,16 +10820,16 @@ initFrame:SetScript("OnEvent", function(self)
                       disabledTooltip = "Show Icon on Portrait",
                       requireState = "disabled",
                       get = function()
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               return UNIT_DB_MAP.player().playerCastIconOffsetX or 0
                           end
-                          return UNIT_DB_MAP[selectedUnit]().castIconOffsetX or 0
+                          return UNIT_DB_MAP[optState.selectedUnit]().castIconOffsetX or 0
                       end,
                       set = function(v)
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               UNIT_DB_MAP.player().playerCastIconOffsetX = v
                           else
-                              UNIT_DB_MAP[selectedUnit]().castIconOffsetX = v
+                              UNIT_DB_MAP[optState.selectedUnit]().castIconOffsetX = v
                           end
                           ReloadAndUpdate(); UpdatePreview()
                       end },
@@ -10835,16 +10838,16 @@ initFrame:SetScript("OnEvent", function(self)
                       disabledTooltip = "Show Icon on Portrait",
                       requireState = "disabled",
                       get = function()
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               return UNIT_DB_MAP.player().playerCastIconOffsetY or 0
                           end
-                          return UNIT_DB_MAP[selectedUnit]().castIconOffsetY or 0
+                          return UNIT_DB_MAP[optState.selectedUnit]().castIconOffsetY or 0
                       end,
                       set = function(v)
-                          if selectedUnit == "player" then
+                          if optState.selectedUnit == "player" then
                               UNIT_DB_MAP.player().playerCastIconOffsetY = v
                           else
-                              UNIT_DB_MAP[selectedUnit]().castIconOffsetY = v
+                              UNIT_DB_MAP[optState.selectedUnit]().castIconOffsetY = v
                           end
                           ReloadAndUpdate(); UpdatePreview()
                       end },
@@ -10855,12 +10858,12 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = castRow2._rightRegion
             local bgSwGet = function()
-                local c = UNIT_DB_MAP[selectedUnit]().castBgColor
+                local c = UNIT_DB_MAP[optState.selectedUnit]().castBgColor
                 if c then return c.r, c.g, c.b end
                 return 0, 0, 0
             end
             local bgSwSet = function(r, g, b)
-                UNIT_DB_MAP[selectedUnit]().castBgColor = { r=r, g=g, b=b }
+                UNIT_DB_MAP[optState.selectedUnit]().castBgColor = { r=r, g=g, b=b }
                 ReloadAndUpdate(); UpdatePreview()
             end
             local bgSw, bgSwUpdate = EllesmereUI.BuildColorSwatch(rgn, rgn:GetFrameLevel() + 5, bgSwGet, bgSwSet, false, 20)
@@ -10872,11 +10875,11 @@ initFrame:SetScript("OnEvent", function(self)
         if not EllesmereUI._prebuilding then
             local rgn = castRow2._rightRegion
             local function ApplyCastBgTo(keys)
-                local src = UNIT_DB_MAP[selectedUnit]()
+                local src = UNIT_DB_MAP[optState.selectedUnit]()
                 local bc = src.castBgColor or { r=0, g=0, b=0 }
                 local bgA = src.castBgAlpha
                 for _, key in ipairs(keys) do
-                    if key ~= selectedUnit then
+                    if key ~= optState.selectedUnit then
                         local d = UNIT_DB_MAP[key]()
                         d.castBgColor = { r=bc.r, g=bc.g, b=bc.b }
                         d.castBgAlpha = bgA
@@ -10889,7 +10892,7 @@ initFrame:SetScript("OnEvent", function(self)
                 tooltip = "Apply Bar Background to all Frames",
                 onClick = function() ApplyCastBgTo(GROUP_UNIT_ORDER) end,
                 isSynced = function()
-                    local src = UNIT_DB_MAP[selectedUnit]()
+                    local src = UNIT_DB_MAP[optState.selectedUnit]()
                     local function colEq(a, b)
                         -- A nil color means "use the hardcoded default (black)", so a
                         -- nil color and an explicit black must compare equal. Without
@@ -10910,7 +10913,7 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys) ApplyCastBgTo(checkedKeys) end,
                 },
             })
@@ -10927,7 +10930,7 @@ initFrame:SetScript("OnEvent", function(self)
             { type="dropdown", text="Spell Name", values=castTextPosValues, order=castTextPosOrder,
               getValue=function() return SValSupported("castSpellNameSide", "left") end,
               setValue=function(v)
-                local s = UNIT_DB_MAP[selectedUnit]()
+                local s = UNIT_DB_MAP[optState.selectedUnit]()
                 s.castSpellNameSide = v
                 if v ~= "none" and (s.showCastTarget ~= false) and (s.castSpellTargetSide or "right") == v then
                     s.showCastTarget = false
@@ -10942,7 +10945,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return SValSupported("castDurationSide", "right")
               end,
               setValue=function(v)
-                local s = UNIT_DB_MAP[selectedUnit]()
+                local s = UNIT_DB_MAP[optState.selectedUnit]()
                 if v == "none" then
                     s.showCastDuration = false
                 else
@@ -10961,7 +10964,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().castSpellNameColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().castSpellNameColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             snSw:SetPoint("RIGHT", snRgn._lastInline or snRgn._control, "LEFT", -12, 0)
@@ -10981,7 +10984,7 @@ initFrame:SetScript("OnEvent", function(self)
                       get=function() return SValSupported("castSpellNameY", 0) end,
                       set=function(v) SSetSupported("castSpellNameY", v); ReloadAndUpdate(); UpdatePreview() end },
             }
-            if selectedUnit == "target" or selectedUnit == "focus" then
+            if optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
                 snCogRows[#snCogRows + 1] = { type="toggle", label="Combine Spell Name and Target",
                     tooltip="Appends the cast target to the spell name (Spell Name - Target), class colored, and disables the separate Spell Target display.",
                     get=function() return SValSupported("castCombineNameTarget", false) end,
@@ -11007,7 +11010,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().castDurationColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().castDurationColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             dtSw:SetPoint("RIGHT", dtRgn._lastInline or dtRgn._control, "LEFT", -12, 0)
@@ -11039,8 +11042,8 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Spell Name Size and Color to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castSpellNameSize or 11
-                    local c = UNIT_DB_MAP[selectedUnit]().castSpellNameColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameSize or 11
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         UNIT_DB_MAP[key]().castSpellNameSize = v
                         if c then UNIT_DB_MAP[key]().castSpellNameColor = { r=c.r, g=c.g, b=c.b } end
@@ -11048,8 +11051,8 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castSpellNameSize or 11
-                    local c = UNIT_DB_MAP[selectedUnit]().castSpellNameColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameSize or 11
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().castSpellNameSize or 11) ~= v then return false end
                         local kc = UNIT_DB_MAP[key]().castSpellNameColor
@@ -11063,10 +11066,10 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().castSpellNameSize or 11
-                        local c = UNIT_DB_MAP[selectedUnit]().castSpellNameColor
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameSize or 11
+                        local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellNameColor
                         for _, key in ipairs(checkedKeys) do
                             UNIT_DB_MAP[key]().castSpellNameSize = v
                             if c then UNIT_DB_MAP[key]().castSpellNameColor = { r=c.r, g=c.g, b=c.b } end
@@ -11082,8 +11085,8 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Duration Size and Color to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castDurationSize or 10
-                    local c = UNIT_DB_MAP[selectedUnit]().castDurationColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castDurationSize or 10
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castDurationColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         UNIT_DB_MAP[key]().castDurationSize = v
                         if c then UNIT_DB_MAP[key]().castDurationColor = { r=c.r, g=c.g, b=c.b } end
@@ -11091,8 +11094,8 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castDurationSize or 10
-                    local c = UNIT_DB_MAP[selectedUnit]().castDurationColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castDurationSize or 10
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castDurationColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().castDurationSize or 10) ~= v then return false end
                         local kc = UNIT_DB_MAP[key]().castDurationColor
@@ -11106,10 +11109,10 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().castDurationSize or 10
-                        local c = UNIT_DB_MAP[selectedUnit]().castDurationColor
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().castDurationSize or 10
+                        local c = UNIT_DB_MAP[optState.selectedUnit]().castDurationColor
                         for _, key in ipairs(checkedKeys) do
                             UNIT_DB_MAP[key]().castDurationSize = v
                             if c then UNIT_DB_MAP[key]().castDurationColor = { r=c.r, g=c.g, b=c.b } end
@@ -11127,8 +11130,8 @@ initFrame:SetScript("OnEvent", function(self)
               -- name string; the separate target display greys out and no-ops
               -- while it is on.
               disabled=function()
-                  if selectedUnit ~= "target" and selectedUnit ~= "focus" then return false end
-                  local s = UNIT_DB_MAP[selectedUnit]()
+                  if optState.selectedUnit ~= "target" and optState.selectedUnit ~= "focus" then return false end
+                  local s = UNIT_DB_MAP[optState.selectedUnit]()
                   return (s and s.castCombineNameTarget == true) and true or false
               end,
               disabledTooltip="This option requires Combine Spell Name and Target to be disabled.",
@@ -11137,7 +11140,7 @@ initFrame:SetScript("OnEvent", function(self)
                 return SValSupported("castSpellTargetSide", "right")
               end,
               setValue=function(v)
-                local s = UNIT_DB_MAP[selectedUnit]()
+                local s = UNIT_DB_MAP[optState.selectedUnit]()
                 if v == "none" then
                     s.showCastTarget = false
                 else
@@ -11160,7 +11163,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().castSpellTargetColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             trgSw:SetPoint("RIGHT", trgRgn._lastInline or trgRgn._control, "LEFT", -12, 0)
@@ -11192,8 +11195,8 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Spell Target Size and Color to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castSpellTargetSize or 11
-                    local c = UNIT_DB_MAP[selectedUnit]().castSpellTargetColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetSize or 11
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         UNIT_DB_MAP[key]().castSpellTargetSize = v
                         if c then UNIT_DB_MAP[key]().castSpellTargetColor = { r=c.r, g=c.g, b=c.b } end
@@ -11201,8 +11204,8 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().castSpellTargetSize or 11
-                    local c = UNIT_DB_MAP[selectedUnit]().castSpellTargetColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetSize or 11
+                    local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().castSpellTargetSize or 11) ~= v then return false end
                         local kc = UNIT_DB_MAP[key]().castSpellTargetColor
@@ -11216,10 +11219,10 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().castSpellTargetSize or 11
-                        local c = UNIT_DB_MAP[selectedUnit]().castSpellTargetColor
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetSize or 11
+                        local c = UNIT_DB_MAP[optState.selectedUnit]().castSpellTargetColor
                         for _, key in ipairs(checkedKeys) do
                             UNIT_DB_MAP[key]().castSpellTargetSize = v
                             if c then UNIT_DB_MAP[key]().castSpellTargetColor = { r=c.r, g=c.g, b=c.b } end
@@ -11233,31 +11236,31 @@ initFrame:SetScript("OnEvent", function(self)
         -- Cast Bar gate and ahead of the Classic-only Border Size row.
         if SVal("castBorderCustom", false) == true then
             y = y - ns.UF_CastBorderRows(W, parent, y,
-                function() return UNIT_DB_MAP[selectedUnit]() end,
+                function() return UNIT_DB_MAP[optState.selectedUnit]() end,
                 ReloadAndUpdate,
-                selectedUnit .. "Castbar",
+                optState.selectedUnit .. "Castbar",
                 { units = GROUP_UNIT_ORDER, labels = SHORT_LABELS,
-                  current = function() return selectedUnit end,
+                  current = function() return optState.selectedUnit end,
                   db = function(u) local f = UNIT_DB_MAP[u]; return f and f() end })
         end
         -- Important Cast Glow (target/focus); in Classic WoW UI it fills the Border Size row's free slot.
         local impGlowCfg, impGlowDesc
-        if selectedUnit == "target" or selectedUnit == "focus" then
-            impGlowDesc = UF_ImpCastGlowDesc(function() return UNIT_DB_MAP[selectedUnit]() end,
+        if optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
+            impGlowDesc = UF_ImpCastGlowDesc(function() return UNIT_DB_MAP[optState.selectedUnit]() end,
                 function() ReloadAndUpdate(); UpdatePreview() end)
             impGlowCfg = EllesmereUI.GlowOptions.DropdownSpec(impGlowDesc, "Important Cast Glow",
                 "Show a glow on the cast bar when the unit is casting a spell Blizzard marks as important.")
         end
         -- Classic WoW UI: Border Size closes the section (odd last slot).
         local classicH, classicRow = ns.UF_ClassicCastBorderRow(W, parent, y,
-            function() return UNIT_DB_MAP[selectedUnit]() end,
-            ns.UF_CastClassicKey(selectedUnit),
+            function() return UNIT_DB_MAP[optState.selectedUnit]() end,
+            ns.UF_CastClassicKey(optState.selectedUnit),
             function() ReloadAndUpdate(); UpdatePreview() end,
             { units = GROUP_UNIT_ORDER, labels = SHORT_LABELS,
-              current = function() return selectedUnit end,
+              current = function() return optState.selectedUnit end,
               db = function(u) local f = UNIT_DB_MAP[u]; return f and f() end,
               reload = ReloadAndUpdate },
-            selectedUnit .. "Castbar", impGlowCfg)
+            optState.selectedUnit .. "Castbar", impGlowCfg)
         y = y - classicH
         if impGlowCfg then
             local impGlowRow, impGlowSide = classicRow, "_rightRegion"
@@ -11293,9 +11296,9 @@ initFrame:SetScript("OnEvent", function(self)
                     region  = rgn,
                     tooltip = "Apply Important Cast Glow to Target and Focus",
                     onClick = function()
-                        local src = UNIT_DB_MAP[selectedUnit]()
+                        local src = UNIT_DB_MAP[optState.selectedUnit]()
                         for _, key in ipairs({ "target", "focus" }) do
-                            if key ~= selectedUnit then
+                            if key ~= optState.selectedUnit then
                                 local d = UNIT_DB_MAP[key]()
                                 for _, k in ipairs(GLOW_KEYS) do d[k] = src[k] end
                                 for _, k in ipairs(GLOW_COLOR_KEYS) do
@@ -11307,7 +11310,7 @@ initFrame:SetScript("OnEvent", function(self)
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
                     isSynced = function()
-                        local src = UNIT_DB_MAP[selectedUnit]()
+                        local src = UNIT_DB_MAP[optState.selectedUnit]()
                         for _, key in ipairs({ "target", "focus" }) do
                             local d = UNIT_DB_MAP[key]()
                             for _, k in ipairs(GLOW_KEYS) do
@@ -11366,14 +11369,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Enable Text Bar to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().bottomTextBar or false
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBar or false
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().bottomTextBar = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().bottomTextBar = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().bottomTextBar or false
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBar or false
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().bottomTextBar or false) ~= v then return false end
                     end
@@ -11383,9 +11386,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().bottomTextBar or false
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBar or false
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().bottomTextBar = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -11399,14 +11402,14 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Position to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbPosition or "bottom"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbPosition or "bottom"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
-                        if key ~= selectedUnit then UNIT_DB_MAP[key]().btbPosition = v end
+                        if key ~= optState.selectedUnit then UNIT_DB_MAP[key]().btbPosition = v end
                     end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbPosition or "bottom"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbPosition or "bottom"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbPosition or "bottom") ~= v then return false end
                     end
@@ -11416,9 +11419,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbPosition or "bottom"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbPosition or "bottom"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbPosition = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -11436,8 +11439,8 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, a or 1.0
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().btbBgColor = { r=r, g=g, b=b }
-                    UNIT_DB_MAP[selectedUnit]().btbBgOpacity = a
+                    UNIT_DB_MAP[optState.selectedUnit]().btbBgColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().btbBgOpacity = a
                     ReloadAndUpdate(); UpdatePreview()
                 end, true, 20)
             sw:SetPoint("RIGHT", btbRgn._lastInline or btbRgn._control, "LEFT", -12, 0)
@@ -11522,12 +11525,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Height to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().bottomTextBarHeight or 16
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBarHeight or 16
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().bottomTextBarHeight = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().bottomTextBarHeight or 16
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBarHeight or 16
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().bottomTextBarHeight or 16) ~= v then return false end
                     end
@@ -11537,9 +11540,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().bottomTextBarHeight or 16
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().bottomTextBarHeight or 16
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().bottomTextBarHeight = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -11552,12 +11555,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Width to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbWidth or 0
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbWidth or 0
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().btbWidth = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbWidth or 0
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbWidth or 0
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbWidth or 0) ~= v then return false end
                     end
@@ -11567,9 +11570,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbWidth or 0
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbWidth or 0
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbWidth = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -11876,12 +11879,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Left Text to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbLeftContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbLeftContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().btbLeftContent = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbLeftContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbLeftContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbLeftContent or "none") ~= v then return false end
                     end
@@ -11891,9 +11894,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbLeftContent or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbLeftContent or "none"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbLeftContent = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -11906,12 +11909,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Right Text to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbRightContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbRightContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().btbRightContent = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbRightContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbRightContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbRightContent or "none") ~= v then return false end
                     end
@@ -11921,9 +11924,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbRightContent or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbRightContent or "none"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbRightContent = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12113,12 +12116,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Center Text to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbCenterContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbCenterContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().btbCenterContent = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbCenterContent or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbCenterContent or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbCenterContent or "none") ~= v then return false end
                     end
@@ -12128,9 +12131,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbCenterContent or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbCenterContent or "none"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbCenterContent = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12143,12 +12146,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Text Bar Class Icon to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbClassIcon or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbClassIcon or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().btbClassIcon = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().btbClassIcon or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().btbClassIcon or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().btbClassIcon or "none") ~= v then return false end
                     end
@@ -12158,9 +12161,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().btbClassIcon or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().btbClassIcon or "none"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().btbClassIcon = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12170,7 +12173,7 @@ initFrame:SetScript("OnEvent", function(self)
         end   -- close Text Bar hidden-while-disabled gate
 
         -- CLASS RESOURCE section: only shown in multi-edit or when player is selected
-        local _showClassRes = selectedUnit == "player"
+        local _showClassRes = optState.selectedUnit == "player"
         if _showClassRes then
         _, h = W:Spacer(parent, y, 20); y = y - h
 
@@ -12237,7 +12240,7 @@ initFrame:SetScript("OnEvent", function(self)
                       return c.r, c.g, c.b, 1
                   end,
                   setValue = function(r, g, b)
-                      UNIT_DB_MAP[selectedUnit]().classPowerCustomColor = { r=r, g=g, b=b }
+                      UNIT_DB_MAP[optState.selectedUnit]().classPowerCustomColor = { r=r, g=g, b=b }
                       if ns.frames and ns.frames._toggleClassPower then
                           ns.frames._toggleClassPower()
                       end
@@ -12287,7 +12290,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return c.r, c.g, c.b, c.a or 1
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().classPowerEmptyColor = { r = r, g = g, b = b, a = a or 1 }
+                    UNIT_DB_MAP[optState.selectedUnit]().classPowerEmptyColor = { r = r, g = g, b = b, a = a or 1 }
                     if ns.frames and ns.frames._toggleClassPower then
                         ns.frames._toggleClassPower()
                     end
@@ -12321,7 +12324,7 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Resource Style to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerStyle or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerStyle or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         UNIT_DB_MAP[key]().classPowerStyle = v
                         UNIT_DB_MAP[key]().showClassPowerBar = (v ~= "none")
@@ -12329,7 +12332,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerStyle or "none"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerStyle or "none"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().classPowerStyle or "none") ~= v then return false end
                     end
@@ -12339,9 +12342,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerStyle or "none"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerStyle or "none"
                         for _, key in ipairs(checkedKeys) do
                             UNIT_DB_MAP[key]().classPowerStyle = v
                             UNIT_DB_MAP[key]().showClassPowerBar = (v ~= "none")
@@ -12357,13 +12360,13 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Colors to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerClassColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerClassColor
                     if v == nil then v = true end
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().classPowerClassColor = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerClassColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerClassColor
                     if v == nil then v = true end
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local ov = UNIT_DB_MAP[key]().classPowerClassColor
@@ -12376,9 +12379,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerClassColor
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerClassColor
                         if v == nil then v = true end
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().classPowerClassColor = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
@@ -12445,12 +12448,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Resource Position to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerPosition or "top"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerPosition or "top"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().classPowerPosition = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerPosition or "top"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerPosition or "top"
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().classPowerPosition or "top") ~= v then return false end
                     end
@@ -12460,9 +12463,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerPosition or "top"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerPosition or "top"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().classPowerPosition = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12475,12 +12478,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Resource Size to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerSize or 8
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSize or 8
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().classPowerSize = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerSize or 8
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSize or 8
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().classPowerSize or 8) ~= v then return false end
                     end
@@ -12490,9 +12493,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerSize or 8
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSize or 8
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().classPowerSize = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12533,12 +12536,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Resource Bar Spacing to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerSpacing or 2
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSpacing or 2
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().classPowerSpacing = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerSpacing or 2
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSpacing or 2
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().classPowerSpacing or 2) ~= v then return false end
                     end
@@ -12548,9 +12551,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerSpacing or 2
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerSpacing or 2
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().classPowerSpacing = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -12563,7 +12566,7 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Class Resource Background Color to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerBgColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerBgColor
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if v then UNIT_DB_MAP[key]().classPowerBgColor = { r=v.r, g=v.g, b=v.b, a=v.a }
                         else UNIT_DB_MAP[key]().classPowerBgColor = nil end
@@ -12571,7 +12574,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().classPowerBgColor
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerBgColor
                     local vr = v and v.r or 0
                     local vg = v and v.g or 0
                     local vb = v and v.b or 0
@@ -12590,9 +12593,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().classPowerBgColor
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().classPowerBgColor
                         for _, key in ipairs(checkedKeys) do
                             if v then UNIT_DB_MAP[key]().classPowerBgColor = { r=v.r, g=v.g, b=v.b, a=v.a }
                             else UNIT_DB_MAP[key]().classPowerBgColor = nil end
@@ -12616,7 +12619,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- When Buff/Debuff Display is "none", everything in that column is disabled.
         local function BuffDisabled()
-            local s = UNIT_DB_MAP[selectedUnit]()
+            local s = UNIT_DB_MAP[optState.selectedUnit]()
             if not s then return false end
             -- Anchor Buffs with Debuffs renders buffs inside the debuff stack, so
             -- buff appearance settings stay live while Buff Display reads None (visibility belongs to the merge toggle).
@@ -12659,7 +12662,7 @@ initFrame:SetScript("OnEvent", function(self)
                   if v == "anchor_debuffs" then return "Requires a Debuff Display" end
               end,
               getValue=function()
-                  local s = UNIT_DB_MAP[selectedUnit]()
+                  local s = UNIT_DB_MAP[optState.selectedUnit]()
                   -- Active merge presents as its own display choice; an inert merge
                   -- (Debuff Display None) falls through to the truthful None readout.
                   if s.debuffAnchorBuffs and SValSupported("debuffAnchor", "bottomleft") ~= "none" then
@@ -12674,7 +12677,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=EllesmereUI.DependentSetValue(
                   function() return not BuffDisabled() end,
                   function(v)
-                      local s = UNIT_DB_MAP[selectedUnit]()
+                      local s = UNIT_DB_MAP[optState.selectedUnit]()
                       if v == "anchor_debuffs" then
                           -- Same stored shape the old cog toggle wrote: the
                           -- merge owns visibility, Buff Display stores None.
@@ -12704,7 +12707,7 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Buffs Location to all Frames",
                 onClick = function()
-                    local s = UNIT_DB_MAP[selectedUnit]()
+                    local s = UNIT_DB_MAP[optState.selectedUnit]()
                     local showV = s.showBuffs
                     if showV == nil then showV = true end
                     local anchorV = s.buffAnchor or "topleft"
@@ -12715,7 +12718,7 @@ initFrame:SetScript("OnEvent", function(self)
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local s = UNIT_DB_MAP[selectedUnit]()
+                    local s = UNIT_DB_MAP[optState.selectedUnit]()
                     local showV = s.showBuffs
                     if showV == nil then showV = true end
                     local anchorV = s.buffAnchor or "topleft"
@@ -12731,9 +12734,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local s = UNIT_DB_MAP[selectedUnit]()
+                        local s = UNIT_DB_MAP[optState.selectedUnit]()
                         local showV = s.showBuffs
                         if showV == nil then showV = true end
                         local anchorV = s.buffAnchor or "topleft"
@@ -12773,12 +12776,12 @@ initFrame:SetScript("OnEvent", function(self)
                       get=function() return SValSupported("buffIconZoom", 0.07) end,
                       set=function(v) SSetSupported("buffIconZoom", v) end },
                     { type="toggle", label="Dispel Type Borders",
-                      disabled=function() return selectedUnit == "player" or EllesmereUI.BlizzStyle.Get("unitframes") end,
+                      disabled=function() return optState.selectedUnit == "player" or EllesmereUI.BlizzStyle.Get("unitframes") end,
                       disabledTooltip=function()
-                          if selectedUnit == "player" then return "This option is not available on the player frame" end
+                          if optState.selectedUnit == "player" then return "This option is not available on the player frame" end
                           return "This option requires Blizzard Style to be disabled"
                       end,
-                      get=function() return selectedUnit ~= "player" and SValSupported("buffDispelBorder", false) == true end,
+                      get=function() return optState.selectedUnit ~= "player" and SValSupported("buffDispelBorder", false) == true end,
                       set=function(v) SSetSupported("buffDispelBorder", v) end },
                 },
             })
@@ -12884,7 +12887,7 @@ initFrame:SetScript("OnEvent", function(self)
               setValue=EllesmereUI.DependentSetValue(
                   function() return not DebuffDisabled() end,
                   function(v)
-                      SwapAuraSlot(UNIT_DB_MAP[selectedUnit](), "debuffAnchor", v)
+                      SwapAuraSlot(UNIT_DB_MAP[optState.selectedUnit](), "debuffAnchor", v)
                       ReloadAndUpdate(); UpdatePreview(); EllesmereUI:RefreshPage()
                   end) },
             { type="slider", text="Debuff Size", min=10, max=70, step=1,
@@ -12925,7 +12928,7 @@ initFrame:SetScript("OnEvent", function(self)
             }
             -- Player only: the Dispel Colors palette (the Dispel Overlay row's
             -- swatches) tints the player's dispel type borders.
-            if selectedUnit == "player" then
+            if optState.selectedUnit == "player" then
                 debuffCogRows[#debuffCogRows + 1] = { type="toggle", label="Use Dispel Colors",
                     tooltip="Colors the dispel type borders with your Dispel Colors instead of Blizzard's.",
                     disabled=function()
@@ -13039,7 +13042,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Built here with the aura section's helpers, but appended only after
         -- all other buff/debuff controls so the border row stays last.
         local function AddAuraBorderSettings()
-        if selectedUnit == "player" or selectedUnit == "target" then
+        if optState.selectedUnit == "player" or optState.selectedUnit == "target" then
             local texValues, texOrder = EllesmereUI.GetBorderTextureDropdown()
             local auraBorderRow
             auraBorderRow, h = W:DualRow(parent, y,
@@ -13123,7 +13126,7 @@ initFrame:SetScript("OnEvent", function(self)
                           -- or on Target the Buff Settings cog's own.
                           disabled=function()
                               return SVal("debuffDispelBorder", false) ~= true
-                                  and not (selectedUnit ~= "player" and SVal("buffDispelBorder", false) == true)
+                                  and not (optState.selectedUnit ~= "player" and SVal("buffDispelBorder", false) == true)
                           end,
                           disabledTooltip="Dispel Type Borders",
                           get=function() return SVal("auraBorderDispelTextured", false) == true end,
@@ -13180,17 +13183,17 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Hide-lane storage skeys (per-class entries in s.buffNegClasses);
                 -- only dual rows appear here.
                 BUFF_NEG_SKEYS   = { stealable = "Stealable", bigDefensive = "BigDefensive", dispellable = "Dispellable" }
-            local unitLabel = UNIT_LABELS_SUP[selectedUnit] or "Player"
+            local unitLabel = UNIT_LABELS_SUP[optState.selectedUnit] or "Player"
             -- Right slot: the player frame swaps its checkbox dropdown in below;
             -- target/focus get the mode dropdown here (disabled, with the
             -- requirement tooltip, while Debuff Display is None).
             local debuffSlot
-            if selectedUnit == "player" then
+            if optState.selectedUnit == "player" then
                 debuffSlot = { type="dropdown", text=unitLabel.." Debuff Filter",
                   values={ __placeholder="..." }, order={ "__placeholder" },
                   getValue=function() return "__placeholder" end, setValue=function() end }
             else
-                debuffSlot = DebuffModeDropdownCfg(unitLabel.." Debuff Filter", selectedUnit, SDB, ReloadAndUpdate,
+                debuffSlot = DebuffModeDropdownCfg(unitLabel.." Debuff Filter", optState.selectedUnit, SDB, ReloadAndUpdate,
                   { disabled=DebuffDisabled, disabledTooltip="Debuffs", requireState="displayed" })
             end
             local filterRow
@@ -13219,11 +13222,11 @@ initFrame:SetScript("OnEvent", function(self)
                 local rgn = filterRow._leftRegion
                 if rgn._control then rgn._control:Hide() end
                 local cbDD, cbRefresh
-                if selectedUnit == "player" then
+                if optState.selectedUnit == "player" then
                     -- The registry list needs the curated presets present
                     -- (idempotent; PAB may be disabled).
                     if ns.PAB_ImportBM2Filters then ns.PAB_ImportBM2Filters() end
-                    local ps = UNIT_DB_MAP[selectedUnit]()
+                    local ps = UNIT_DB_MAP[optState.selectedUnit]()
                     local ALL_KEY, DUR_KEY = "__allBuffs", "__hasDuration"
                     -- Hovering a dimmed Show box explains the dim (the lane is inert
                     -- while a broad mode already shows everything), same wording as
@@ -13429,7 +13432,7 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Purgeable Buff Glow (target/focus): inline cog beside the Buff
                 -- Filter. The glow styles whichever purgeable buffs the filter
                 -- shows; the engine gates it on the character's offensive dispel.
-                if selectedUnit == "target" or selectedUnit == "focus" then
+                if optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
                     -- Shared glow controls over the unit's own keys. Engine aura
                     -- buttons: C-side styles only. Unset color = the suite default (gold).
                     local GO = EllesmereUI.GlowOptions
@@ -13452,12 +13455,12 @@ initFrame:SetScript("OnEvent", function(self)
             -- Checked classes SUBTRACT while All Debuffs is on, ADD with it off; class
             -- rows view the SAME legacy per-class keys (s.debuff<SKey>) the old dropdown
             -- wrote. Target/focus built their mode dropdown in the DualRow above.
-            if selectedUnit == "player" and not EllesmereUI._prebuilding then
+            if optState.selectedUnit == "player" and not EllesmereUI._prebuilding then
                 local rgn = filterRow._rightRegion
                 if rgn._control then rgn._control:Hide() end
                 local cbDD, cbRefresh
                 do
-                    local ps = UNIT_DB_MAP[selectedUnit]()
+                    local ps = UNIT_DB_MAP[optState.selectedUnit]()
                     local ALL_KEY, DUR_KEY = "__allDebuffs", "__debuffHasDuration"
                     local function AllOn() return ps.debuffShowAll ~= false end
                     -- Hovering a dimmed Show box explains the dim (the lane is inert
@@ -13618,7 +13621,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             -- Target/focus: Only Tracked Auras with an empty list renders
             -- nothing, so the mode dropdown carries the standard empty warning.
-            if selectedUnit ~= "player" and not EllesmereUI._prebuilding then
+            if optState.selectedUnit ~= "player" and not EllesmereUI._prebuilding then
                 AttachDebuffModeWarn(filterRow._rightRegion, SDB, DebuffDisabled)
                 -- Has Duration: an AND-modifier on the picked mode (engine:
                 -- ChainFor), in the row's cog since the mode dropdown is
@@ -13645,7 +13648,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Dispel Overlay + Dispel Colors (player frame only; settings keys
         -- mirror the Raid Frames dispel system 1:1)
-        if selectedUnit == "player" then
+        if optState.selectedUnit == "player" then
             local dispelOverlayValues = {
                 none     = "None",
                 fill     = "Fill Overlay",
@@ -13732,17 +13735,17 @@ initFrame:SetScript("OnEvent", function(self)
                 local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
                 eyeTex:SetAllPoints()
                 local function RefreshDispelEye()
-                    eyeTex:SetTexture(showDispelOverlayPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                    eyeTex:SetTexture(optState.showDispelOverlayPreview and EYE_INVISIBLE or EYE_VISIBLE)
                 end
                 RefreshDispelEye()
                 eyeBtn:SetScript("OnClick", function()
-                    showDispelOverlayPreview = not showDispelOverlayPreview
+                    optState.showDispelOverlayPreview = not optState.showDispelOverlayPreview
                     RefreshDispelEye()
                     UpdatePreview()
                 end)
                 eyeBtn:SetScript("OnEnter", function(self)
                     self:SetAlpha(0.7)
-                    EllesmereUI.ShowWidgetTooltip(self, showDispelOverlayPreview and "Hide dispel overlay preview" or "Show dispel overlay preview")
+                    EllesmereUI.ShowWidgetTooltip(self, optState.showDispelOverlayPreview and "Hide dispel overlay preview" or "Show dispel overlay preview")
                 end)
                 eyeBtn:SetScript("OnLeave", function(self)
                     self:SetAlpha(0.4)
@@ -13789,7 +13792,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Declared outside the gate: the click-mapping table at the bottom of
         -- this function references them (block-locals would be nil there).
         local sharedAbsorbsHeader, absorbRow
-        local _supportsAbsorbs = (selectedUnit == "player" or selectedUnit == "target" or selectedUnit == "focus")
+        local _supportsAbsorbs = (optState.selectedUnit == "player" or optState.selectedUnit == "target" or optState.selectedUnit == "focus")
         if _supportsAbsorbs then
         sharedAbsorbsHeader, h = W:SectionHeader(parent, "ABSORBS AND HEALS", y); y = y - h
 
@@ -13901,9 +13904,9 @@ initFrame:SetScript("OnEvent", function(self)
               getValue=function() return SValSupported("showPlayerAbsorb", "none") end,
               setValue=function(v)
                   if v == "clean" then
-                      UNIT_DB_MAP[selectedUnit]().absorbOpacity = 30
+                      UNIT_DB_MAP[optState.selectedUnit]().absorbOpacity = 30
                   else
-                      UNIT_DB_MAP[selectedUnit]().absorbOpacity = 90
+                      UNIT_DB_MAP[optState.selectedUnit]().absorbOpacity = 90
                   end
                   SSetSupported("showPlayerAbsorb", v)
                   EllesmereUI:RefreshPage()
@@ -13926,7 +13929,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return 1, 1, 1, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().absorbColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().absorbColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             swatch:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -14055,19 +14058,19 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Absorb Style, color and rendering to all Frames",
                 onClick = function()
-                    for _, key in ipairs(GROUP_UNIT_ORDER) do CopyAbsorbSync(ABSORB_SYNC_DEFS, selectedUnit, key) end
+                    for _, key in ipairs(GROUP_UNIT_ORDER) do CopyAbsorbSync(ABSORB_SYNC_DEFS, optState.selectedUnit, key) end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    return AbsorbSyncMatches(ABSORB_SYNC_DEFS, selectedUnit, GROUP_UNIT_ORDER)
+                    return AbsorbSyncMatches(ABSORB_SYNC_DEFS, optState.selectedUnit, GROUP_UNIT_ORDER)
                 end,
                 flashTargets = function() return { rgn } end,
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        for _, key in ipairs(checkedKeys) do CopyAbsorbSync(ABSORB_SYNC_DEFS, selectedUnit, key) end
+                        for _, key in ipairs(checkedKeys) do CopyAbsorbSync(ABSORB_SYNC_DEFS, optState.selectedUnit, key) end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
                 },
@@ -14082,9 +14085,9 @@ initFrame:SetScript("OnEvent", function(self)
               getValue=function() return SValSupported("healAbsorbStyle", "clean") end,
               setValue=function(v)
                   if v == "clean" then
-                      UNIT_DB_MAP[selectedUnit]().healAbsorbOpacity = 50
+                      UNIT_DB_MAP[optState.selectedUnit]().healAbsorbOpacity = 50
                   else
-                      UNIT_DB_MAP[selectedUnit]().healAbsorbOpacity = 75
+                      UNIT_DB_MAP[optState.selectedUnit]().healAbsorbOpacity = 75
                   end
                   SSetSupported("healAbsorbStyle", v)
                   EllesmereUI:RefreshPage()
@@ -14111,17 +14114,17 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshHealEye()
-                eyeTex:SetTexture(showHealAbsorbPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                eyeTex:SetTexture(optState.showHealAbsorbPreview and EYE_INVISIBLE or EYE_VISIBLE)
             end
             RefreshHealEye()
             eyeBtn:SetScript("OnClick", function()
-                showHealAbsorbPreview = not showHealAbsorbPreview
+                optState.showHealAbsorbPreview = not optState.showHealAbsorbPreview
                 RefreshHealEye()
                 UpdatePreview()
             end)
             eyeBtn:SetScript("OnEnter", function(self)
                 self:SetAlpha(0.7)
-                EllesmereUI.ShowWidgetTooltip(self, showHealAbsorbPreview and "Hide heal absorb preview" or "Show heal absorb preview")
+                EllesmereUI.ShowWidgetTooltip(self, optState.showHealAbsorbPreview and "Hide heal absorb preview" or "Show heal absorb preview")
             end)
             eyeBtn:SetScript("OnLeave", function(self)
                 self:SetAlpha(0.4)
@@ -14139,7 +14142,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return 0.8, 0.15, 0.15, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().healAbsorbColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().healAbsorbColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             swatch:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -14213,19 +14216,19 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Heal Absorb Style, color and rendering to all Frames",
                 onClick = function()
-                    for _, key in ipairs(GROUP_UNIT_ORDER) do CopyAbsorbSync(HEAL_ABSORB_SYNC_DEFS, selectedUnit, key) end
+                    for _, key in ipairs(GROUP_UNIT_ORDER) do CopyAbsorbSync(HEAL_ABSORB_SYNC_DEFS, optState.selectedUnit, key) end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    return AbsorbSyncMatches(HEAL_ABSORB_SYNC_DEFS, selectedUnit, GROUP_UNIT_ORDER)
+                    return AbsorbSyncMatches(HEAL_ABSORB_SYNC_DEFS, optState.selectedUnit, GROUP_UNIT_ORDER)
                 end,
                 flashTargets = function() return { rgn } end,
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        for _, key in ipairs(checkedKeys) do CopyAbsorbSync(HEAL_ABSORB_SYNC_DEFS, selectedUnit, key) end
+                        for _, key in ipairs(checkedKeys) do CopyAbsorbSync(HEAL_ABSORB_SYNC_DEFS, optState.selectedUnit, key) end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
                 },
@@ -14257,7 +14260,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return 1, 1, 1, 1
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().absorbBarColor = { r=r, g=g, b=b, a=a }
+                    UNIT_DB_MAP[optState.selectedUnit]().absorbBarColor = { r=r, g=g, b=b, a=a }
                     ReloadAndUpdate(); UpdatePreview()
                 end, true, 20)
             swatch:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -14294,7 +14297,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return 200/255, 29/255, 29/255, 1
                 end,
                 function(r, g, b, a)
-                    UNIT_DB_MAP[selectedUnit]().healAbsorbBarColor = { r=r, g=g, b=b, a=a }
+                    UNIT_DB_MAP[optState.selectedUnit]().healAbsorbBarColor = { r=r, g=g, b=b, a=a }
                     ReloadAndUpdate(); UpdatePreview()
                 end, true, 20)
             swatch:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -14359,7 +14362,7 @@ initFrame:SetScript("OnEvent", function(self)
                         return c.r, c.g, c.b, 1
                     end,
                     function(r, g, b)
-                        UNIT_DB_MAP[selectedUnit]()[key] = { r=r, g=g, b=b }
+                        UNIT_DB_MAP[optState.selectedUnit]()[key] = { r=r, g=g, b=b }
                         ReloadAndUpdate(); UpdatePreview()
                     end, false, 20)
                 swatch:SetPoint("RIGHT", rgn._lastInline or rgn._control, "LEFT", -8, 0)
@@ -14424,7 +14427,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Declared outside the gate: the click-mapping table at the bottom of
         -- this function references it (a block-local would be nil there).
         local sharedAddRow1
-        local _showAbsorbsCombat = (selectedUnit == "player" or selectedUnit == "target" or selectedUnit == "focus")
+        local _showAbsorbsCombat = (optState.selectedUnit == "player" or optState.selectedUnit == "target" or optState.selectedUnit == "focus")
         if _showAbsorbsCombat then
         local COMBAT_MEDIA_P = "Interface\\AddOns\\EllesmereUI\\media\\combat\\"
         local combatIndValues = {
@@ -14477,7 +14480,7 @@ initFrame:SetScript("OnEvent", function(self)
         sharedAddRow1, h = W:DualRow(parent, y,
             { type="dropdown", text="Combat Indicator", values=combatIndValues, order=combatIndOrder,
               -- Target ships disabled ("none"): opt-in, no change for existing users.
-              getValue=function() return SValSupported("combatIndicatorStyle", selectedUnit == "player" and "class" or "none") end,
+              getValue=function() return SValSupported("combatIndicatorStyle", optState.selectedUnit == "player" and "class" or "none") end,
               setValue=function(v) SSetSupported("combatIndicatorStyle", v); ReloadAndUpdate(); UpdatePreview() end },
             { type = "multiSwatch", text = "Enemy Colors",
               swatches = {
@@ -14498,12 +14501,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Combat Indicator Style to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().combatIndicatorStyle or "class"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().combatIndicatorStyle or "class"
                     for _, key in ipairs(ciSyncUnits) do UNIT_DB_MAP[key]().combatIndicatorStyle = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().combatIndicatorStyle or "class"
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().combatIndicatorStyle or "class"
                     for _, key in ipairs(ciSyncUnits) do
                         if (UNIT_DB_MAP[key]().combatIndicatorStyle or "class") ~= v then return false end
                     end
@@ -14513,9 +14516,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = ciSyncUnits,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().combatIndicatorStyle or "class"
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().combatIndicatorStyle or "class"
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().combatIndicatorStyle = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -14538,17 +14541,17 @@ initFrame:SetScript("OnEvent", function(self)
             local eyeTex = eyeBtn:CreateTexture(nil, "OVERLAY")
             eyeTex:SetAllPoints()
             local function RefreshCombatEye()
-                eyeTex:SetTexture(showCombatIndicatorPreview and EYE_INVISIBLE or EYE_VISIBLE)
+                eyeTex:SetTexture(optState.showCombatIndicatorPreview and EYE_INVISIBLE or EYE_VISIBLE)
             end
             RefreshCombatEye()
             eyeBtn:SetScript("OnClick", function()
-                showCombatIndicatorPreview = not showCombatIndicatorPreview
+                optState.showCombatIndicatorPreview = not optState.showCombatIndicatorPreview
                 RefreshCombatEye()
                 UpdatePreview()
             end)
             eyeBtn:SetScript("OnEnter", function(self)
                 self:SetAlpha(0.7)
-                EllesmereUI.ShowWidgetTooltip(self, showCombatIndicatorPreview and "Hide combat indicator preview" or "Show combat indicator preview")
+                EllesmereUI.ShowWidgetTooltip(self, optState.showCombatIndicatorPreview and "Hide combat indicator preview" or "Show combat indicator preview")
             end)
             eyeBtn:SetScript("OnLeave", function(self)
                 self:SetAlpha(0.4)
@@ -14566,7 +14569,7 @@ initFrame:SetScript("OnEvent", function(self)
                     return cc.r, cc.g, cc.b, 1
                 end,
                 function(r, g, b)
-                    UNIT_DB_MAP[selectedUnit]().combatIndicatorCustomColor = { r=r, g=g, b=b }
+                    UNIT_DB_MAP[optState.selectedUnit]().combatIndicatorCustomColor = { r=r, g=g, b=b }
                     ReloadAndUpdate(); UpdatePreview()
                 end, false, 20)
             combatSwatch:SetPoint("RIGHT", ciRgn._lastInline or ciRgn._control, "LEFT", -8, 0)
@@ -14637,7 +14640,7 @@ initFrame:SetScript("OnEvent", function(self)
         ns._ufPvEyes = ns._ufPvEyes or {}
         ns._ufAddPvEye = function(rgn, key, what)
             if EllesmereUI._prebuilding or not rgn then return end
-            if selectedUnit ~= "player" and selectedUnit ~= "target" then return end
+            if optState.selectedUnit ~= "player" and optState.selectedUnit ~= "target" then return end
             local eyes = ns._ufPvEyes
             local eyeBtn = CreateFrame("Button", nil, rgn)
             eyeBtn:SetSize(26, 26)
@@ -14709,13 +14712,13 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Raid Marker to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().raidMarkerEnabled
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerEnabled
                     if v == nil then v = false end
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().raidMarkerEnabled = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().raidMarkerEnabled
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerEnabled
                     if v == nil then v = false end
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         local ov = UNIT_DB_MAP[key]().raidMarkerEnabled
@@ -14728,9 +14731,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().raidMarkerEnabled
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerEnabled
                         if v == nil then v = false end
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().raidMarkerEnabled = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
@@ -14744,12 +14747,12 @@ initFrame:SetScript("OnEvent", function(self)
                 region  = rgn,
                 tooltip = "Apply Marker Size to all Frames",
                 onClick = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().raidMarkerSize or 28
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerSize or 28
                     for _, key in ipairs(GROUP_UNIT_ORDER) do UNIT_DB_MAP[key]().raidMarkerSize = v end
                     ReloadAndUpdate(); EllesmereUI:RefreshPage()
                 end,
                 isSynced = function()
-                    local v = UNIT_DB_MAP[selectedUnit]().raidMarkerSize or 28
+                    local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerSize or 28
                     for _, key in ipairs(GROUP_UNIT_ORDER) do
                         if (UNIT_DB_MAP[key]().raidMarkerSize or 28) ~= v then return false end
                     end
@@ -14759,9 +14762,9 @@ initFrame:SetScript("OnEvent", function(self)
                 multiApply = {
                     elementKeys   = GROUP_UNIT_ORDER,
                     elementLabels = SHORT_LABELS,
-                    getCurrentKey = function() return selectedUnit end,
+                    getCurrentKey = function() return optState.selectedUnit end,
                     onApply       = function(checkedKeys)
-                        local v = UNIT_DB_MAP[selectedUnit]().raidMarkerSize or 28
+                        local v = UNIT_DB_MAP[optState.selectedUnit]().raidMarkerSize or 28
                         for _, key in ipairs(checkedKeys) do UNIT_DB_MAP[key]().raidMarkerSize = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
@@ -14778,7 +14781,7 @@ initFrame:SetScript("OnEvent", function(self)
             return SValSupported("leaderIndicatorEnabled", true) == false
         end
         local function leaderIndSupported()
-            return selectedUnit == "player" or selectedUnit == "target"
+            return optState.selectedUnit == "player" or optState.selectedUnit == "target"
         end
         if leaderIndSupported() then
             local leaderSyncUnits = { "player", "target" }
@@ -14830,12 +14833,12 @@ initFrame:SetScript("OnEvent", function(self)
                     region = rgn,
                     tooltip = tooltip,
                     onClick = function()
-                        local v = GetValue(selectedUnit)
+                        local v = GetValue(optState.selectedUnit)
                         for _, unit in ipairs(leaderSyncUnits) do UNIT_DB_MAP[unit]()[key] = v end
                         ReloadAndUpdate(); EllesmereUI:RefreshPage()
                     end,
                     isSynced = function()
-                        local v = GetValue(selectedUnit)
+                        local v = GetValue(optState.selectedUnit)
                         for _, unit in ipairs(leaderSyncUnits) do
                             if GetValue(unit) ~= v then return false end
                         end
@@ -14845,9 +14848,9 @@ initFrame:SetScript("OnEvent", function(self)
                     multiApply = {
                         elementKeys = leaderSyncUnits,
                         elementLabels = SHORT_LABELS,
-                        getCurrentKey = function() return selectedUnit end,
+                        getCurrentKey = function() return optState.selectedUnit end,
                         onApply = function(checkedKeys)
-                            local v = GetValue(selectedUnit)
+                            local v = GetValue(optState.selectedUnit)
                             for _, unit in ipairs(checkedKeys) do UNIT_DB_MAP[unit]()[key] = v end
                             ReloadAndUpdate(); EllesmereUI:RefreshPage()
                         end,
@@ -14869,7 +14872,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Row 5b: Elite/Rare Indicator (+ Show-in-Instances cog) | Icon Size (+ X/Y
         -- cog). Target only (classification is a property of the unit being looked at);
         -- same controls as Leader Indicator above, badge atlases match nameplates.
-        if selectedUnit == "target" then
+        if optState.selectedUnit == "target" then
             -- A table on the "wingless" style belongs to the Portrait Dragon
             -- (ns.UF_DragonLegacy): the indicator reads as off and as Badge, and
             -- every setter pins that view over first.
@@ -14964,8 +14967,8 @@ initFrame:SetScript("OnEvent", function(self)
         -- Player and target. On the player frame it is a PvP-flagged indicator
         -- (PvP Flag defaults to Flagged Only there); Opposite Faction and Players
         -- Only are target-only.
-        if selectedUnit == "player" or selectedUnit == "target" then
-            local isTarget = selectedUnit == "target"
+        if optState.selectedUnit == "player" or optState.selectedUnit == "target" then
+            local isTarget = optState.selectedUnit == "target"
             local function factionIndOff()
                 return SValSupported("factionIndicatorMode", "off") == "off"
             end
@@ -15080,10 +15083,10 @@ initFrame:SetScript("OnEvent", function(self)
             levelText    = { section = sharedBarsHeader,     target = parent._ufLevelRow, slotSide = "left" },
         }
         -- Rows that exist only for some frames (Elite/Rare: target; Faction: player + target).
-        if selectedUnit == "target" and parent._ufEliteRow then
+        if optState.selectedUnit == "target" and parent._ufEliteRow then
             parent._sharedClickTargets.eliteIndicator = { section = sharedAddHeader, target = parent._ufEliteRow, slotSide = "left" }
         end
-        if (selectedUnit == "player" or selectedUnit == "target") and parent._ufFactionRow then
+        if (optState.selectedUnit == "player" or optState.selectedUnit == "target") and parent._ufFactionRow then
             parent._sharedClickTargets.factionIndicator = { section = sharedAddHeader, target = parent._ufFactionRow, slotSide = "left" }
         end
 
@@ -15104,7 +15107,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- search jump to a unit-specific setting can restore this unit first via
         -- EllesmereUI._setUnitFrameUnit (see the matching EllesmereUI._buildingSelector
         -- comment in EUI_CooldownManager_Options.lua for the full reasoning).
-        EllesmereUI._buildingSelector = { setter = EllesmereUI._setUnitFrameUnit, key = selectedUnit }
+        EllesmereUI._buildingSelector = { setter = EllesmereUI._setUnitFrameUnit, key = optState.selectedUnit }
 
         local W = EllesmereUI.Widgets
         local y = yOffset
@@ -15124,13 +15127,13 @@ initFrame:SetScript("OnEvent", function(self)
             local ddBtn, ddLbl = EllesmereUI.BuildDropdownControl(
                 hdr, ddW, hdr:GetFrameLevel() + 5,
                 unitLabels, unitOrder,
-                function() return selectedUnit end,
+                function() return optState.selectedUnit end,
                 function(v)
                     -- Preserve scroll position across the unit swap; capture BEFORE the
                     -- rebuild since SetContentHeader's relayout can clobber the live value.
                     -- Settings sit below the fixed header, so the same offset lands on the same section for any unit.
                     local savedScroll = EllesmereUI.GetContentScroll and EllesmereUI.GetContentScroll() or 0
-                    selectedUnit = v
+                    optState.selectedUnit = v
                     EllesmereUI:InvalidateContentHeaderCache()
                     EllesmereUI:SetContentHeader(_displayHeaderBuilder)
                     EllesmereUI:RefreshPage(true)
@@ -15146,8 +15149,8 @@ initFrame:SetScript("OnEvent", function(self)
             ddBtn:SetHeight(DD_H)
             fy = fy - DD_H - 20
 
-            local side = unitSide[selectedUnit] or "left"
-            local preview = BuildUnitPreview(hdr, selectedUnit, side)
+            local side = unitSide[optState.selectedUnit] or "left"
+            local preview = BuildUnitPreview(hdr, optState.selectedUnit, side)
             activePreview = preview
             local previewScale = preview._previewScale or 1
             local initBuffTopPad = preview._buffTopPad or 0
@@ -15165,24 +15168,24 @@ initFrame:SetScript("OnEvent", function(self)
             if preview then preview._headerFixedH = displayHeaderFixedH end
 
             -- Hint text
-            if _ufPreviewHintFS_display and not _ufPreviewHintFS_display:GetParent() then
-                _ufPreviewHintFS_display = nil
+            if optState._ufPreviewHintFS_display and not optState._ufPreviewHintFS_display:GetParent() then
+                optState._ufPreviewHintFS_display = nil
             end
             local hintH = 0
             if not IsPreviewHintDismissed() then
-                if not _ufPreviewHintFS_display then
-                    _ufPreviewHintFS_display = EllesmereUI.MakeFont(preview or hdr, 11, nil, 1, 1, 1)
-                    _ufPreviewHintFS_display:SetAlpha(0.45)
-                    _ufPreviewHintFS_display:SetText(EllesmereUI.L("Click elements to scroll to and highlight their options"))
+                if not optState._ufPreviewHintFS_display then
+                    optState._ufPreviewHintFS_display = EllesmereUI.MakeFont(preview or hdr, 11, nil, 1, 1, 1)
+                    optState._ufPreviewHintFS_display:SetAlpha(0.45)
+                    optState._ufPreviewHintFS_display:SetText(EllesmereUI.L("Click elements to scroll to and highlight their options"))
                 end
-                _ufPreviewHintFS_display:SetParent(preview or hdr)
-                _ufPreviewHintFS_display:ClearAllPoints()
-                _ufPreviewHintFS_display:SetPoint("BOTTOM", hdr, "BOTTOM", 0, 17)
-                _ufPreviewHintFS_display:SetAlpha(0.45)
-                _ufPreviewHintFS_display:Show()
+                optState._ufPreviewHintFS_display:SetParent(preview or hdr)
+                optState._ufPreviewHintFS_display:ClearAllPoints()
+                optState._ufPreviewHintFS_display:SetPoint("BOTTOM", hdr, "BOTTOM", 0, 17)
+                optState._ufPreviewHintFS_display:SetAlpha(0.45)
+                optState._ufPreviewHintFS_display:Show()
                 hintH = 29
-            elseif _ufPreviewHintFS_display then
-                _ufPreviewHintFS_display:Hide()
+            elseif optState._ufPreviewHintFS_display then
+                optState._ufPreviewHintFS_display:Hide()
             end
 
             _displayHeaderBaseH = math.abs(fy)
@@ -15195,15 +15198,15 @@ initFrame:SetScript("OnEvent", function(self)
         -------------------------------------------------------------------
         --  Route to shared settings or mini builders
         -------------------------------------------------------------------
-        if selectedUnit == "player" or selectedUnit == "target" or selectedUnit == "focus" then
+        if optState.selectedUnit == "player" or optState.selectedUnit == "target" or optState.selectedUnit == "focus" then
             y = BuildSharedSettings(parent, y)
-        elseif selectedUnit == "targettarget" then
+        elseif optState.selectedUnit == "targettarget" then
             y = -ns.UFO_BuildFoTToTOptions(W, parent, y, db.profile.targettarget, "targettarget")
-        elseif selectedUnit == "focustarget" then
+        elseif optState.selectedUnit == "focustarget" then
             y = -ns.UFO_BuildFoTToTOptions(W, parent, y, db.profile.focustarget, "focustarget")
-        elseif selectedUnit == "pet" then
+        elseif optState.selectedUnit == "pet" then
             y = -ns.UFO_BuildPetOptions(W, parent, y)
-        elseif selectedUnit == "boss" then
+        elseif optState.selectedUnit == "boss" then
             y = -ns.UFO_BuildBossOptions(W, parent, y)
         end
 
@@ -15663,7 +15666,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- unit lists are small and fixed, so build once per unit rather than collapsing to representative shapes.
         getPrebuildVariants = function(pageName)
             if pageName == PAGE_DISPLAY then
-                return { setter = EllesmereUI._setUnitFrameUnit, keys = unitOrder, currentKey = selectedUnit }
+                return { setter = EllesmereUI._setUnitFrameUnit, keys = unitOrder, currentKey = optState.selectedUnit }
             elseif pageName == PAGE_MINI then
                 return { setter = EllesmereUI._setMiniUnit, keys = miniUnitOrder, currentKey = selectedMiniUnit }
             end
@@ -15708,12 +15711,12 @@ initFrame:SetScript("OnEvent", function(self)
             UpdatePreview()
             -- Refresh hint visibility on cache restore
             local dismissed = IsPreviewHintDismissed()
-            if pageName == PAGE_DISPLAY and _ufPreviewHintFS_display then
+            if pageName == PAGE_DISPLAY and optState._ufPreviewHintFS_display then
                 if dismissed then
-                    _ufPreviewHintFS_display:Hide()
+                    optState._ufPreviewHintFS_display:Hide()
                 else
-                    _ufPreviewHintFS_display:SetAlpha(0.45)
-                    _ufPreviewHintFS_display:Show()
+                    optState._ufPreviewHintFS_display:SetAlpha(0.45)
+                    optState._ufPreviewHintFS_display:Show()
                 end
             end
         end,
