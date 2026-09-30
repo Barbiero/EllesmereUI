@@ -1615,6 +1615,19 @@ initFrame:SetScript("OnEvent", function(self)
                   end
               end });  y = y - h
 
+        -- Reorient toggles: run the XP readout / the divider % labels ALONG a vertical bar.
+        -- Disabled unless Orientation is Vertical (no effect on a horizontal bar).
+        local function XPVert() local b = EAB.db.profile.bars["XPBar"]; return b and b.orientation == "VERTICAL" and true or false end
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Reorient XP Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="toggle", text="Reorient XP% Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientDividerText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientDividerText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end });  y = y - h
+
         _, h = W:Spacer(parent, y, 12);  y = y - h
 
         -------------------------------------------------------------------
@@ -2035,6 +2048,11 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUI.BuildInlineCog(rgn, { icon = EllesmereUI.DIRECTIONS_ICON, anchorTo = rgn._control,
                     title = "Bar Text Offsets",
                     rows = {
+                        { type="dropdown", label="Anchor",
+                          values = { top="Top", bottom="Bottom", center="Center", left="Left", right="Right" },
+                          order = { "top", "bottom", "center", "left", "right" },
+                          get=function() return S().textAnchor or "center" end,
+                          set=function(v) S().textAnchor = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end end },
                         { type="slider", label="X Offset", min=-150, max=150, step=1,
                           get=function() return S().textOffsetX or 0 end,
                           set=function(v)
@@ -2070,6 +2088,14 @@ initFrame:SetScript("OnEvent", function(self)
                         get=function() return EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"] and EAB.db.profile.bars["XPBar"].showLevel end,
                         set=function(v)
                             EAB.db.profile.bars["XPBar"].showLevel = v
+                        end },
+                    -- (Show Dividers + Text Background moved to visible rows below the cog.)
+                    -- (Reorient toggles moved to the XP/REP BAR STYLE section, under Orientation.)
+                    { type="toggle", label="Read Downward",
+                        get=function() return EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"] and EAB.db.profile.bars["XPBar"].textReadDown end,
+                        set=function(v)
+                            EAB.db.profile.bars["XPBar"].textReadDown = v
+                            if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end
                         end },
                 },
             })

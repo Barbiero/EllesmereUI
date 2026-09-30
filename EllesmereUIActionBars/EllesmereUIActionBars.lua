@@ -16734,8 +16734,30 @@ local function ApplyDataBarLayout(barKey)
     -- through the existing ApplyDataBarLayout calls.
     if frame._text then
         frame._text:SetFont(FONT_PATH, s.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
+        -- WoW Forever: reorient the readout to run ALONG a vertical bar instead of overflowing
+        -- its narrow width. SetRotation pivots about the string center. Opt out via
+        -- noReorientText; textReadDown flips +90 (read bottom->top) to -90 (top->bottom).
+        local rot = 0
+        if orient == "VERTICAL" and not s.noReorientText then
+            rot = s.textReadDown and (-math.pi / 2) or (math.pi / 2)
+        end
+        -- Orientation-aware offsets: rotate the X/Y offset by the same angle so the sliders
+        -- stay intuitive -- X nudges along the reading direction, Y across it, at any rotation.
+        local ox, oy = s.textOffsetX or 0, s.textOffsetY or 0
+        local rc, rs = math.cos(rot), math.sin(rot)
+        -- Anchor: the readout's base position on the bar (offsets nudge from there so their
+        -- caps stay small). CENTER anchor point so SetRotation still pivots about the anchor.
+        local anchor = s.textAnchor or "center"
+        local ap = (anchor == "top" and "TOP") or (anchor == "bottom" and "BOTTOM")
+            or (anchor == "left" and "LEFT") or (anchor == "right" and "RIGHT") or "CENTER"
+        local aox, aoy = ox * rc - oy * rs, ox * rs + oy * rc
         frame._text:ClearAllPoints()
-        frame._text:SetPoint("CENTER", s.textOffsetX or 0, s.textOffsetY or 0)
+        frame._text:SetPoint("CENTER", frame, ap, aox, aoy)
+        if frame._text.SetRotation then frame._text:SetRotation(rot) end
+        -- Record the exact anchor + rotation so the text background can be given the IDENTICAL
+        -- transform (same holder point, same angle) and stay locked to the text regardless of
+        -- SetRotation's pivot -- anchoring the bg to the rotated fontstring desyncs.
+        frame._txAP, frame._txOX, frame._txOY, frame._txRot = ap, aox, aoy, rot
     end
 
     -- Data bar dividers: the WoW Forever always-on segments, OR the standalone "Show
