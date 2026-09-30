@@ -375,8 +375,19 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
 end
 
 -- Only In Combat | Hero Talent (the current spec's hero trees; glows are
--- saved per spec). Returns the new y.
+-- saved per spec). WoW Forever has no hero talents: the Hero Talent half is
+-- left empty there. Returns the new y.
 function ns.BuildBarGlowCombatRow(W, parent, y, entry, onChange)
+    local combatCfg = { type = "toggle", text = "Only In Combat",
+        getValue = function() return entry.onlyInCombat == true end,
+        setValue = function(v)
+            entry.onlyInCombat = v or nil
+            if onChange then onChange() end
+        end }
+    if EllesmereUI.IS_FOREVER then
+        local _, h = W:DualRow(parent, y, combatCfg, { type = "label", text = "" })
+        return y - h
+    end
     local heroValues, heroOrder = { any = EllesmereUI.L("Any") }, { "any" }
     for _, t in ipairs(ns.BarGlowHeroTrees and ns.BarGlowHeroTrees() or {}) do
         local key = tostring(t.id)
@@ -389,12 +400,7 @@ function ns.BuildBarGlowCombatRow(W, parent, y, entry, onChange)
         heroOrder[#heroOrder + 1] = tostring(cur)
     end
     local _, h = W:DualRow(parent, y,
-        { type = "toggle", text = "Only In Combat",
-          getValue = function() return entry.onlyInCombat == true end,
-          setValue = function(v)
-              entry.onlyInCombat = v or nil
-              if onChange then onChange() end
-          end },
+        combatCfg,
         { type = "dropdown", text = "Hero Talent",
           tooltip = "Only use this glow while the chosen hero talent tree is active. Any: always.",
           values = heroValues, order = heroOrder,

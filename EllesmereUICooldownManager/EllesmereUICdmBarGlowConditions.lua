@@ -13,7 +13,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --
 --    entry.heroTree      = hero talent subTreeID | nil (any)
 --        The glow only runs while that hero tree is active, so one button can
---        carry different glows per hero tree.
+--        carry different glows per hero tree. Ignored on WoW Forever (no hero
+--        talents), so a glow imported from retail still lights there.
 --
 --  Cost: nothing for entries without these keys (two table reads). The hero
 --  tree is one C call per hero-gated entry per glow pass, no cache and no
@@ -48,7 +49,7 @@ end
 -- The entry's final glow state, given its own Glow When result `main`.
 function ns.BarGlowCombine(entry, main, cache)
     local hero = entry.heroTree
-    if hero and ActiveHeroTree() ~= hero then return false end
+    if hero and not EllesmereUI.IS_FOREVER and ActiveHeroTree() ~= hero then return false end
     if entry.andMode ~= "and" then return main end
     local c = type(entry.conditions) == "table" and entry.conditions[1]
     local sid = type(c) == "table" and tonumber(c.spellID)

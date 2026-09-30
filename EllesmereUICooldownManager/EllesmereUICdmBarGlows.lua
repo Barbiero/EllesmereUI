@@ -372,7 +372,7 @@ local function SetupOverlays()
                     local cond = entry.andMode == "and" and type(entry.conditions) == "table" and entry.conditions[1]
                     local csid = type(cond) == "table" and tonumber(cond.spellID)
                     if csid and csid > 0 then glowSids[csid] = true end
-                    if entry.heroTree then anyHero = true end
+                    if entry.heroTree and not EllesmereUI.IS_FOREVER then anyHero = true end
                     local sid = entry.stackEnabled and entry.spellID
                     if sid and sid > 0 then
                         stackSids = stackSids or {}
