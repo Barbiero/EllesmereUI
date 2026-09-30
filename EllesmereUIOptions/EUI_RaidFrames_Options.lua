@@ -612,19 +612,22 @@ initFrame:SetScript("OnEvent", function(self)
     --  With _partyCtx true (party tab), reads/writes go to "party_<key>" with
     --  fallthrough to raid values, so ONE set of page builders serves both tabs.
     ---------------------------------------------------------------------------
-    local _partyCtx = false  -- true while building/interacting on the party tab
+    -- Mutable state shared with the page builders under RaidFrames_Options\.
+    -- A table instead of locals so every file reads and writes the live value.
+    -- _partyCtx: true while building/interacting on the party tab.
+    local optState = { _partyCtx = false }
     local PARTY_KEY_SECTION = ns._PARTY_KEY_SECTION or {}
     local IsPartySectionCustom = ns._IsPartySectionCustom
 
     local function SGet(key)
-        if _partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
+        if optState._partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
             local pv = db.profile["party_" .. key]
             if pv ~= nil then return pv end
         end
         return db.profile[key]
     end
     local function SSet(key, val)
-        if _partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
+        if optState._partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
             db.profile["party_" .. key] = val
         else
             db.profile[key] = val
@@ -633,7 +636,7 @@ initFrame:SetScript("OnEvent", function(self)
         ReloadAndUpdate()
     end
     local function SVal(key, default)
-        if _partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
+        if optState._partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
             local pv = db.profile["party_" .. key]
             if pv ~= nil then return pv end
         end
@@ -643,7 +646,7 @@ initFrame:SetScript("OnEvent", function(self)
     end
     -- Context-aware direct write, for color swatches that bypass SSet.
     local function SWrite(key, val)
-        if _partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
+        if optState._partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key]) then
             db.profile["party_" .. key] = val
         else
             db.profile[key] = val
@@ -654,7 +657,7 @@ initFrame:SetScript("OnEvent", function(self)
     -- sibling, the party proxy's rule: on the party tab a stored party sibling
     -- carries only the party companion (nil included), never the raid one.
     local function SGetPx(key, sib)
-        if _partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key])
+        if optState._partyCtx and PARTY_KEY_SECTION[key] and IsPartySectionCustom(PARTY_KEY_SECTION[key])
            and db.profile["party_" .. sib] ~= nil then
             return db.profile["party_" .. key]
         end
@@ -1300,7 +1303,7 @@ initFrame:SetScript("OnEvent", function(self)
         local row
         local _secY  -- section start tracker
         -- Eyeball handles are per-context (raid vs party) so the two page builds don't clobber each other's eye-icon refreshers. Animation start/stop stay on ns: one shared ticker resolves the active preview at call time via ns.PvActiveFrames.
-        local _eyeCtx = _partyCtx and "party" or "raid"
+        local _eyeCtx = optState._partyCtx and "party" or "raid"
         ns._eye = ns._eye or {}
         ns._eye[_eyeCtx] = ns._eye[_eyeCtx] or {}
         local EYE = ns._eye[_eyeCtx]
@@ -1494,7 +1497,7 @@ initFrame:SetScript("OnEvent", function(self)
             end)
 
             -- One-time eyeball hint, raid/main page only.
-            if not _partyCtx and not (EllesmereUIDB and EllesmereUIDB.rfEyeHintSeen) then
+            if not optState._partyCtx and not (EllesmereUIDB and EllesmereUIDB.rfEyeHintSeen) then
                 local TIP_W, TIP_H = 310, 82
                 local EG = EllesmereUI.ELLESMERE_GREEN or { r = 0.05, g = 0.83, b = 0.62 }
                 local ar, ag, ab = EG.r, EG.g, EG.b
@@ -3498,7 +3501,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Rows below Marker Position are the less-common indicators. The RAID tab collapses them behind the shared session expander (BuildLessCommonExpander in EllesmereUI_Widgets.lua, honors the global Auto Expand Less Common Settings toggle); the party tab always shows them.
         local lessCommonOpen = true
-        if not _partyCtx then
+        if not optState._partyCtx then
             lessCommonOpen, y = EllesmereUI.BuildLessCommonExpander(parent, y,
                 "rfIndicators", "Show Less Common Indicator Options")
         end
@@ -3758,7 +3761,7 @@ initFrame:SetScript("OnEvent", function(self)
         end
 
         -- Show Group Numbers | Number Size (+ alpha swatch). Raid only: party has no groups. Size + color also drive the always-on preview group labels; the toggle gates only the real frames.
-        if not _partyCtx then
+        if not optState._partyCtx then
             local gnRow
             gnRow, h = W:DualRow(parent, y,
                 { type="toggle", text="Show Group Numbers",
@@ -3855,7 +3858,7 @@ initFrame:SetScript("OnEvent", function(self)
         end
         end   -- close the less-common-indicators collapse wrapper
         -- While expanded the shared link re-renders here in its "Hide ..." form; no-op while collapsed or in party ctx.
-        if not _partyCtx then
+        if not optState._partyCtx then
             y = EllesmereUI.FinishLessCommonExpander(parent, y,
                 "rfIndicators", "Show Less Common Indicator Options")
         end
@@ -4184,7 +4187,7 @@ initFrame:SetScript("OnEvent", function(self)
         -------------------------------------------------------------------
         --  FRIENDLY BOSS FRAMES (raid tab only)
         -------------------------------------------------------------------
-        if not _partyCtx then
+        if not optState._partyCtx then
             _, h = W:SectionHeader(parent, "FRIENDLY BOSS FRAMES", y); y = y - h
 
             local function FBSet()
@@ -4544,7 +4547,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 return p.petFrames
             end
-            local tabKey = _partyCtx and "party" or "raid"
+            local tabKey = optState._partyCtx and "party" or "raid"
             local onParty = tabKey == "party"
             -- This tab's Position, Extra Width/Height and Free Move spot (it reads the shared ones
             -- until it sets its own).
@@ -6314,7 +6317,7 @@ initFrame:SetScript("OnEvent", function(self)
             if ss and ss[sectionKey] == false then ov:Hide() end
         end
 
-        _partyCtx = true
+        optState._partyCtx = true
         y = BuildVisualSections(parent, y, W, SyncOverlay)
         -- Do NOT reset _partyCtx here (the SelectPage hook owns it): resetting would break SSet after any RefreshPage on the party tab.
 
@@ -6875,7 +6878,7 @@ initFrame:SetScript("OnEvent", function(self)
                 if ns.HidePartyPreview then ns.HidePartyPreview() end
             end
             -- Set party context BEFORE building any page so SGet/SSet/SVal read the correct keys during widget construction.
-            _partyCtx = (pageName == PAGE_PARTY)
+            optState._partyCtx = (pageName == PAGE_PARTY)
 
             if pageName == PAGE_MAIN then
                 return BuildMainPage(pageName, parent, yOffset)
@@ -7079,7 +7082,7 @@ initFrame:SetScript("OnEvent", function(self)
     if EllesmereUI.SelectPage then
         local origSelectPage = EllesmereUI.SelectPage
         EllesmereUI.SelectPage = function(self, pageName, ...)
-            _partyCtx = (pageName == PAGE_PARTY)
+            optState._partyCtx = (pageName == PAGE_PARTY)
             -- Entering Buffs from another page (not a rebuild while on it): WoW Forever opens it on All Specs.
             if pageName == PAGE_BUFFS and EllesmereUI:GetActivePage() ~= PAGE_BUFFS then ns.BM_EnterAllSpecs() end
             -- Party tab excludes synced sections from inline search; cleared on every other page (any module) so the hook can never leak.
