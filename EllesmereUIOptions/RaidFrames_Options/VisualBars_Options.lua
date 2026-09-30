@@ -1,3 +1,26 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  RaidFrames_Options\VisualBars_Options.lua
+--  Raid Frames options: the Health Bar, Absorbs, Power Bar and Text Display
+--  sections of the raid and party pages. Called by BuildVisualSections; returns
+--  y and the Health Bar custom-border gates Dispels reuses. Shared helpers come
+--  from ns._RFO_OptEnv.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIRaidFrames"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildVisualBars(parent, y, W, onSection, EYE)
+    local env = ns._RFO_OptEnv
+    local AbbreviateNumbers, absorbStyleOrder, absorbStyleValues, db = env.AbbreviateNumbers, env.absorbStyleOrder, env.absorbStyleValues, env.db
+    local hbtOrder, hbtValues, healAbsorbStyleOrder, healthColorOrder = env.hbtOrder, env.hbtValues, env.healAbsorbStyleOrder, env.healthColorOrder
+    local healthColorValues, healthTextOrder, healthTextValues, IsPreviewOff = env.healthColorValues, env.healthTextOrder, env.healthTextValues, env.IsPreviewOff
+    local maxHealthStyleOrder, namePositionOrder, namePositionOrderName, namePositionValues = env.maxHealthStyleOrder, env.namePositionOrder, env.namePositionOrderName, env.namePositionValues
+    local namePositionValuesName, optState, PP, ReloadAndUpdate = env.namePositionValuesName, env.optState, env.PP, env.ReloadAndUpdate
+    local SGet, SGetPx, SSet, SVal = env.SGet, env.SGetPx, env.SSet, env.SVal
+    local SWrite = env.SWrite
+    local _, h
+    local row
+    local _secY  -- section start tracker
     -------------------------------------------------------------------
     --  HEALTH BAR
     -------------------------------------------------------------------
@@ -1864,3 +1887,8 @@
             { type="label", text="" });  y = y - h
     end
     if onSection then onSection("textDisplay", _secY, y) end; _secY = y
+    return y, CustomBorderOff, CustomBorderOffTip
+end
+
+-- Used by EUI_RaidFrames_Options.lua
+ns.RFO_BuildVisualBars = BuildVisualBars

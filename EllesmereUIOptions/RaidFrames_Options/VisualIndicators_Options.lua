@@ -1,3 +1,22 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  RaidFrames_Options\VisualIndicators_Options.lua
+--  Raid Frames options: the Indicators, Dispels, Top Name Bar, Friendly Boss
+--  and Extra Frames, Pet Frames and Range & Tooltip sections of the raid and
+--  party pages. Called by BuildVisualSections after BuildVisualBars; returns y.
+--  Shared helpers come from ns._RFO_OptEnv.
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIRaidFrames"]
+if not ns then return end  -- module disabled: no options page
+
+local function BuildVisualIndicators(parent, y, W, onSection, EYE, CustomBorderOff, CustomBorderOffTip)
+    local env = ns._RFO_OptEnv
+    local db, floor, IsPreviewOff, MissingGlowDesc = env.db, env.floor, env.IsPreviewOff, env.MissingGlowDesc
+    local optState, PP, ReloadAndUpdate, SGet = env.optState, env.PP, env.ReloadAndUpdate, env.SGet
+    local SSet, SVal, SWrite = env.SSet, env.SVal, env.SWrite
+    local _, h
+    local row
+    local _secY = y  -- section start tracker
     -------------------------------------------------------------------
     --  INDICATORS
     -------------------------------------------------------------------
@@ -1735,3 +1754,8 @@
           end });  y = y - h
 
     if onSection then onSection("rangeTooltip", _secY, y) end
+    return y
+end
+
+-- Used by EUI_RaidFrames_Options.lua
+ns.RFO_BuildVisualIndicators = BuildVisualIndicators

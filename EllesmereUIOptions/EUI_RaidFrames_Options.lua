@@ -976,14 +976,17 @@ initFrame:SetScript("OnEvent", function(self)
     --  Visual settings sections (shared by raid + party pages)
     ---------------------------------------------------------------------------
     local function BuildVisualSections(parent, y, W, onSection)
-        local _, h
-        local row
-        local _secY  -- section start tracker
         -- Eyeball handles are per-context (raid vs party) so the two page builds don't clobber each other's eye-icon refreshers. Animation start/stop stay on ns: one shared ticker resolves the active preview at call time via ns.PvActiveFrames.
         local _eyeCtx = optState._partyCtx and "party" or "raid"
         ns._eye = ns._eye or {}
         ns._eye[_eyeCtx] = ns._eye[_eyeCtx] or {}
         local EYE = ns._eye[_eyeCtx]
+        -- The sections live in RaidFrames_Options\VisualBars_Options.lua (HEALTH BAR ..
+        -- TEXT DISPLAY) and VisualIndicators_Options.lua (INDICATORS .. RANGE & TOOLTIP);
+        -- Dispels reuses the Health Bar custom-border gates.
+        local CustomBorderOff, CustomBorderOffTip
+        y, CustomBorderOff, CustomBorderOffTip = ns.RFO_BuildVisualBars(parent, y, W, onSection, EYE)
+        y = ns.RFO_BuildVisualIndicators(parent, y, W, onSection, EYE, CustomBorderOff, CustomBorderOffTip)
         return y
     end
 
@@ -1451,6 +1454,24 @@ initFrame:SetScript("OnEvent", function(self)
         end)
     end
 
+    -- Shared with the page builders under RaidFrames_Options\ (read in their
+    -- prologs). Every field is final here: optState holds the mutable state.
+    ns._RFO_OptEnv = {
+        AbbreviateNumbers = AbbreviateNumbers, absorbStyleOrder = absorbStyleOrder,
+        absorbStyleValues = absorbStyleValues, allGrowthOrder = allGrowthOrder,
+        BuildPreviewModeRow = BuildPreviewModeRow, BuildVisualSections = BuildVisualSections,
+        db = db, floor = floor, growthValues = growthValues, hbtOrder = hbtOrder,
+        hbtValues = hbtValues, healAbsorbStyleOrder = healAbsorbStyleOrder,
+        healthColorOrder = healthColorOrder, healthColorValues = healthColorValues,
+        healthTextOrder = healthTextOrder, healthTextValues = healthTextValues,
+        IsPreviewOff = IsPreviewOff, KeepGrowthPerpendicular = KeepGrowthPerpendicular,
+        maxHealthStyleOrder = maxHealthStyleOrder, MissingGlowDesc = MissingGlowDesc,
+        namePositionOrder = namePositionOrder, namePositionOrderName = namePositionOrderName,
+        namePositionValues = namePositionValues, namePositionValuesName = namePositionValuesName,
+        optState = optState, PP = PP, ReloadAndUpdate = ReloadAndUpdate, SGet = SGet,
+        SGetPx = SGetPx, SSet = SSet, SVal = SVal, SWrite = SWrite,
+    }
+
     ---------------------------------------------------------------------------
     --  Register module
     ---------------------------------------------------------------------------
@@ -1508,9 +1529,9 @@ initFrame:SetScript("OnEvent", function(self)
             -- with the wrapper and never invoked, so only the live path needs it.
             if EllesmereUI._prebuilding then
                 if pageName == PAGE_MAIN then
-                    return BuildMainPage(pageName, parent, yOffset)
+                    return ns.RFO_BuildMainPage(pageName, parent, yOffset)
                 elseif pageName == PAGE_PARTY then
-                    return BuildPartyPage(pageName, parent, yOffset)
+                    return ns.RFO_BuildPartyPage(pageName, parent, yOffset)
                 end
                 return
             end
@@ -1543,9 +1564,9 @@ initFrame:SetScript("OnEvent", function(self)
             optState._partyCtx = (pageName == PAGE_PARTY)
 
             if pageName == PAGE_MAIN then
-                return BuildMainPage(pageName, parent, yOffset)
+                return ns.RFO_BuildMainPage(pageName, parent, yOffset)
             elseif pageName == PAGE_PARTY then
-                return BuildPartyPage(pageName, parent, yOffset)
+                return ns.RFO_BuildPartyPage(pageName, parent, yOffset)
             elseif pageName == PAGE_DM then
                 if ns.DMP_BuildPage then
                     return ns.DMP_BuildPage(pageName, parent, yOffset)

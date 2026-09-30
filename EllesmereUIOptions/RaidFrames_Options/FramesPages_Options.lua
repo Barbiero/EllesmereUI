@@ -1,3 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  RaidFrames_Options\FramesPages_Options.lua
+--  Raid Frames options: the raid Frames page (BuildMainPage), the Party page
+--  (BuildPartyPage) and the Sort By control both use. Definitions only; the
+--  shared helpers come from ns._RFO_OptEnv (filled by EUI_RaidFrames_Options.lua).
+-------------------------------------------------------------------------------
+local ns = EllesmereUI._ModuleNS["EllesmereUIRaidFrames"]
+if not ns then return end  -- module disabled: no options page
+
 ---------------------------------------------------------------------------
 --  Shared "Sort By" control: Group/Role radio + drag-to-reorder role rows, installed into a DualRow half-region
 --  (replaces its placeholder dropdown); used by both raid LAYOUT and party FRAMES tabs. opts wires it to:
@@ -7,6 +17,8 @@
 --      opts.writeRoles(t) -- persist role order + trigger reload/preview
 ---------------------------------------------------------------------------
 local function BuildSortByControl(rgn, opts)
+    local env = ns._RFO_OptEnv
+    local PP = env.PP
     if rgn._control then rgn._control:Hide() end
 
     local sortBtn = CreateFrame("Button", nil, rgn)
@@ -324,6 +336,11 @@ end
 --  Page Builder
 ---------------------------------------------------------------------------
 local function BuildMainPage(pageName, parent, yOffset)
+    local env = ns._RFO_OptEnv
+    local allGrowthOrder, BuildPreviewModeRow, BuildVisualSections, db = env.allGrowthOrder, env.BuildPreviewModeRow, env.BuildVisualSections, env.db
+    local growthValues, KeepGrowthPerpendicular, PP, ReloadAndUpdate = env.growthValues, env.KeepGrowthPerpendicular, env.PP, env.ReloadAndUpdate
+    local SGet, SGetPx, SSet, SVal = env.SGet, env.SGetPx, env.SSet, env.SVal
+    local SWrite = env.SWrite
     local W = EllesmereUI.Widgets
     local _, h
     local row
@@ -1234,6 +1251,8 @@ local function PartyReloadAndUpdate()
 end
 
 local function PSSet(key, val)
+    local env = ns._RFO_OptEnv
+    local db = env.db
     db.profile[key] = val
     -- Set showSolo directly: _UpdatePartyVisibility bails while preview is up.
     if key == "partyShowWhenSolo" and ns._partyHeader and not InCombatLockdown() then
@@ -1266,6 +1285,9 @@ local function PSSet(key, val)
 end
 
 local function BuildPartyPage(pageName, parent, yOffset)
+    local env = ns._RFO_OptEnv
+    local BuildPreviewModeRow, BuildVisualSections, db, optState = env.BuildPreviewModeRow, env.BuildVisualSections, env.db, env.optState
+    local PP, SVal = env.PP, env.SVal
     local W = EllesmereUI.Widgets
     local _, h
     local row
@@ -1729,3 +1751,7 @@ local function BuildPartyPage(pageName, parent, yOffset)
 
     return math.abs(y)
 end
+
+-- Used by EUI_RaidFrames_Options.lua
+ns.RFO_BuildMainPage = BuildMainPage
+ns.RFO_BuildPartyPage = BuildPartyPage
