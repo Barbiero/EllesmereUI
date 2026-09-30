@@ -26,6 +26,8 @@ EllesmereUIBlizzardSkin_WindowPacks.lua
 EllesmereUIBlizzardSkin_CharacterSheetForever.lua
 # WoW Forever only: the stock friends list under the standard window treatment
 EllesmereUIBlizzardSkin_FriendsForever.lua
+# WoW Forever only: the vanilla Looking For Group window (LFGParentFrame)
+EllesmereUIBlizzardSkin_GroupFinderForever.lua
 EllesmereUIBlizzardSkin_SkinAPI.lua
 
 # Options
