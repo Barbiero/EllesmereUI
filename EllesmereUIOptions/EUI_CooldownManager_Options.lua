@@ -206,9 +206,6 @@ initFrame:SetScript("OnEvent", function(self)
         return false
     end
 
-    local BG_MODE_VALUES = { ACTIVE = "Buff Active", MISSING = "Buff Missing" }
-    local BG_MODE_ORDER  = { "ACTIVE", "MISSING" }
-
     -- Build glow style dropdown values from ns.GLOW_STYLES
     local function GetGlowStyleValues()
         local labels, order = {}, {}
@@ -1043,6 +1040,9 @@ initFrame:SetScript("OnEvent", function(self)
                     realBtnW = cdmBd.iconSize or 36
                     realBtnH = realBtnW
                 end
+                -- The live icon's on-screen size (width/height match, UI scale) in this panel's scale
+                local liveW = ns.BarGlowPreviewIconSize(ns.cdmBarIcons and ns.cdmBarIcons[cdmBarKey], headerFrame)
+                if liveW then realBtnW, realBtnH = liveW, liveW end
             else
                 local btn1 = _G[prefix .. "1"]
                 realBtnW = (btn1 and btn1:GetWidth() or 36)
@@ -1113,6 +1113,14 @@ initFrame:SetScript("OnEvent", function(self)
             if not brdColor then brdColor = { r = 0, g = 0, b = 0, a = 1 } end
 
             local gridW = numVisible * scaledBtnW + (numVisible - 1) * scaledPad
+            -- Live-sized CDM icons can outgrow the preview width: shrink to fit
+            if isCDMBar and width and width > 0 and gridW > width then
+                local f = width / gridW
+                scaledBtnW = math.floor(scaledBtnW * f)
+                scaledBtnH = math.floor(scaledBtnH * f)
+                scaledPad = scaledPad * f
+                gridW = numVisible * scaledBtnW + (numVisible - 1) * scaledPad
+            end
             local startX = math.max(0, math.floor((width - gridW) / 2))
             local startY = gridTopY
 
@@ -1498,63 +1506,14 @@ initFrame:SetScript("OnEvent", function(self)
                 local glowLabels, glowOrder = GetGlowStyleValues()
 
                 for aIdx, entry in ipairs(buffList) do
-                    local buffName = "Unknown"
-                    if entry.spellID and entry.spellID > 0 then
-                        buffName = C_Spell.GetSpellName(entry.spellID) or ("Spell " .. entry.spellID)
-                    end
+                    -- Glows on the same button: a thin divider between them (row 1
+                    -- names the buff, so no header).
+                    if aIdx > 1 then y = ns.BarGlowDivider(parent, y) end
 
-                    -- cooldownID is a cooldown-viewer id, NOT a spell id (GetSpellName on it
-                    -- returns an unrelated spell); resolve via the same canonical resolver
-                    -- CD/utility bars use, falling back to cooldown viewer info.
-                    local btnSpellName = "Button " .. curBtn
-                    if isCurCDM then
-                        local cdmIcons = ns.cdmBarIcons and ns.cdmBarIcons[curBar]
-                        local icon = cdmIcons and cdmIcons[curBtn]
-                        if icon then
-                            local sid = ns.GetCanonicalSpellIDForFrame and ns.GetCanonicalSpellIDForFrame(icon)
-                            if (not sid) and icon.cooldownID and C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo then
-                                local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(icon.cooldownID)
-                                if info and info.spellID and info.spellID > 0 then sid = info.spellID end
-                            end
-                            if sid then btnSpellName = C_Spell.GetSpellName(sid) or btnSpellName end
-                        end
-                    else
-                        local prefix = BAR_BUTTON_PREFIXES[curBar]
-                        local realBtn = prefix and _G[prefix .. curBtn]
-                        if realBtn and realBtn.action then
-                            local aType, aID = GetActionInfo(realBtn.action)
-                            if aType == "spell" and aID then
-                                btnSpellName = C_Spell.GetSpellName(aID) or btnSpellName
-                            elseif aType == "macro" then
-                                local mName = GetMacroInfo(aID)
-                                if mName then btnSpellName = mName end
-                            end
-                        end
-                    end
-
-                    _, h = W:SectionHeader(parent, btnSpellName .. " x " .. buffName, y);  y = y - h
-
-                    -- Row 1: Glow When | Only In Combat
-                    local modeRow
+                    -- Row 1: When (icon) <buff> is [Active] | And [buff] is [Active] (toggle)
+                    -- (EUI_CooldownManager_BarGlowConditions.lua)
                     local removeAIdx = aIdx
-                    modeRow, h = W:DualRow(parent, y,
-                        { type = "dropdown", text = "Glow When",
-                          values = BG_MODE_VALUES, order = BG_MODE_ORDER,
-                          getValue = function() return entry.mode or "ACTIVE" end,
-                          setValue = function(v)
-                              entry.mode = v
-                              Refresh()
-                              EllesmereUI:RefreshPage()
-                          end,
-                        },
-                        { type = "toggle", text = "Only In Combat",
-                          getValue = function() return entry.onlyInCombat == true end,
-                          setValue = function(v)
-                              entry.onlyInCombat = v or nil
-                              Refresh()
-                          end,
-                        }
-                    );  y = y - h
+                    y = ns.BuildBarGlowWhenRow(W, parent, y, entry, Refresh)
 
                     -- Helper: resolve current glow color and restart preview if active
                     local pvKey = assignKey .. "_" .. aIdx
@@ -1724,11 +1683,14 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
-                    -- Row: Glow Color (swatches) | Remove Glow
+                    -- Row: Only In Combat | Hero Talent
+                    y = ns.BuildBarGlowCombatRow(W, parent, y, entry, Refresh)
+
+                    -- Row: Glow Color (swatches) | (icon) [Duplicate] [Remove]
                     local colorRow
                     colorRow, h = W:DualRow(parent, y,
                         { type = "label", text = "Glow Color" },
-                        { type = "labeledButton", text = "Remove Glow", buttonText = "Remove", width = 150,
+                        { type = "labeledButton", text = "", buttonText = "Remove", width = 150,
                           onClick = function()
                               table.remove(buffList, removeAIdx)
                               if #buffList == 0 then
@@ -1766,22 +1728,17 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
 
-                    -- Buff icon to the LEFT of the Remove button
-                    do
+                    -- Duplicate, then the buff icon (spell tooltip on hover), LEFT of Remove
+                    if not EllesmereUI._prebuilding then
                         local rightRgn = colorRow._rightRegion
                         if rightRgn and rightRgn._control then
                             local btn = rightRgn._control
-                            local btnH = btn:GetHeight()
-                            local ico = rightRgn:CreateTexture(nil, "ARTWORK")
-                            ico:SetSize(btnH, btnH)
-                            PP.Point(ico, "RIGHT", btn, "LEFT", -8, 0)
-                            ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                            if entry.spellID and entry.spellID > 0 then
-                                local info = C_Spell.GetSpellInfo(entry.spellID)
-                                if info and info.iconID then
-                                    ico:SetTexture(info.iconID)
-                                end
-                            end
+                            local dupBtn = ns.BarGlowDuplicateButton(rightRgn, btn, buffList, aIdx, function()
+                                Refresh()
+                                EllesmereUI:RefreshPage(true)
+                            end)
+                            local ico = ns.BarGlowSpellIcon(rightRgn, btn:GetHeight(), entry.spellID)
+                            PP.Point(ico, "RIGHT", dupBtn or btn, "LEFT", -8, 0)
                         end
                     end
                 end

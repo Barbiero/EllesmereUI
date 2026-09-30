@@ -315,6 +315,7 @@ local function SetupOverlays()
             overlay:Hide()
         end
         ns._barGlowStackSids = nil
+        ns._barGlowAnyHero = nil
         ns._bgWantTargetAuras = false
         if ns.SetBarGlowTargetAuras then ns.SetBarGlowTargetAuras(false) end
         return
@@ -326,6 +327,7 @@ local function SetupOverlays()
     -- these ids pay the applications read; no gated entry = no reads at all.
     local stackSids
     local glowSids = {}  -- every assigned glow's spellID, for AnyTargetAura
+    local anyHero
 
     local activeKeys = {}
     for assignKey, buffList in pairs(bg.assignments) do
@@ -366,6 +368,11 @@ local function SetupOverlays()
                     overlay:Show()
                     activeKeys[key] = true
                     if entry.spellID and entry.spellID > 0 then glowSids[entry.spellID] = true end
+                    -- The And condition's second buff can be a target debuff too.
+                    local cond = entry.andMode == "and" and type(entry.conditions) == "table" and entry.conditions[1]
+                    local csid = type(cond) == "table" and tonumber(cond.spellID)
+                    if csid and csid > 0 then glowSids[csid] = true end
+                    if entry.heroTree then anyHero = true end
                     local sid = entry.stackEnabled and entry.spellID
                     if sid and sid > 0 then
                         stackSids = stackSids or {}
@@ -376,6 +383,8 @@ local function SetupOverlays()
         end
     end
     ns._barGlowStackSids = stackSids
+    -- A hero-talent-gated glow exists: talent changes re-run the glow pass.
+    ns._barGlowAnyHero = anyHero
     -- Listen to target auras only while some glow tracks a non-self aura (EllesmereUICdmHooks).
     local wantTarget = AnyTargetAura(glowSids)
     ns._bgWantTargetAuras = wantTarget
@@ -420,6 +429,10 @@ local function UpdateOverlayVisuals()
                 shouldGlow = not auraActive
             else
                 shouldGlow = auraActive
+            end
+            -- Second-buff (And) and hero talent conditions (EllesmereUICdmBarGlowConditions.lua)
+            if entry.andMode or entry.heroTree then
+                shouldGlow = ns.BarGlowCombine(entry, shouldGlow, ns._tickBlizzActiveCache)
             end
 
             if shouldGlow and onlyInCombat then

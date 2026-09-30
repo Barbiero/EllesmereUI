@@ -11137,6 +11137,8 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
         -- Talent Conditions read node ranks from a cache; the rebuild's reanchor re-evaluates them.
         -- Unconditional: the options popup fills the cache before the gate is ever set.
         ns.TalentCondInvalidate()
+        -- Bar Glows limited to a hero tree: re-check them now (only while one exists).
+        if ns._barGlowAnyHero and ns.UpdateOverlayVisuals then ns.UpdateOverlayVisuals() end
         ScheduleTalentRebuild()
         return
     end
