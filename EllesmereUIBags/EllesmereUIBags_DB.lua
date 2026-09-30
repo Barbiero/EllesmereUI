@@ -64,6 +64,7 @@ local BAGS_DEFAULTS = {
         bagListSplitProfessions = false,
         bagListGapL           = 15,
         bagListGapR           = 23,
+        bagListFontSize       = 11,
     },
 }
 local db = EllesmereUI.Lite.NewDB("EllesmereUIBagsDB", BAGS_DEFAULTS)

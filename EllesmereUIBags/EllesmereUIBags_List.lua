@@ -53,6 +53,21 @@ local function SetColumns(list)
     BP().bagListColumns = copy
 end
 
+-- List font: resolved once per layout pass, applied only when it changed
+local _lfPath, _lfSize
+local function ResolveListFont()
+    _lfPath = EUI.GetFontPath("bags")
+    _lfSize = BP().bagListFontSize or 11
+end
+local function SetListFont(fs, size)
+    if not _lfPath then ResolveListFont() end
+    size = size or _lfSize
+    if fs._lfPath == _lfPath and fs._lfSize == size then return end
+    fs._lfPath, fs._lfSize = _lfPath, size
+    EUI.PrimeFontShadow(fs, true)
+    fs:SetFont(_lfPath, size, EUI.GetFontOutlineFlag("bags"))
+end
+
 local function Refresh()
     if EUI_Bags and EUI_Bags.RefreshInventory then EUI_Bags:RefreshInventory() end
     local bank = _G.EUI_BankFrame
@@ -228,11 +243,11 @@ local function GetCell(btn, id)
     local fs = btn._cells[id]
     if not fs then
         fs = btn:CreateFontString(nil, "OVERLAY")
-        ns.SetBagFont(fs, 11)
         fs:SetWordWrap(false)
         fs:SetJustifyH(COLUMNS[id].justify or "LEFT")
         btn._cells[id] = fs
     end
+    SetListFont(fs)
     return fs
 end
 
@@ -274,7 +289,6 @@ local function GetOrCreateSection(idx)
     f._label:SetPoint("LEFT", f._arrow, "RIGHT", 4, 0)
     f._label:SetJustifyH("LEFT")
     f._count = f:CreateFontString(nil, "OVERLAY")
-    ns.SetBagFont(f._count, 10)
     f._count:SetPoint("LEFT", f._label, "RIGHT", 4, 0)
     f._count:SetTextColor(0.7, 0.7, 0.7, 0.9)
     f._line = f:CreateTexture(nil, "ARTWORK")
@@ -309,6 +323,7 @@ local _colX, _colW = {}, {}
 local _lastRowW
 local function LayoutColumns(rowW)
     _lastRowW = rowW
+    ResolveListFont()
     local cols = GetColumns()
     local fixed = 0
     for _, id in ipairs(cols) do
@@ -515,7 +530,7 @@ local function GetOrCreateHeaderBtn(bar, id)
     b:SetHeight(COLHDR_H)
     b._colId = id
     b._label = b:CreateFontString(nil, "OVERLAY")
-    ns.SetBagFont(b._label, 10)
+    SetListFont(b._label, 10)
     b._label:SetAllPoints()
     b._label:SetJustifyH(COLUMNS[id].justify or "LEFT")
     b._label:SetText(COLUMNS[id].label ~= "" and L(COLUMNS[id].label) or "")
@@ -581,6 +596,7 @@ function ns.UpdateListHeaderBar(host, cols, leftX, topY, startX, noSort)
     local sortKey = not noSort and BP().bagListSortKey
     for i, id in ipairs(cols) do
         local b = GetOrCreateHeaderBtn(bar, id)
+        SetListFont(b._label, 10)
         b:ClearAllPoints()
         b:SetPoint("TOPLEFT", bar, "TOPLEFT", startX + _colX[id], 0)
         b:SetWidth(math.max(_colW[id], 12))
@@ -739,7 +755,8 @@ local function PlaceSection(key, label, count, x, y, w, sub)
     s:ClearAllPoints()
     s:SetPoint("TOPLEFT", x + (sub and 12 or 0), y)
     s:SetSize(w - (sub and 12 or 0), sub and SUBSECTION_H or SECTION_H)
-    ns.SetBagFont(s._label, sub and 10 or 11)
+    SetListFont(s._label, sub and 10 or 11)
+    SetListFont(s._count, 10)
     s._label:SetTextColor(sub and 0.55 or 0.7, sub and 0.55 or 0.7, sub and 0.55 or 0.7)
     s._label:SetText(label)
     s._count:SetText(count)
