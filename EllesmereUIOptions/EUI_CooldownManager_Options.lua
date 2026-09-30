@@ -518,7 +518,8 @@ initFrame:SetScript("OnEvent", function(self)
                     if type(v) == "number" and v > 0 then return true end
                 end
                 local cse = rawget(e, "cdStateEffect")
-                return type(cse) == "string" and cse:find("GlowReady", 1, true) ~= nil
+                return type(cse) == "string"
+                    and (cse == "glowOnCD" or cse:find("GlowReady", 1, true) ~= nil)
             end
             local function CountPerIconGlows()
                 local n = 0
@@ -1570,7 +1571,10 @@ initFrame:SetScript("OnEvent", function(self)
                             cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                         end
                         ns.StopNativeGlow(ov)
-                        ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                        -- Blackout reads its fill opacity from the extras; every other
+                        -- style takes the shared panel extras.
+                        ns.StartNativeGlow(ov, style, cr, cg, cb,
+                            style == 8 and { panel = true, alpha = entry.glowAlpha } or EllesmereUI.Glows.PANEL_EXTRA)
                     end
 
                     -- At Stacks (toggle) + gear (Comparison / Stack Count), paired with
@@ -1603,6 +1607,7 @@ initFrame:SetScript("OnEvent", function(self)
                               entry.glowStyle = tonumber(v) or 1
                               Refresh()
                               RefreshPreviewGlow()
+                              EllesmereUI:RefreshPage()
                           end,
                         }
                     );  y = y - h
@@ -1679,7 +1684,8 @@ initFrame:SetScript("OnEvent", function(self)
                                     elseif entry.colorMode == "custom" and entry.glowColor then
                                         cr, cg, cb = entry.glowColor.r, entry.glowColor.g, entry.glowColor.b
                                     end
-                                    ns.StartNativeGlow(ov, style, cr, cg, cb, EllesmereUI.Glows.PANEL_EXTRA)
+                                    ns.StartNativeGlow(ov, style, cr, cg, cb,
+                                        style == 8 and { panel = true, alpha = entry.glowAlpha } or EllesmereUI.Glows.PANEL_EXTRA)
                                     _bgPreviewGlowActive[pvKey] = true
                                     -- Hide accent border so glow is visible
                                     if previewBtn._accentBrd then previewBtn._accentBrd:Hide() end
@@ -1688,6 +1694,33 @@ initFrame:SetScript("OnEvent", function(self)
                             end)
                             eyeBtn:SetScript("OnEnter", function(self) self:SetAlpha(0.7) end)
                             eyeBtn:SetScript("OnLeave", function(self) self:SetAlpha(0.4) end)
+
+                            -- Blackout fill opacity, in a cog chained left of the eye. Locked
+                            -- unless the entry renders Blackout (custom-shaped bars always
+                            -- draw Shape Glow); the Glow Type setter's page refresh re-checks it.
+                            leftRgn._lastInline = eyeBtn
+                            EllesmereUI.BuildInlineCog(leftRgn, {
+                                title = "Blackout",
+                                disabled = function()
+                                    return (BarHasCustomShape(curBar) and 2 or (entry.glowStyle or 1)) ~= 8
+                                end,
+                                disabledTooltip = function()
+                                    return BarHasCustomShape(curBar) and "This option is not available for custom shaped icons"
+                                        or "This option requires the Blackout glow type"
+                                end,
+                                frameStrata = "FULLSCREEN_DIALOG", frameLevel = 350,
+                                rows = {
+                                    { type = "slider", label = "Opacity", min = 1, max = 100, step = 1,
+                                      get = function() return math.floor((entry.glowAlpha or 1) * 100 + 0.5) end,
+                                      set = function(v)
+                                          entry.glowAlpha = v / 100
+                                          -- Restarts the lit Bar Glows with the new opacity (fires
+                                          -- per drag step, so no full CDM rebuild here).
+                                          if ns.RequestBarGlowUpdate then ns.RequestBarGlowUpdate() end
+                                          RefreshPreviewGlow()
+                                      end },
+                                },
+                            })
                         end
                     end
 
@@ -8122,6 +8155,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._previewCdID = trackedCd and trackedCd[i] or nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
+                    slot._previewIsEmptySlot = nil
                     if id then
                         local tex
                         local cdClaim = ns.CdClaimMarkerToCdID and ns.CdClaimMarkerToCdID(id)
@@ -8173,6 +8207,9 @@ initFrame:SetScript("OnEvent", function(self)
                             end
                             slot._previewSpellID = hostedSid
                             slot._previewHostedBuff = true
+                        elseif ns.IsEmptySlotMarker(id) then
+                            -- Empty Slot: blank placeholder, no icon/tooltip identity.
+                            slot._previewIsEmptySlot = true
                         elseif id <= -100 then
                             -- On-use bag item: negated itemID
                             tex = C_Item.GetItemIconByID(-id)
@@ -8206,6 +8243,7 @@ initFrame:SetScript("OnEvent", function(self)
                     slot._previewCdID = nil
                     slot._previewItemID = nil
                     slot._previewHostedBuff = nil
+                    slot._previewIsEmptySlot = nil
                 end
 
                 local bSz = bd.borderSize or 1
