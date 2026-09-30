@@ -11135,15 +11135,15 @@ local function CreateCustomClassPower(playerFrame, style)
     eventFrame:Show()
     if isCustom then
         -- Per-resource event registration: only register what each resource actually
-        -- needs. Icicles and Maelstrom Weapon are aura-driven; everything else polls
-        -- via OnUpdate (either Lua API changes mid-combat, or no reliable event exists).
-        local auraDriven    = (powerType == "MAELSTROM_WEAPON" or powerType == "ICICLES")
+        -- needs. Icicles, Maelstrom Weapon and Tip of the Spear are aura-driven; everything
+        -- else polls via OnUpdate (either Lua API changes mid-combat, or no reliable event exists).
+        local auraDriven    = (powerType == "MAELSTROM_WEAPON" or powerType == "ICICLES"
+            or powerType == "TIP_OF_THE_SPEAR")
         -- Warrior charge buffs are engine-driven end to end (the overlay owns
         -- the row: EllesmereUI_WarriorCharges): no poll, no cast events.
         local engineDriven  = (powerType == "WHIRLWIND_STACKS" or powerType == "SWEEPING_STRIKES")
         local needsOnUpdate = not auraDriven and not engineDriven
         local needsAura     = auraDriven
-        local needsCasts    = (powerType == "TIP_OF_THE_SPEAR")
 
         if needsOnUpdate then
             -- 10 Hz poll on the shared anim ticker (see ns._cpDriverTick):
@@ -11164,24 +11164,7 @@ local function CreateCustomClassPower(playerFrame, style)
         if needsAura then
             eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
         end
-        if needsCasts then
-            eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-            eventFrame:RegisterEvent("PLAYER_DEAD")
-            eventFrame:RegisterEvent("PLAYER_ALIVE")
-        end
-        eventFrame:SetScript("OnEvent", function(_, event, ...)
-            if event == "UNIT_SPELLCAST_SUCCEEDED" then
-                if not _G._ERB_AceDB and EllesmereUI then
-                    local unit, castGUID, spellID = ...
-                    if unit == "player" then
-                        EllesmereUI.HandleTipOfTheSpear(event, unit, castGUID, spellID)
-                    end
-                end
-            elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" then
-                if not _G._ERB_AceDB and EllesmereUI then
-                    EllesmereUI.HandleTipOfTheSpear(event)
-                end
-            end
+        eventFrame:SetScript("OnEvent", function()
             UpdatePips()
         end)
     else

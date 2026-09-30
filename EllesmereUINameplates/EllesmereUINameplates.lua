@@ -6140,7 +6140,7 @@ local function EnableClassPowerWatcher()
         classPowerWatcher:RegisterUnitEvent("UNIT_AURA", "player")
         classPowerWatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
         classPowerWatcher:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        -- Manual tracker events (TotS, Whirlwind, Bladestorm/Unhinged)
+        -- Manual tracker events (Whirlwind, Bladestorm/Unhinged)
         -- so tracking works even without EllesmereUIResourceBars loaded.
         classPowerWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         classPowerWatcher:RegisterEvent("PLAYER_DEAD")
@@ -6163,23 +6163,6 @@ local function EnableClassPowerWatcher()
                 ApplyClassPowerSetting()
             elseif event == "PLAYER_TARGET_CHANGED" then
                 RefreshClassPowerFull()
-            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                -- Route to manual trackers so they work standalone.
-                -- Skip if EllesmereUIResourceBars is loaded (it handles routing).
-                if _G._ERB_AceDB then
-                    RefreshClassPower()
-                    return
-                end
-                local unit, castGUID, spellID = ...
-                if unit == "player" and EllesmereUI then
-                    EllesmereUI.HandleTipOfTheSpear(event, unit, castGUID, spellID)
-                end
-                RefreshClassPower()
-            elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" then
-                if not _G._ERB_AceDB and EllesmereUI then
-                    EllesmereUI.HandleTipOfTheSpear(event)
-                end
-                RefreshClassPower()
             elseif event == "PLAYER_REGEN_ENABLED" then
                 RefreshClassPower()
             else
