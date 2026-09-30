@@ -232,12 +232,6 @@ initFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     do
         local GO = EllesmereUI.GlowOptions
-        -- Blackout renders fine on a rectangle (a plain fill has no shape to
-        -- distort), so it is NOT in the shared RECT_EXCLUDES -- Tracked Buff
-        -- Bars exclude it separately below because PG_TbbEffectiveStyle only
-        -- ever renders Pixel/Auto-Cast regardless of what is picked.
-        local TBB_GLOW_EXCLUDES = { [8] = true }
-        for i in pairs(EllesmereUI.Glows.RECT_EXCLUDES) do TBB_GLOW_EXCLUDES[i] = true end
         local function CdmBars()
             local p = ns.ECME and ns.ECME.db and ns.ECME.db.profile
             return p and p.cdmBars
@@ -286,7 +280,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- still draws for them, so only an explicit false reads as None.
         local function PandemicDesc(getBd, onChange)
             return {
-                view = ns.GLOW_VIEW, host = "icon", excludes = { [4] = true, [8] = true },
+                view = ns.GLOW_VIEW, host = "icon", excludes = { [4] = true },
                 extras = { { value = -1, label = "Blizzard Default" } },
                 caps = { mode = true, params = true, bg = true },
                 defaultColor = { r = 1, g = 1, b = 0 },
@@ -311,7 +305,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- onChange as for PandemicDesc.
         local function BuffGlowDesc(getBd, onChange)
             return {
-                view = ns.GLOW_VIEW, host = "icon", excludes = { [4] = true, [8] = true },
+                view = ns.GLOW_VIEW, host = "icon", excludes = { [4] = true },
                 caps = { mode = true, params = true, bg = true },
                 defaultColor = { r = 1, g = 0.788, b = 0.137 },
                 onChange = onChange or RebuildBuffGlows,
@@ -380,7 +374,7 @@ initFrame:SetScript("OnEvent", function(self)
         -- Tracking Bars page (selected bar) and the Glows page share this.
         local function TbbDesc(getBd, onChange)
             return {
-                view = ns.GLOW_VIEW, host = "bar", excludes = TBB_GLOW_EXCLUDES,
+                view = ns.GLOW_VIEW, host = "bar", excludes = EllesmereUI.Glows.RECT_EXCLUDES,
                 caps = { mode = true, params = true, bg = true },
                 defaultColor = { r = 1, g = 1, b = 0 },
                 isOff = function() local bd = getBd(); return not bd or bd.pandemicGlow ~= true end,

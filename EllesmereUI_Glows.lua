@@ -1313,9 +1313,9 @@ do
     --   engine : 12.1 aura-button subtree; no driver ticks, so no Auto-Cast or
     --            Shape (Pixel renders as animated ants, ABG as its FlipBook twin)
     G.HOSTS = {
-        icon   = { true, true, true, true,  true, true, true, true },
-        bar    = { true, true, true, false, true, true, true, true },
-        engine = { true, true, false, false, true, true, true, true },
+        icon   = { true, true, true, true,  true, true, true },
+        bar    = { true, true, true, false, true, true, true },
+        engine = { true, true, false, false, true, true, true },
     }
 
     -- Rectangles (buff bars, whole-frame glows): the texture styles
@@ -1386,8 +1386,7 @@ do
     -- Spec from a settings table using the prefix key schema shared by the aura
     -- managers: <p>Type (shared index, 0 = off), <p>ColorMode, legacy
     -- <p>ClassColor, <p>R/G/B, <p>Lines, <p>Thickness, <p>Speed, <p>Background,
-    -- <p>BackgroundR/G/B, <p>Alpha (Blackout opacity). Returns nil when off.
-    -- Keys are built once per prefix.
+    -- <p>BackgroundR/G/B. Returns nil when off. Keys are built once per prefix.
     local _prefixKeys = {}
     local function PrefixKeys(p)
         local k = _prefixKeys[p]
@@ -1395,8 +1394,7 @@ do
             k = { type = p .. "Type", mode = p .. "ColorMode", class = p .. "ClassColor",
                   r = p .. "R", g = p .. "G", b = p .. "B", lines = p .. "Lines",
                   th = p .. "Thickness", speed = p .. "Speed", bg = p .. "Background",
-                  bgR = p .. "BackgroundR", bgG = p .. "BackgroundG", bgB = p .. "BackgroundB",
-                  alpha = p .. "Alpha" }
+                  bgR = p .. "BackgroundR", bgG = p .. "BackgroundG", bgB = p .. "BackgroundB" }
             _prefixKeys[p] = k
         end
         return k
@@ -1411,7 +1409,6 @@ do
         out.r, out.g, out.b = G.ResolveColor(G.DeriveColorMode(t[k.mode], t[k.class]),
             t[k.r], t[k.g], t[k.b], defR, defG, defB)
         out.lines, out.thickness, out.speed = t[k.lines], t[k.th], t[k.speed]
-        out.alpha = t[k.alpha]
         if t[k.bg] then
             out.bg, out.bgR, out.bgG, out.bgB = true, t[k.bgR] or 0, t[k.bgG] or 0, t[k.bgB] or 0
         else
@@ -1441,7 +1438,7 @@ do
 
     -- spec = { style = shared index, r, g, b (already resolved; nil = default
     --          look), lines, thickness, speed (period), bg, bgR, bgG, bgB,
-    --          alpha (Blackout opacity, 0-1, default 1), excludes }
+    --          excludes }
     -- host = "icon" | "bar" | "engine"; extra = { maskWith, maskPath,
     --          borderPath, shapeMask, anchorFrame, panel } (optional, read in this call)
     -- Restarts only when something changed; returns the rendered shared index
@@ -1486,7 +1483,6 @@ do
         -- reused scratch spec can still carry an old one).
         local bgR, bgG, bgB = 0, 0, 0
         if bgOn then bgR, bgG, bgB = spec.bgR or 0, spec.bgG or 0, spec.bgB or 0 end
-        local alpha = spec.alpha or 1
         local mask = extra and extra.maskWith or nil
         local maskPath = extra and extra.maskPath or nil
         local shapeMask = extra and extra.shapeMask or nil
@@ -1495,7 +1491,6 @@ do
            and s.w == w and s.h == h and s.r == r and s.g == g and s.b == b
            and s.N == N and s.th == th and s.period == period
            and s.bg == bgOn and s.bgR == bgR and s.bgG == bgG and s.bgB == bgB
-           and s.alpha == alpha
            and s.mask == mask and s.maskPath == maskPath and s.shapeMask == shapeMask then
             return idx, converted
         end
@@ -1509,7 +1504,6 @@ do
             o.bg = nil
         end
         o.untinted = (r == nil) or nil
-        o.alpha = alpha
         o.abgHalo, o.haloR, o.haloG, o.haloB = nil, nil, nil, nil
         o.maskWith = mask
         o.maskPath    = maskPath
@@ -1528,7 +1522,6 @@ do
         s.idx, s.host, s.w, s.h, s.r, s.g, s.b = idx, host, w, h, r, g, b
         s.N, s.th, s.period = N, th, period
         s.bg, s.bgR, s.bgG, s.bgB, s.mask = bgOn, bgR, bgG, bgB, mask
-        s.alpha = alpha
         s.maskPath, s.shapeMask = maskPath, shapeMask
         return idx, converted
     end
