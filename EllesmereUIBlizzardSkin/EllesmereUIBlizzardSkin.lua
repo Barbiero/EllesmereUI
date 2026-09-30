@@ -29,6 +29,7 @@ local WINDOW_ENABLE_KEYS = {
     charsheet       = "themedCharacterSheet",
     inspect         = "themedInspectSheet",
     lfg             = "reskinLFGMenu",
+    legacysystem    = "reskinLegacySystem",
     greatvault      = "reskinGreatVault",
     collections     = "reskinCollections",
     playerspells    = "reskinPlayerSpells",
