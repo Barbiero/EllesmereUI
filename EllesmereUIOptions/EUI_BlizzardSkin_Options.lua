@@ -2023,6 +2023,16 @@ initFrame:SetScript("OnEvent", function(self)
             end,
         },
         {
+            key   = "bagbar",
+            title = "Bag Bar",
+            desc  = "Flattens the bag bar slot buttons into the EllesmereUI style.",
+            reloadMsg = "Changing the Bag Bar reskin requires a UI reload to fully swap between Blizzard and Ellesmere styles.",
+            setEnabled = function(v)
+                if not EllesmereUIDB then EllesmereUIDB = {} end
+                EllesmereUIDB.reskinBagBar = v
+            end,
+        },
+        {
             key   = "dressup",
             title = "Dressing Room",
             desc  = "The item preview / transmog dressing room window.",
@@ -2212,19 +2222,23 @@ initFrame:SetScript("OnEvent", function(self)
     }
 
     -- WoW Forever drops the cards for windows it does not skin or has no use
-    -- for: the micro menu keeps Blizzard's art (its pack is not registered
-    -- there, see WindowPacks), the Delve Tier Picker and Housing Dashboard
-    -- never load on that client, and the Great Vault has no content there.
-    -- The LFG Menu card stays -- Forever's own vanilla Looking For Group window
-    -- is skinned by GroupFinderForever under the same key. Their saved enable
-    -- keys stay untouched.
+    -- for: the Delve Tier Picker and Housing Dashboard never load on that client,
+    -- and the Great Vault has no content there. The micro menu and the vanilla
+    -- Looking For Group window ARE skinned on Forever now (see WindowPacks /
+    -- GroupFinderForever), so their cards stay; retail in turn drops the Bag Bar
+    -- card (a Forever-only skin). Their saved enable keys stay untouched.
     if EllesmereUI.IS_FOREVER then
         local foreverDropped = {
-            micromenu = true, greatvault = true,
+            greatvault = true,
             delvepicker = true, housing = true,
         }
         for i = #WINDOWS, 1, -1 do
             if foreverDropped[WINDOWS[i].key] then table.remove(WINDOWS, i) end
+        end
+    else
+        -- The Bag Bar skin exists only on Forever; drop its card on retail.
+        for i = #WINDOWS, 1, -1 do
+            if WINDOWS[i].key == "bagbar" then table.remove(WINDOWS, i) end
         end
     end
 

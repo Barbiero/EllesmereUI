@@ -28,6 +28,8 @@ EllesmereUIBlizzardSkin_CharacterSheetForever.lua
 EllesmereUIBlizzardSkin_FriendsForever.lua
 # WoW Forever only: the vanilla Looking For Group window (LFGParentFrame)
 EllesmereUIBlizzardSkin_GroupFinderForever.lua
+# WoW Forever only: the bag bar slot buttons in the house style
+EllesmereUIBlizzardSkin_BagBarForever.lua
 EllesmereUIBlizzardSkin_SkinAPI.lua
 
 # Options
