@@ -11106,9 +11106,10 @@ function ns.SetupViewerHooks()
         -- Target auras: a Bar Glow on a tracked TARGET debuff (e.g. Freezing) changes
         -- with no player aura edge, so with a player-only listener its glow waited
         -- for some unrelated player aura (or a target swap) -- seconds late. The
-        -- target unit is added only while a Bar Glow exists (Bar Glows' SetupOverlays
-        -- calls this with its want, remembered in ns._bgWantTargetAuras in case it
-        -- runs before this block), so users without Bar Glows register nothing new.
+        -- target unit is added only while a Bar Glow tracks a non-self aura (Bar
+        -- Glows' SetupOverlays calls this with its want, remembered in
+        -- ns._bgWantTargetAuras in case it runs before this block), so glows on
+        -- your own buffs never pay for target (raid boss) aura churn.
         ns.SetBarGlowTargetAuras = function(want)
             want = want and true or false
             if want == ns._bgTargetAuras then return end

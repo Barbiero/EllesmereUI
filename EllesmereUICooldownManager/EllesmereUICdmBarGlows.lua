@@ -247,6 +247,64 @@ local function ConfigureStackGate(overlay, key, threshold, operator)
     return st
 end
 
+-- Whether a Cooldown Manager entry names one of the glow spells (its spell,
+-- override or a linked spell).
+local function EntryHasSid(info, sids)
+    if sids[info.spellID] or (info.overrideSpellID and sids[info.overrideSpellID]) then return true end
+    local linked = info.linkedSpellIDs
+    if linked then
+        for i = 1, #linked do
+            if sids[linked[i]] then return true end
+        end
+    end
+    return false
+end
+
+-- Whether a Cooldown Manager entry tracks an aura on another unit.
+-- selfAura == false covers spells whose own aura lands elsewhere (Polymorph,
+-- Frost Nova, ...). A talent entry that tracks a debuff it applies still reads
+-- selfAura == true (Frost Mage's Shatter tracks its linked Freezing debuff on
+-- the target), so a harmful linked spell counts as well.
+local function EntryOnOtherUnit(info, harmful)
+    if info.selfAura == false then return true end
+    local linked = info.linkedSpellIDs
+    if harmful and linked then
+        for i = 1, #linked do
+            if linked[i] and harmful(linked[i]) then return true end
+        end
+    end
+    return false
+end
+
+-- Whether any of the glow spells (sids: set of spellIDs) is tracked on another
+-- unit (a target debuff such as Freezing). Only then does the buff ticker need
+-- the target UNIT_AURA listener (EllesmereUICdmHooks): every target aura change
+-- rebuilds the active-aura cache, so on a raid boss the whole raid's aura
+-- churn would otherwise cost players whose glows only watch their own buffs.
+-- Walks the Tracked Buff / Tracked Bar category sets; called from
+-- SetupOverlays only (glow rebuilds), never per tick.
+local function AnyTargetAura(sids)
+    if not next(sids) then return false end
+    local CV = C_CooldownViewer
+    local cats = Enum and Enum.CooldownViewerCategory
+    if not (cats and CV and CV.GetCooldownViewerCategorySet and CV.GetCooldownViewerCooldownInfo) then
+        return false
+    end
+    local harmful = C_Spell and C_Spell.IsSpellHarmful
+    for _, cat in ipairs({ cats.TrackedBuff, cats.TrackedBar }) do
+        local ok, cdIDs = pcall(CV.GetCooldownViewerCategorySet, cat, true)
+        if ok and type(cdIDs) == "table" then
+            for _, cdID in ipairs(cdIDs) do
+                local info = CV.GetCooldownViewerCooldownInfo(cdID)
+                if info and EntryHasSid(info, sids) and EntryOnOtherUnit(info, harmful) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 --- Rebuild overlay frames from assignments
 local function SetupOverlays()
     local bg = ns.GetBarGlows()
@@ -267,6 +325,7 @@ local function SetupOverlays()
     -- entries name, nil when there are none. Only frames resolving to one of
     -- these ids pay the applications read; no gated entry = no reads at all.
     local stackSids
+    local glowSids = {}  -- every assigned glow's spellID, for AnyTargetAura
 
     local activeKeys = {}
     for assignKey, buffList in pairs(bg.assignments) do
@@ -306,6 +365,7 @@ local function SetupOverlays()
                     overlay._assignEntry = entry
                     overlay:Show()
                     activeKeys[key] = true
+                    if entry.spellID and entry.spellID > 0 then glowSids[entry.spellID] = true end
                     local sid = entry.stackEnabled and entry.spellID
                     if sid and sid > 0 then
                         stackSids = stackSids or {}
@@ -316,8 +376,8 @@ local function SetupOverlays()
         end
     end
     ns._barGlowStackSids = stackSids
-    -- Listen to target auras only while some glow is assigned (EllesmereUICdmHooks).
-    local wantTarget = next(activeKeys) ~= nil
+    -- Listen to target auras only while some glow tracks a non-self aura (EllesmereUICdmHooks).
+    local wantTarget = AnyTargetAura(glowSids)
     ns._bgWantTargetAuras = wantTarget
     if ns.SetBarGlowTargetAuras then ns.SetBarGlowTargetAuras(wantTarget) end
 
