@@ -441,6 +441,7 @@ EllesmereUI.RegisterSyncExclusions("EllesmereUIResourceBars", {
     "secondary.offsetX", "secondary.offsetY",
     "castBar.width", "castBar.height", "castBar.anchorX", "castBar.anchorY", "castBar.unlockPos",
     "totemBar.iconSize", "totemBar.spacing", "totemBar.unlockPos",
+    "callTotemBar.iconSize", "callTotemBar.spacing", "callTotemBar.unlockPos",
     "general.anchorX", "general.anchorY", "general.orientation",
 })
 
