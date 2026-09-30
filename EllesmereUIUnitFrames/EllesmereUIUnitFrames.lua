@@ -1448,7 +1448,7 @@ end
 
 -- Resolve a unit's effective health bar texture KEY. Main frames use their own key
 -- (falling back to the global default); mini frames (pet, ToT, focus target, boss)
--- inherit the donor frame's texture (focus > target > player) unless their own key is
+-- inherit the donor frame's texture (target > focus > player) unless their own key is
 -- non-nil/non-"inherit". Shared by the live frames and the options preview to match.
 ns.ResolveHealthBarTextureKey = function(ownSettings, donorSettings)
     local own = ownSettings and ownSettings.healthBarTexture
@@ -3855,16 +3855,16 @@ function ns.UF_CastIconPortrait(castbar, frame, s, unit)
     return bd
 end
 
--- Donor settings table for mini frames (focus > target > player); source of
+-- Donor settings table for mini frames (target > focus > player); source of
 -- inherited border, texture and font settings. A frame that is disabled, or that
 -- Visibility keeps off screen entirely, is not a donor -- before Visibility and
 -- enabledFrames were split, "never" cleared that flag and fell out here for free.
 function ns.GetMiniDonorSettings()
     local ef = db.profile.enabledFrames
-    local focus = db.profile.focus
-    if ef.focus ~= false and focus and ns.VisEffective(focus) ~= "never" then return focus end
     local target = db.profile.target
     if ef.target ~= false and target and ns.VisEffective(target) ~= "never" then return target end
+    local focus = db.profile.focus
+    if ef.focus ~= false and focus and ns.VisEffective(focus) ~= "never" then return focus end
     return db.profile.player
 end
 local GetMiniDonorSettings = ns.GetMiniDonorSettings
@@ -5619,7 +5619,8 @@ local function UpdateBordersForScale(frame, unit)
     if ns.UF_Blizz() and not ns._ufReloadSweep then ns.UF_ApplyBlizzardLayout(frame, unit) end
     if settings.portraitSeparator or frame._portraitSeparator then
         ns.UpdatePortraitSeparator(frame, frame.Portrait and frame.Portrait.backdrop,
-            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz())
+            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz(), nil,
+            unit == "targettarget" and GetMiniDonorSettings() or nil)
     end
 end
 
@@ -7345,14 +7346,17 @@ end
 -- Attached portrait divider: reuse the border style's vertical companion art.
 -- A sibling of the portrait avoids clipping the strip where it crosses into the
 -- bars. Built only on opt-in; layout and colour updates use existing passes.
-function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview)
+function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview, borderSettings)
     local seam = frame._portraitSeparator
     local power = frame.Power or frame._power
     local powerSeam = power and power._pbSeam
+    local sizeOverride = borderSettings and s.borderSizeOverride
+    local b = borderSettings or s
+    local size = sizeOverride or b.borderSize or 1
     local path
     if s.portraitSeparator and attached and portrait and portrait:IsShown()
-       and not stock and (s.borderSize or 1) > 0 then
-        path = EllesmereUI.GetBorderCompanion(s.borderTexture or "solid", "sepV")
+       and not stock and size > 0 then
+        path = EllesmereUI.GetBorderCompanion(b.borderTexture or "solid", "sepV")
     end
     if not path then
         if seam then
@@ -7372,11 +7376,12 @@ function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, p
     local border = frame.unifiedBorder or frame._border
     seam:SetFrameLevel(math.max(frame:GetFrameLevel() + (preview and 4 or 9),
         border and border:GetFrameLevel() + 1 or 0))
-    seam._key, seam._step = s.borderTexture, s.borderSize or 1
-    seam._px = EllesmereUI.BorderPx(s.borderSizePx, seam._step, seam._key)
+    seam._key, seam._step = b.borderTexture, size
+    seam._px = nil
+    if not sizeOverride then seam._px = EllesmereUI.BorderPx(b.borderSizePx, size, seam._key) end
     seam._right = side == "right"
-    local c = s.borderColor
-    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, s.borderAlpha or 1)
+    local c = b.borderColor
+    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, b.borderAlpha or 1)
     ns.UF_LayoutPortraitSeparator(seam)
     seam:Show()
     if powerSeam and powerSeam:IsShown() then ns.UF_LayoutPowerSeam(powerSeam) end
@@ -10152,7 +10157,7 @@ local function StyleSimpleFrame(frame, unit)
     health.colorDisconnected = true
     health._euiUnitKey = UnitToSettingsKey(unit)
 
-    -- Inherit health bar texture from donor frame (focus > target > player),
+    -- Inherit health bar texture from donor frame (target > focus > player),
     -- unless this frame set its own override.
     local donor = GetMiniDonorSettings()
     local unitKey = UnitToSettingsKey(unit)

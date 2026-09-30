@@ -10,7 +10,7 @@ if not ns then return end  -- module disabled: no options page
 
 ---------------------------------------------------------------------------
 --  Mini frame donor settings helper
---  Returns the settings table from focus (if usable) target player. Routed
+--  Returns the settings table from target (if usable) focus player. Routed
 --  through the runtime resolver so the options preview and the live frames
 --  can never disagree about which frame is on screen to inherit from.
 ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ local function BuildMiniTextAndSize(W, parent, y, settingsTable, unitKey, enable
     end
 
     -- Bar Texture override. Mini frames inherit the main frames' donor texture
-    -- (focus > target > player) by default; a specific pick here overrides it for
+    -- (target > focus > player) by default; a specific pick here overrides it for
     -- this frame only. Lands as the last DISPLAY row: Row 2 for ToT/Focus Target/Pet, Row 3 for Boss.
     do
         local mtVals, mtOrder = BuildBarTexDropdown()
@@ -1505,8 +1505,9 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
         rows[#rows + 1] = { type="toggle", label="Vertical Border Separator",
             tooltip="Draws the selected border style between the attached portrait and the bars.",
             disabled=function()
-                return EllesmereUI.BlizzStyle.Get("unitframes") or (settingsTable.borderSize or 1) <= 0
-                    or not EllesmereUI.GetBorderCompanion(settingsTable.borderTexture or "solid", "sepV")
+                local donor = GetMiniDonorSettings()
+                return EllesmereUI.BlizzStyle.Get("unitframes") or (settingsTable.borderSizeOverride or donor.borderSize or 1) <= 0
+                    or not EllesmereUI.GetBorderCompanion(donor.borderTexture or "solid", "sepV")
             end,
             disabledTooltip=function()
                 if EllesmereUI.BlizzStyle.Get("unitframes") then return EllesmereUI.BlizzStyle.Label("unitframes") end
