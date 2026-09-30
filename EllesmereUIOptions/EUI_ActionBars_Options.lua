@@ -1608,12 +1608,32 @@ initFrame:SetScript("OnEvent", function(self)
                   -- bar included where it is not built, so the three bars keep
                   -- one shared value in a profile carried to another client.
                   for _, k in ipairs({"XPBar", "RepBar", "FavorBar"}) do
-                      if EAB.db.profile.bars[k] then
-                          EAB.db.profile.bars[k].orientation = v
+                      local b = EAB.db.profile.bars[k]
+                      if b then
+                          -- Orientation-aware sizing (custom): keep the bar's length and
+                          -- thickness across a flip by swapping the two dimensions, so a 600x18
+                          -- horizontal bar becomes 18x600 vertical rather than 600 wide.
+                          if b.orientation ~= v then b.width, b.height = b.height, b.width end
+                          b.orientation = v
                           if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(k) end
                       end
                   end
+                  -- Rebuild the page so the Width/Height sliders pick up the swapped caps.
+                  EllesmereUI:RefreshPage()
               end });  y = y - h
+
+        -- Reorient toggles: run the XP readout / the divider % labels ALONG a vertical bar.
+        -- Disabled unless Orientation is Vertical (no effect on a horizontal bar).
+        local function XPVert() local b = EAB.db.profile.bars["XPBar"]; return b and b.orientation == "VERTICAL" and true or false end
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Reorient XP Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="toggle", text="Reorient XP% Text",
+              disabled=function() return not XPVert() end, disabledTooltip="Requires Vertical orientation",
+              getValue=function() local b = EAB.db.profile.bars["XPBar"]; return b and not b.noReorientDividerText end,
+              setValue=function(v) EAB.db.profile.bars["XPBar"].noReorientDividerText = not v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end });  y = y - h
 
         _, h = W:Spacer(parent, y, 12);  y = y - h
 
@@ -1767,15 +1787,23 @@ initFrame:SetScript("OnEvent", function(self)
 
             local wDis, wTip, wRaw = EllesmereUI.MatchGuard(barKey, "Width", _blizzDis, BLIZZ_DIS_TIP)
             local hDis, hTip, hRaw = EllesmereUI.MatchGuard(barKey, "Height", _blizzDis, BLIZZ_DIS_TIP)
+            -- Orientation-aware caps (custom): the "length" axis (Width when horizontal, Height
+            -- when vertical) scales up to the screen width; the "thickness" axis stays capped
+            -- small. Sliders rebuild when the Orientation dropdown flips (RefreshPage), and the
+            -- flip swaps the stored width/height so the caps always fit. Replaces the flat 600 cap.
+            local _dbVert = (S().orientation == "VERTICAL")
+            local _dbLenMax = math.floor((UIParent and UIParent:GetWidth()) or 1920)
+            local _dbWMin, _dbWMax = (_dbVert and 4 or 50), (_dbVert and 100 or _dbLenMax)
+            local _dbHMin, _dbHMax = (_dbVert and 50 or 4), (_dbVert and _dbLenMax or 100)
             sizeRow, h = W:DualRow(parent, y,
-                { type="slider", text="Width", min=50, max=600, step=1,
+                { type="slider", text="Width", min=_dbWMin, max=_dbWMax, step=1,
                   disabled=wDis, disabledTooltip=wTip, rawTooltip=wRaw,
                   getValue=function() return S().width or 400 end,
                   setValue=function(v)
                       S().width = v
                       if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end
                   end },
-                { type="slider", text="Height", min=4, max=40, step=1,
+                { type="slider", text="Height", min=_dbHMin, max=_dbHMax, step=1,
                   disabled=hDis, disabledTooltip=hTip, rawTooltip=hRaw,
                   getValue=function() return S().height or 18 end,
                   setValue=function(v)
@@ -2035,6 +2063,11 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUI.BuildInlineCog(rgn, { icon = EllesmereUI.DIRECTIONS_ICON, anchorTo = rgn._control,
                     title = "Bar Text Offsets",
                     rows = {
+                        { type="dropdown", label="Anchor",
+                          values = { top="Top", bottom="Bottom", center="Center", left="Left", right="Right" },
+                          order = { "top", "bottom", "center", "left", "right" },
+                          get=function() return S().textAnchor or "center" end,
+                          set=function(v) S().textAnchor = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout(barKey) end end },
                         { type="slider", label="X Offset", min=-150, max=150, step=1,
                           get=function() return S().textOffsetX or 0 end,
                           set=function(v)
@@ -2071,6 +2104,84 @@ initFrame:SetScript("OnEvent", function(self)
                         set=function(v)
                             EAB.db.profile.bars["XPBar"].showLevel = v
                         end },
+                    -- (Show Dividers + Text Background moved to visible rows below the cog.)
+                    -- (Reorient toggles moved to the XP/REP BAR STYLE section, under Orientation.)
+                    { type="toggle", label="Read Downward",
+                        get=function() return EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"] and EAB.db.profile.bars["XPBar"].textReadDown end,
+                        set=function(v)
+                            EAB.db.profile.bars["XPBar"].textReadDown = v
+                            if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end
+                        end },
+                },
+            })
+        end
+
+        -- XP divider + text controls:
+        --   [ Text Background (toggle + bg colour) | Show Dividers (toggle) ]
+        --   [ Divider Text (toggle + text colour + offset cog) | Divider Colors (5% / 10%) ]
+        -- Divider Text and Divider Colors grey out while Show Dividers is off.
+        local function XPB() return EAB.db.profile.bars["XPBar"] end
+        local function DivOn() local b = XPB(); return b and b.showDividers and true or false end
+        local xpbRowA, xpbRowB
+        xpbRowA, h = W:DualRow(parent, y,
+            { type="toggle", text="Text Background",
+              getValue=function() return XPB() and XPB().showTextBg end,
+              setValue=function(v) XPB().showTextBg = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="toggle", text="Show Dividers",
+              getValue=function() return XPB() and XPB().showDividers end,
+              setValue=function(v) XPB().showDividers = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end; EllesmereUI:RefreshPage() end });  y = y - h
+        xpbRowB, h = W:DualRow(parent, y,
+            { type="toggle", text="Divider Text",
+              disabled=function() return not DivOn() end, disabledTooltip="Requires Show Dividers",
+              getValue=function() return XPB() and XPB().showDividerText end,
+              setValue=function(v) XPB().showDividerText = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+            { type="multiSwatch", text="Divider Colors",
+              swatches = {
+                  { tooltip = "5% Tick",
+                    getValue = function() local c = XPB() and XPB().tick5Color; if c then return c.r or 220/255, c.g or 167/255, c.b or 127/255 end return 220/255, 167/255, 127/255 end,
+                    setValue = function(r, g, b) XPB().tick5Color = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                    onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                    refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+                  { tooltip = "10% Tick",
+                    getValue = function() local c = XPB() and XPB().tick10Color; if c then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                    setValue = function(r, g, b) XPB().tick10Color = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                    onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                    refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+              } });  y = y - h
+        if not EllesmereUI._prebuilding then
+            -- Text Background colour on the Text Background toggle.
+            EllesmereUI.BuildInlineSwatches(xpbRowA._leftRegion, {
+                { tooltip = "Text Background Color",
+                  getValue = function() local c = XPB() and XPB().textBgColor; if c then return c.r or 0.06, c.g or 0.06, c.b or 0.08 end return 0.06, 0.06, 0.08 end,
+                  setValue = function(r, g, b) local o = XPB().textBgColor or {}; XPB().textBgColor = { r = r, g = g, b = b, a = o.a or 0.9 }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                  onClick = function(self) if self._eabOrigClick then self._eabOrigClick(self) end end,
+                  refreshAlpha = function() return (XPB() and XPB().showTextBg) and 1 or 0.3 end },
+            }, { size = 20 })
+            -- Divider Text colour + a 4-arrow cog (Text Size / X / Y offset) on Divider Text.
+            EllesmereUI.BuildInlineSwatches(xpbRowB._leftRegion, {
+                { tooltip = "Divider Text Color",
+                  getValue = function() local c = XPB() and XPB().dividerTextColor; if c then return c.r or 1, c.g or 1, c.b or 1 end return 1, 1, 1 end,
+                  setValue = function(r, g, b) XPB().dividerTextColor = { r = r, g = g, b = b }; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end,
+                  onClick = function(self) if not DivOn() then return end if self._eabOrigClick then self._eabOrigClick(self) end end,
+                  refreshAlpha = function() return DivOn() and 1 or 0.3 end },
+            }, { size = 20 })
+            -- No anchorTo: chains off region._lastInline (the Divider Text colour swatch
+            -- above), so the 4-arrow cog lands to the LEFT of the swatch instead of on it.
+            EllesmereUI.BuildInlineCog(xpbRowB._leftRegion, {
+                icon = EllesmereUI.DIRECTIONS_ICON,
+                title = "Divider Text",
+                disabled = function() return not DivOn() end,
+                disabledTooltip = "Requires Show Dividers",
+                rows = {
+                    { type="slider", label="Text Size", min=6, max=18, step=1,
+                      get=function() return XPB() and XPB().dividerTextSize or 8 end,
+                      set=function(v) XPB().dividerTextSize = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+                    { type="slider", label="X Offset", min=-50, max=50, step=1,
+                      get=function() return XPB() and XPB().dividerTextOffX or 0 end,
+                      set=function(v) XPB().dividerTextOffX = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
+                    { type="slider", label="Y Offset", min=-50, max=50, step=1,
+                      get=function() return XPB() and XPB().dividerTextOffY or 0 end,
+                      set=function(v) XPB().dividerTextOffY = v; if ns.ApplyDataBarLayout then ns.ApplyDataBarLayout("XPBar") end end },
                 },
             })
         end
