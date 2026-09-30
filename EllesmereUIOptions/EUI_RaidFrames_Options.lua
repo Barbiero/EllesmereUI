@@ -716,9 +716,8 @@ initFrame:SetScript("OnEvent", function(self)
     end
 
     ---------------------------------------------------------------------------
-    --  Shared "Sort By" control: Group/Role radio + drag-to-reorder role rows,
-    --  installed into a DualRow half-region (replaces its placeholder dropdown);
-    --  used by both raid LAYOUT and party FRAMES tabs. opts wires it to:
+    --  Shared "Sort By" control: Group/Role radio + drag-to-reorder role rows, installed into a DualRow half-region
+    --  (replaces its placeholder dropdown); used by both raid LAYOUT and party FRAMES tabs. opts wires it to:
     --      opts.readMode()    -> "INDEX" | "ROLE"
     --      opts.writeMode(v)  -- persist sort mode + trigger reload/preview
     --      opts.readRoles()   -> { role, role, role }  (read-only)
@@ -3172,12 +3171,12 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue=function(v) SSet("healAbsorbTextSize", v) end },
                 { type="label", text="" });  y = y - h
         end
+        if onSection then onSection("textDisplay", _secY, y) end; _secY = y
 
         -------------------------------------------------------------------
         --  INDICATORS
         -------------------------------------------------------------------
         local indicatorHeader
-        if onSection then onSection("textDisplay", _secY, y) end; _secY = y
         indicatorHeader, h = W:SectionHeader(parent, "INDICATORS", y); y = y - h
 
         -- Eyeball: toggle indicator visibility on preview (raid + party)
@@ -5255,7 +5254,7 @@ initFrame:SetScript("OnEvent", function(self)
                     autoResizeSlot);  y = y - h
             else
                 -- All tiers added: only Auto Resize Icons remains.
-                autoResizeRow, h = W:DualRow(parent, y,
+                autoResizeRow, h = W:DualRow(parent, y,  -- eui-style: allow dualrow-left-gap (the checkbox dropdown below overlays the right region)
                     { type="label", text="" },
                     autoResizeSlot);  y = y - h
             end
