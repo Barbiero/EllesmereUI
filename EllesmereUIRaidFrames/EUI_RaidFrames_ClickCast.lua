@@ -126,11 +126,16 @@ local REZ_BY_CLASS = {
     WARLOCK     = { battle = 20707 },
 }
 
+-- Combat rez items, best first: a class with no battle rez falls back to the
+-- first one carried (Dynamic Rez and Smart Rez). Emergency Soul Link, both
+-- crafted ranks (the higher one casts faster).
+local REZ_ITEMS = { 269586, 248486 }
+
 -- WoW Forever: the vanilla spells. An entry's alts are its higher ranks and a
 -- rez slot lists every rank ID, rank 1 first; /cast by name casts the highest
 -- rank the character knows. Each class's dispels run in priority order (the
 -- first known line fires), Paladin is the only class with an external, and
--- there is no group rez and no Warlock entry.
+-- there is no group rez, no Warlock entry and no combat rez item.
 if EllesmereUI.IS_FOREVER then
     DISPEL_SPELLS = {
         { id = 527,   name = "Dispel Magic",        class = "PRIEST", alts = { 988 } },
@@ -156,6 +161,7 @@ if EllesmereUI.IS_FOREVER then
         SHAMAN  = { single = { 2008, 20609, 20610, 20776, 20777 } },
         DRUID   = { battle = { 20484, 20739, 20742, 20747, 20748 } },
     }
+    REZ_ITEMS = {}
 end
 
 -- Every rez spell ID across all classes; exempt from the exists/nodead corpse
@@ -849,15 +855,32 @@ local function BuildReactionMacroText(binding, guard)
     return table.concat(lines, "\n")
 end
 
+-- The combat rez item a class with no battle rez falls back to: the first one
+-- carried, or nil.
+local function CarriedRezItem()
+    local _, pClass = UnitClass("player")
+    local kit = REZ_BY_CLASS[pClass]
+    if kit and kit.battle then return nil end
+    for i = 1, #REZ_ITEMS do
+        if C_Item.GetItemCount(REZ_ITEMS[i]) > 0 then return REZ_ITEMS[i] end
+    end
+    return nil
+end
+
+-- The item the rez lines use, read once per CC_ApplyBindings (only while a
+-- rez binding could use it); the bag listener re-applies when it changes.
+local rezItemID = nil
+
 -- Builds dynamic-rez /cast lines (used by the dynamicrez binding type + Smart
--- Rez). Returns a list of macro lines (possibly empty) or nil if the class has
--- no rez kit. Never includes /stopmacro -- caller adds that for oocOnly.
+-- Rez). Returns a list of macro lines (possibly empty) or nil when the class
+-- has no rez kit and carries no combat rez item. Never includes /stopmacro --
+-- caller adds that for oocOnly.
 -- standalone marks the dedicated rez binding, where these lines are the whole
 -- macro rather than a [dead] prefix in front of somebody else's action.
 local function BuildRezLines(binding, guard, standalone)
     local _, pClass = UnitClass("player")
     local kit = REZ_BY_CLASS[pClass]
-    if not kit then return nil end
+    if not kit and not rezItemID then return nil end
     local bank = Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
     -- A slot is one spell ID or a list of rank IDs. The first rank found in the
     -- book answers: every rank shares the name, and /cast by name casts the
@@ -876,9 +899,9 @@ local function BuildRezLines(binding, guard, standalone)
         end
         return C_Spell.GetSpellName and C_Spell.GetSpellName(sid)
     end
-    local battleName = Known(kit.battle)
-    local groupName  = Known(kit.group)
-    local singleName = Known(kit.single)
+    local battleName = kit and Known(kit.battle)
+    local groupName  = kit and Known(kit.group)
+    local singleName = kit and Known(kit.single)
     local lines = {}
     -- [combat] only when there is an out-of-combat rez after it to be the answer
     -- instead. A death knight or a warlock, whose only rez IS the battle one,
@@ -895,6 +918,9 @@ local function BuildRezLines(binding, guard, standalone)
             combatCond = ",nocombat"
         end
         lines[#lines + 1] = "/cast [@mouseover,help,dead" .. combatCond .. guard .. "] " .. battleName
+    elseif rezItemID and not binding.oocOnly then
+        -- No battle rez in the class: the carried combat rez item instead.
+        lines[#lines + 1] = "/use [@mouseover,help,dead,combat" .. guard .. "] item:" .. rezItemID
     end
     if groupName then
         lines[#lines + 1] = "/cast [@mouseover,help,dead,nocombat" .. guard .. "] " .. groupName
@@ -1039,11 +1065,55 @@ local function BuildBaseMacroText(binding)
     return nil
 end
 
+-- Clear Stuck Spell Targeting (HoverCast page, cc.clearTargeting, on unless
+-- switched off). A cast on a unit the spell cannot take (a priest in Spirit of
+-- Redemption) leaves the spell waiting for a target, which swallows the next
+-- press. Each cast line this file writes is led by /stopspelltarget under the
+-- same conditions, so a press that is about to cast first drops a spell still
+-- waiting -- what Blizzard's own mouseover casting does before a mouseover
+-- cast. The clear goes BEFORE the cast, never after it: a ground-targeted
+-- spell ignores @mouseover and opens its placement circle, which a clear after
+-- the cast would close at once. SpellStopTargeting is protected, so a secure
+-- macro line is the only way to reach it.
+local function ClearTargetingOn()
+    local cc = GetClickCastDB()
+    return not (cc and cc.clearTargeting == false)
+end
+
+-- Macro text -> the same text with its clears; the whole input is the key.
+-- ResolveBinding runs for every binding on every frame (registration bursts,
+-- CC_ApplyBindings), so each repeat of a binding's identical macro is one
+-- lookup. Wiped at every apply, so texts an edit retired do not pile up.
+local clearMemo = {}
+
+local function AddTargetingClears(text)
+    if not text or not ClearTargetingOn() then return text end
+    local hit = clearMemo[text]
+    if hit then return hit end
+    local out, seen = {}, {}
+    for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+        local cond = line:match("^/cast%s+(%b[])") or line:match("^/use%s+(%b[])")
+            or line:match("^/click%s+(%b[])")
+        -- One clear per condition set: a dispel list repeats the same
+        -- conditions on every line, and the first clear already covers them.
+        if cond and not seen[cond] then
+            seen[cond] = true
+            out[#out + 1] = "/stopspelltarget " .. cond
+        end
+        out[#out + 1] = line
+    end
+    local result = table.concat(out, "\n")
+    clearMemo[text] = result
+    return result
+end
+
 -- Wraps base macrotext with Smart Rez: when binding.smartRez is set, dynamic-rez
 -- /cast lines are prepended (they fail their [dead] condition on a living unit,
 -- so the macro falls through to the normal action).
 local function BuildMacroText(binding)
     local base = BuildBaseMacroText(binding)
+    -- A user macro body is theirs: only the lines this file writes get clears.
+    if binding.type ~= "macro" then base = AddTargetingClears(base) end
     if not binding.smartRez then return base end
     -- A pinned WoW Forever rez rank is the rez itself: the by-name rez lines
     -- would cast the top rank ahead of it on every dead target.
@@ -1055,7 +1125,7 @@ local function BuildMacroText(binding)
     local guard = binding.hovercast and MOUNT_GUARD or ""
     local rez = BuildRezLines(binding, guard)
     if not rez or #rez == 0 then return base end
-    local rezText = table.concat(rez, "\n")
+    local rezText = AddTargetingClears(table.concat(rez, "\n"))
 
     if base then
         return rezText .. "\n" .. base
@@ -1065,7 +1135,7 @@ local function BuildMacroText(binding)
     if binding.type == "spell" then
         local line = SpellCastLine(binding, "[@mouseover,exists,nodead" .. guard .. "]")
         if not line then return rezText end
-        return rezText .. "\n" .. line
+        return rezText .. "\n" .. AddTargetingClears(line)
     end
     return rezText
 end
@@ -1912,6 +1982,7 @@ function ns.CC_ApplyBindings()
     -- Self-heals non-canonical modifier-order keys before reading active set
     -- (so GetActiveBindings' de-dup also sees canonical keys).
     NormalizeSavedBindingKeys()
+    wipe(clearMemo)
 
     local bindings = GetActiveBindings()
     -- Fresh list becomes the burst list: any registration later this frame
@@ -1923,6 +1994,25 @@ function ns.CC_ApplyBindings()
         ccEventFrame:RegisterEvent("SPELLS_CHANGED")
     else
         ccEventFrame:UnregisterEvent("SPELLS_CHANGED")
+    end
+
+    -- Combat rez item: bags are watched only for a class with no battle rez
+    -- that has a Dynamic Rez or Smart Rez binding.
+    local wantRezItem = false
+    if REZ_ITEMS[1] then
+        local _, pClass = UnitClass("player")
+        local kit = REZ_BY_CLASS[pClass]
+        if not (kit and kit.battle) then
+            for _, b in ipairs(bindings) do
+                if b.type == "dynamicrez" or b.smartRez then wantRezItem = true; break end
+            end
+        end
+    end
+    rezItemID = wantRezItem and CarriedRezItem() or nil
+    if wantRezItem then
+        ccEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    else
+        ccEventFrame:UnregisterEvent("BAG_UPDATE_DELAYED")
     end
 
     local frameBindings = {}
@@ -2018,7 +2108,7 @@ function ns.CC_ApplyBindings()
             if aType == "spell" then
                 mt = BuildMacroText(hb.b)
                 if not mt then
-                    mt = SpellCastLine(hb.b, "[@mouseover" .. MOUNT_GUARD .. "]")
+                    mt = AddTargetingClears(SpellCastLine(hb.b, "[@mouseover" .. MOUNT_GUARD .. "]"))
                         or ("/cast [@mouseover" .. MOUNT_GUARD .. "] ")
                 end
             elseif aType == "macro" then
@@ -2361,6 +2451,11 @@ local function OnCCEvent(self, event)
         -- A talent or loadout swap that moved a bound spell in or out of the
         -- book; the apply re-resolves which binding owns each key.
         if ComputeKnownSignature() ~= knownSig then
+            if not InCombatLockdown() then ns.CC_ApplyBindings() else pendingApply = true end
+        end
+    elseif event == "BAG_UPDATE_DELAYED" then
+        -- Re-applies only when the carried combat rez item changed.
+        if CarriedRezItem() ~= rezItemID then
             if not InCombatLockdown() then ns.CC_ApplyBindings() else pendingApply = true end
         end
     elseif event == "GROUP_ROSTER_UPDATE" then
@@ -3990,6 +4085,25 @@ function ns.CC_BuildPage(pageName, parent, yOffset)
         RowToggle(row,
             function() return cc.downClick end,
             function(v) ns.CC_SetDownClick(v) end)
+        centerY = centerY - ROW_H
+    end
+
+    -- Clear Stuck Spell Targeting (AddTargetingClears): every binding's macro
+    -- changes, so a switch re-applies them all.
+    do
+        local row = MakeRow(centerY)
+        RowLabel(row, "Clear Stuck Spell Targeting")
+        RowToggle(row,
+            function() return cc.clearTargeting ~= false end,
+            function(v)
+                if v then cc.clearTargeting = nil else cc.clearTargeting = false end
+                ns.CC_ApplyBindings()
+            end)
+        row:EnableMouse(true)
+        row:SetScript("OnEnter", function(self)
+            EllesmereUI.ShowWidgetTooltip(self, EllesmereUI.L("Before a binding casts, cancel any spell still waiting for a target (the glowing hand cursor left by a cast on a unit it can't take), so the press casts instead of being swallowed."))
+        end)
+        row:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
         centerY = centerY - ROW_H
     end
 

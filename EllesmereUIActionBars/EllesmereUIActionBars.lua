@@ -5937,17 +5937,16 @@ local function HideSlotArt(btn)
 end
 
 -------------------------------------------------------------------------------
---  The action bars' chrome and the 20-segment data bars. Every action bar can
+--  The action bars' chrome. Every action bar can
 --  carry end caps, left, right or both (the End Caps checklist), in the
 --  current look's art (the EllesmereUI style: the art the player picks), with
 --  its own size and offsets. WoW Forever: the metal frame round a bar and the
 --  dividers between its buttons (Show Bar Background, on by default on Action
---  Bar 1 only), the faction end caps (both sides on by default on Action Bar
---  1 only) and the data bar segments, from Blizzard's own atlases (they draw
---  the Forever art on that client). Built per bar the first time a piece is
---  on (LayoutBar's tail, out of combat, stamp-gated; ApplyDataBarLayout);
---  off, nothing is built and a built piece hides. All on ns: the main chunk
---  is at the 200-local cap.
+--  Bar 1 only) and the faction end caps (both sides on by default on Action
+--  Bar 1 only), from Blizzard's own atlases (they draw the Forever art on
+--  that client). Built per bar the first time a piece is on (LayoutBar's
+--  tail, out of combat, stamp-gated); off, nothing is built and a built
+--  piece hides. All on ns: the main chunk is at the 200-local cap.
 -------------------------------------------------------------------------------
 ns.AB_FV_ART = {
     frame = "UI-HUD-ActionBar-Frame",
@@ -5960,7 +5959,6 @@ ns.AB_FV_ART = {
     divV = { "ui-hud-actionbar-frame-divider-ThreeSlice-EdgeLeft",
              "ui-hud-actionbar-frame-divider-ThreeSlice-EdgeRight",
              "_ui-hud-actionbar-frame-divider-ThreeSlice-Center", 12, 12 },
-    xpDivider = "ui-hud-experiencebar-divider",
 }
 
 -- End caps per look: the art by faction (`art`, none while neutral) or the
@@ -6645,41 +6643,6 @@ function ns.AB_CapsSpanApply()
     end
 end
 
--- The 20 segments of Blizzard's experience bar on our XP / reputation / favor
--- bars: 19 dividers (horizontal bars only), each LEFT edge on a twentieth of
--- the width, 3 wide and 10/17 of the height, over the fill and under the text.
-function ns.AB_ForeverDataBarDividers(holder, w, h, orient)
-    local host = holder._fvDivHost
-    local atlas = ns.AB_FV_ART.xpDivider
-    if not (ns.AB_Forever() and orient == "HORIZONTAL" and ns.AB_AtlasOK(atlas)) then
-        if host then host:Hide() end
-        return
-    end
-    if not host then
-        host = CreateFrame("Frame", nil, holder)
-        host:SetAllPoints(holder)
-        host._tex = {}
-        holder._fvDivHost = host
-    end
-    host:SetFrameLevel(holder:GetFrameLevel() + 2)
-    local dh = floor(h * 10 / 17 + 0.5)
-    if dh < 1 then dh = 1 end
-    local seg = w / 20
-    local tex = host._tex
-    for i = 1, 19 do
-        local t = tex[i]
-        if not t then
-            t = host:CreateTexture(nil, "OVERLAY")
-            t:SetAtlas(atlas)
-            tex[i] = t
-        end
-        t:SetSize(3, dh)
-        t:ClearAllPoints()
-        t:SetPoint("LEFT", holder, "LEFT", i * seg, 0)
-    end
-    host:Show()
-end
-
 -------------------------------------------------------------------------------
 --  Party Mode: spinning action bars, on the shared spin engine
 --  (EllesmereUI.PartySpin_Create, EllesmereUI_PartyMode.lua). Each bar's
@@ -7328,8 +7291,14 @@ local function HideBorder(button)
         button.NormalTexture:SetAlpha(0)
     end
     if button.Border then
-        button.Border:Hide()
-        button.Border:SetAlpha(0)
+        -- Show Equipped Border (Icon Effects) keeps Blizzard's equipped-item
+        -- border, in our square art; its shown state stays with the updates.
+        if EAB.db.profile.showEquippedBorder then
+            ns.AB_EquippedBorderLook(button.Border)
+        else
+            button.Border:Hide()
+            button.Border:SetAlpha(0)
+        end
     end
     if button.icon and button.IconMask then
         button.icon:RemoveMaskTexture(button.IconMask)
@@ -7349,6 +7318,22 @@ local function SetSquareTexture(texture, texPath)
     texture:SetTexCoord(0, 1, 0, 1)
     texture:ClearAllPoints()
     texture:SetAllPoints(texture:GetParent())
+end
+
+-- Show Equipped Border (Icon Effects, profile.showEquippedBorder): Blizzard's
+-- equipped-item border on a square button, in our square highlight art and
+-- Blizzard's own green at half opacity. The art swap fires the Border's
+-- SetAtlas hook (MakeButtonSquare) again, which `busy` turns away.
+do
+    local busy = false
+    function ns.AB_EquippedBorderLook(bd)
+        if busy then return end
+        busy = true
+        SetSquareTexture(bd, HIGHLIGHT_TEXTURES[1])
+        busy = false
+        bd:SetVertexColor(0, 1, 0, 0.5)
+        bd:SetAlpha(1)
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -7768,17 +7753,20 @@ local function MakeButtonSquare(btn)
             end)
         end
     end
-    -- Suppress Blizzard's item-quality Border overlay: it calls
-    -- Border:SetAtlas()/Show() on refreshes and EAB owns the visible border.
+    -- Blizzard's equipped-item Border: it calls Border:SetAtlas()/Show() on
+    -- refreshes and EAB owns the visible border, so it is suppressed, unless
+    -- Show Equipped Border keeps it (in our square art).
     if btn.Border and not fd.borderHooked then
-        hooksecurefunc(btn.Border, "SetAtlas", function(self)
-            self:SetAlpha(0)
-            EAB_VTABLE.HideRegionDeferred(self)
-        end)
-        hooksecurefunc(btn.Border, "Show", function(self)
-            self:SetAlpha(0)
-            EAB_VTABLE.HideRegionDeferred(self)
-        end)
+        local function BorderRefresh(self)
+            if EAB.db.profile.showEquippedBorder then
+                ns.AB_EquippedBorderLook(self)
+            else
+                self:SetAlpha(0)
+                EAB_VTABLE.HideRegionDeferred(self)
+            end
+        end
+        hooksecurefunc(btn.Border, "SetAtlas", BorderRefresh)
+        hooksecurefunc(btn.Border, "Show", BorderRefresh)
         fd.borderHooked = true
     end
     fd.squared = true
@@ -8795,6 +8783,32 @@ end
 -- Immediate re-apply of the Hide Count at 0 alpha on every button, so the options
 -- toggle applies on click instead of waiting for the next count event. Alpha only --
 -- the count TEXT stays whatever its owners last wrote. Cold path: options clicks only.
+-- Show Equipped Border, live: every square button's Border takes the look
+-- (and shows on an equipped item's button) or hides again. The Blizzard and
+-- Classic styles keep their own equipped border, so EllesmereUI style only.
+function EAB:ApplyEquippedBorder()
+    if ns.AB_Style() ~= "eui" then return end
+    local on = self.db.profile.showEquippedBorder
+    for _, info in ipairs(BAR_CONFIG) do
+        local btns = barButtons[info.key]
+        if btns then
+            for _, btn in ipairs(btns) do
+                local bd = btn.Border
+                if bd and EFD(btn).squared then
+                    if on then
+                        ns.AB_EquippedBorderLook(bd)
+                        local a = btn:GetAttribute("action")
+                        bd:SetShown(a and IsEquippedAction(a) and true or false)
+                    else
+                        bd:Hide()
+                        bd:SetAlpha(0)
+                    end
+                end
+            end
+        end
+    end
+end
+
 function EAB:RefreshAllCounts()
     if not (C_ActionBar and C_ActionBar.GetActionDisplayCount) then return end
     for _, info in ipairs(BAR_CONFIG) do
@@ -16469,16 +16483,16 @@ function EAB:FinishSetup()
 end
 
 -------------------------------------------------------------------------------
---  Data Bars (XP Bar, Reputation Bar)
+--  Data Bars (XP, Reputation and House Favor bars): the frame, layout,
+--  border, text and visibility all three share. The XP bar's own code is
+--  in EUI_ActionBars_XPBar.lua (loaded after this file; called through ns).
 -------------------------------------------------------------------------------
 -- dataBarFrames is forward-declared near barFrames at the top of the file
 ns.dataBarFrames = dataBarFrames
 
--- Data bar colors
+-- Reputation and House Favor bar colors (the XP bar's are in
+-- EUI_ActionBars_XPBar.lua)
 local DATA_BAR_COLORS = {
-    xpRested   = { r = 0.00, g = 0.44, b = 0.87 },  -- shaman blue (XP when rested)
-    xpNoRest   = { r = 0.60, g = 0.40, b = 0.85 },  -- purple (XP when no rested)
-    xpRestedBG = { r = 0.15, g = 0.30, b = 0.60 },  -- dark blue (rested overlay)
     favor = { r = 0.85, g = 0.64, b = 0.22 },   -- warm gold (house favor)
     rep = {
         [1] = { r = 0.80, g = 0.20, b = 0.20 },  -- Hated
@@ -16556,7 +16570,8 @@ ns.ApplyDataBarBorder = function(holder, s)
             holder._cbOn = nil
             EllesmereUI.HideBorderStyle(host)
             host:Hide()
-            if line then line:Show() end
+            -- An XP bar art frame keeps the line hidden.
+            if line and not holder._xpArtOn then line:Show() end
         end
         return
     end
@@ -16593,6 +16608,91 @@ ns.ApplyDataBarBorder = function(holder, s)
     end
 end
 
+-- Places a data bar's readout. Unrotated: inside the bar at its textAnchor
+-- edge (4 in from a left or right end), nudged by the offsets. rotateText on
+-- a vertical bar turns it to run along the bar (textReadDown: reading down),
+-- the offsets turning with it (X along the reading direction, Y across it),
+-- placed by its drawn centre: a rotated string pivots about the top centre of
+-- its unrotated region, so the anchor is moved back by that displacement.
+-- Text Background (showTextBg): on the text itself while unrotated, so it
+-- follows every SetText; rotated, an upright box on the holder. _textPost:
+-- a rotated placement is measured from the string, so the bar's update
+-- re-places it after every SetText.
+function ns.DataBarPlaceText(frame, s)
+    local text = frame._text
+    local rot = 0
+    if s.rotateText and s.orientation == "VERTICAL" then
+        rot = s.textReadDown and -math.pi / 2 or math.pi / 2
+    end
+    -- SetRotation only while rotated, and once more on the way back.
+    if rot ~= 0 or frame._textRotated then
+        text:SetRotation(rot)
+        frame._textRotated = (rot ~= 0) or nil
+    end
+    local anchor = s.textAnchor
+    local ox, oy = s.textOffsetX or 0, s.textOffsetY or 0
+    local bgOn = s.showTextBg
+    local bg = frame._textBg
+    if bgOn and not bg then
+        bg = frame._textHost:CreateTexture(nil, "ARTWORK")
+        frame._textBg = bg
+    end
+    text:ClearAllPoints()
+    if rot == 0 then
+        local ap, padX = "CENTER", 0
+        if anchor == "top" then ap = "TOP"
+        elseif anchor == "bottom" then ap = "BOTTOM"
+        elseif anchor == "left" then ap, padX = "LEFT", 4
+        elseif anchor == "right" then ap, padX = "RIGHT", -4 end
+        text:SetPoint(ap, frame._textHost, ap, ox + padX, oy)
+        if bgOn then
+            -- 3 past the text's ends and 1 above and below it, none past the
+            -- edge a top or bottom anchor sets it flush with (the border's).
+            bg:ClearAllPoints()
+            bg:SetPoint("TOPLEFT", text, "TOPLEFT", -3, ap == "TOP" and 0 or 1)
+            bg:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", 3, ap == "BOTTOM" and 0 or -1)
+        end
+        frame._textPost = nil
+    else
+        -- Drawn box: sw along the bar by sh across it; its centre (vx, vy)
+        -- from the holder's centre, inside the border.
+        local sw = text:GetStringWidth()
+        local sh = text:GetStringHeight()
+        if not sh or sh <= 0 then sh = text:GetLineHeight() end
+        if not sh or sh <= 0 then sh = s.textSize or 9 end
+        local vx, vy = 0, 0
+        if anchor == "top" or anchor == "bottom" then
+            vy = max(0, (s.height or 18) / 2 - 1 - 4 - sw / 2)
+            if anchor == "bottom" then vy = -vy end
+        elseif anchor == "left" or anchor == "right" then
+            vx = max(0, (s.width or 400) / 2 - 1 - sh / 2)
+            if anchor == "left" then vx = -vx end
+        end
+        local cs, sn = math.cos(rot), math.sin(rot)
+        vx = vx + ox * cs - oy * sn
+        vy = vy + ox * sn + oy * cs
+        local hh = sh / 2
+        text:SetPoint("CENTER", frame, "CENTER", vx - hh * sn, vy - hh * (1 - cs))
+        if bgOn then
+            -- No pad across the bar at a left or right anchor, where the
+            -- text sits flush with the border.
+            bg:ClearAllPoints()
+            bg:SetSize((anchor == "left" or anchor == "right") and sh or sh + 2, sw + 6)
+            bg:SetPoint("CENTER", frame, "CENTER", vx, vy)
+        end
+        frame._textPost = true
+    end
+    if bg then
+        if bgOn then
+            local c = s.textBgColor
+            bg:SetColorTexture(c and c.r or 0.06, c and c.g or 0.06, c and c.b or 0.08, c and c.a or 0.9)
+            bg:Show()
+        else
+            bg:Hide()
+        end
+    end
+end
+
 local function ApplyDataBarLayout(barKey)
     local frame = dataBarFrames[barKey]
     if not frame then return end
@@ -16626,18 +16726,23 @@ local function ApplyDataBarLayout(barKey)
         frame._restedBar:SetRotatesTexture(orient ~= "HORIZONTAL")
     end
 
-    -- Per-bar Text Size (default 9) + text X/Y offsets (default 0,0).
-    -- Re-applied here so the options slider and offset cog take effect live
-    -- through the existing ApplyDataBarLayout calls.
+    -- XP bar art style and profession fill (both opt-in; EUI_ActionBars_XPBar.lua).
+    if barKey == "XPBar" then ns.ApplyXPBarStyle(frame, s) end
+
+    -- Per-bar Text Size (default 9) and the readout's placement (anchor,
+    -- offsets, rotation, background). Re-applied here so the options take
+    -- effect live through the existing ApplyDataBarLayout calls.
     if frame._text then
-        frame._text:SetFont(FONT_PATH, s.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
-        frame._text:ClearAllPoints()
-        frame._text:SetPoint("CENTER", s.textOffsetX or 0, s.textOffsetY or 0)
+        -- Read live, not FONT_PATH: that load-time capture misses a standalone's
+        -- saved fonts and a login spec-profile switch.
+        frame._text:SetFont(EllesmereUI.GetFontPath("actionBars"), s.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
+        ns.DataBarPlaceText(frame, s)
     end
 
-    -- WoW Forever: the experience bar's 20 segments.
-    if frame._fvDivHost or ns.AB_Forever() then
-        ns.AB_ForeverDataBarDividers(frame, w, h, orient)
+    -- Dividers (EUI_ActionBars_XPBar.lua): one boolean read while off; a
+    -- built host is called to hide.
+    if frame._divHost or s.showDividers then
+        ns.AB_DataBarDividers(frame, w, h, orient, s)
     end
 
     -- Custom Border (one boolean read while off), then its reach for width /
@@ -16701,7 +16806,7 @@ local function CreateDataBarFrame(barKey, updateFunc)
     EllesmereUI.PrimeFontShadow(text, EllesmereUI.GetFontUseShadow("actionBars"))
     local sInit = EAB.db and EAB.db.profile and EAB.db.profile.bars
         and EAB.db.profile.bars[barKey]
-    text:SetFont(FONT_PATH, sInit and sInit.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
+    text:SetFont(EllesmereUI.GetFontPath("actionBars"), sInit and sInit.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
     text:SetPoint("CENTER", sInit and sInit.textOffsetX or 0, sInit and sInit.textOffsetY or 0)
     text:SetTextColor(1, 1, 1, 1)
 
@@ -16712,6 +16817,8 @@ local function CreateDataBarFrame(barKey, updateFunc)
     dataBarFrames[barKey] = holder
     return holder
 end
+-- The XP bar (EUI_ActionBars_XPBar.lua) builds its frame through this too.
+ns.CreateDataBarFrame = CreateDataBarFrame
 
 -- Data bars own their content updates, but visibility is shared with the
 -- generic non-secure visibility system above. Guard each update callback so a
@@ -16754,151 +16861,6 @@ function EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate(barKey, frame, s)
         frame:Show()
     end
 end
-
--------------------------------------------------------------------------------
---  XP Bar
--------------------------------------------------------------------------------
--- Max-level check with layered fallbacks. The Is* helpers are nil-guarded, so client
--- API churn can silently disable them -- a plain numeric compare against the expansion
--- max level backstops the check so the bar can never show for a max-level character.
-function ns.XPBarAtMaxLevel()
-    local level = UnitLevel("player") or 0
-    if IsPlayerAtEffectiveMaxLevel and IsPlayerAtEffectiveMaxLevel() then return true end
-    if IsLevelAtEffectiveMaxLevel and IsLevelAtEffectiveMaxLevel(level) then return true end
-    local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion())
-        or (GetMaxPlayerLevel and GetMaxPlayerLevel())
-    return (maxLevel and level >= maxLevel) or false
-end
-
--- WoW Forever: raw XP under 10,000 is not abbreviated (EllesmereUI_NumberFormat.lua).
--- On ns, not a local: this chunk is at its 200-local cap.
-ns.AbbreviateLargeNumbers = (EllesmereUI.IS_FOREVER and EllesmereUI.ForeverAbbreviateLargeNumbers) or AbbreviateLargeNumbers
-local function UpdateXPBar()
-    local frame, s = EAB_VTABLE.ExtraBars.BeginManagedDataBarUpdate("XPBar")
-    if not frame then return end
-
-    local bar = frame._bar
-    local text = frame._text
-
-    -- Hide at max level (or XP disabled)
-    if ns.XPBarAtMaxLevel() or (IsXPUserDisabled and IsXPUserDisabled()) then
-        EAB_VTABLE.ExtraBars.ApplyManagedNonSecurePresentation(BAR_LOOKUP["XPBar"], frame, s, false, true)
-        return
-    end
-
-    local currentXP = UnitXP("player")
-    local maxXP = UnitXPMax("player")
-    if maxXP <= 0 then maxXP = 1 end
-    local restedXP = GetXPExhaustion() or 0
-    local level = UnitLevel("player")
-
-    bar:SetMinMaxValues(0, maxXP)
-    bar:SetValue(currentXP)
-
-    -- Rested XP overlay
-    local restedBar = frame._restedBar
-    if restedXP > 0 then
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpRested.r, DATA_BAR_COLORS.xpRested.g, DATA_BAR_COLORS.xpRested.b))
-        restedBar:SetMinMaxValues(0, maxXP)
-        restedBar:SetValue(min(currentXP + restedXP, maxXP))
-        restedBar:SetStatusBarColor(DATA_BAR_COLORS.xpRestedBG.r, DATA_BAR_COLORS.xpRestedBG.g, DATA_BAR_COLORS.xpRestedBG.b, 0.5)
-        restedBar:Show()
-    else
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpNoRest.r, DATA_BAR_COLORS.xpNoRest.g, DATA_BAR_COLORS.xpNoRest.b))
-        restedBar:Hide()
-    end
-
-    local config = (EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"]) or {}
-    local showLevel = config.showLevel
-    local showRawValues = config.showRawValues
-
-    local strLevel = ""
-    local strXP = ""
-    local strRested = ""
-
-    if showLevel then
-        strLevel = format("%s %d - ", LEVEL, level)
-    end
-
-    if showRawValues then
-        strXP = format("%s / %s", ns.AbbreviateLargeNumbers(currentXP), ns.AbbreviateLargeNumbers(maxXP))
-    else
-        local pct = (currentXP / maxXP) * 100
-        strXP = format("%.1f%%", pct)
-    end
-
-    if restedXP > 0 then
-        if showRawValues then
-            strRested = format(EllesmereUI.L(" (Rested: %s)"), ns.AbbreviateLargeNumbers(restedXP))
-        else
-            local restedPct = (restedXP / maxXP) * 100
-            strRested = format(EllesmereUI.L(" (Rested: %.1f%%)"), restedPct)
-        end
-    end
-
-    text:SetText(strLevel .. strXP .. strRested)
-
-    EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("XPBar", frame, s)
-end
-
-local function CreateXPBar()
-    local holder = CreateDataBarFrame("XPBar", UpdateXPBar)
-    holder:SetPoint("TOP", UIParent, "TOP", 0, -100)
-
-    -- Rested XP overlay bar (behind main bar)
-    local restedBar = CreateFrame("StatusBar", "EllesmereEAB_XPBar_Rested", holder)
-    restedBar:SetStatusBarTexture("Interface\\BUTTONS\\WHITE8X8")
-    local PP = EllesmereUI and EllesmereUI.PP
-    if PP then
-        PP.SetInside(restedBar, holder, 1, 1)
-    else
-        restedBar:SetPoint("TOPLEFT", 1, -1)
-        restedBar:SetPoint("BOTTOMRIGHT", -1, 1)
-    end
-    restedBar:SetMinMaxValues(0, 1)
-    restedBar:SetValue(0)
-    restedBar:GetStatusBarTexture():SetDrawLayer("ARTWORK", 2)
-    restedBar:Hide()
-    holder._restedBar = restedBar
-
-    -- Tooltip. Click Through suppresses it: on a mouseover bar the holder keeps mouse
-    -- motion only so the hover fade can see the cursor.
-    holder:EnableMouse(true)
-    holder:SetScript("OnEnter", function(self)
-        local cfg = EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"]
-        if cfg and cfg.clickThrough then return end
-        if ns.XPBarAtMaxLevel() or (IsXPUserDisabled and IsXPUserDisabled()) then return end
-        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
-        GameTooltip:ClearLines()
-        local currentXP = UnitXP("player")
-        local maxXP = UnitXPMax("player")
-        if maxXP <= 0 then maxXP = 1 end
-        local restedXP = GetXPExhaustion() or 0
-        local pct = (currentXP / maxXP) * 100
-        local remain = maxXP - currentXP
-        GameTooltip:AddLine(EllesmereUI.L("Experience"), 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("Level"), tostring(UnitLevel("player")), 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("XP"), format("%s / %s (%.1f%%)", BreakUpLargeNumbers(currentXP), BreakUpLargeNumbers(maxXP), pct), 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("Remaining"), BreakUpLargeNumbers(remain), 1, 1, 1, 1, 1, 1)
-        if restedXP > 0 then
-            GameTooltip:AddDoubleLine(EllesmereUI.L("Rested"), format("+%s (%.1f%%)", BreakUpLargeNumbers(restedXP), (restedXP / maxXP) * 100), 1, 1, 1, 1, 1, 1)
-        end
-        GameTooltip:Show()
-    end)
-    holder:SetScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
-
-    -- Events
-    local evFrame = ns.TakeShell()
-    evFrame:RegisterEvent("PLAYER_XP_UPDATE")
-    evFrame:RegisterEvent("PLAYER_LEVEL_UP")
-    evFrame:RegisterEvent("UPDATE_EXHAUSTION")
-    evFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    evFrame:SetScript("OnEvent", UpdateXPBar)
-
-    ApplyDataBarLayout("XPBar")
-    UpdateXPBar()
-end
-
 
 -------------------------------------------------------------------------------
 --  Reputation Bar
@@ -16996,11 +16958,13 @@ local function UpdateRepBar()
     frame._tipStanding, frame._tipCurrent, frame._tipMaximum = standing, current, maximum
     text:SetText(format("%s: %.0f%% [%s]", name, pct, standing))
 
-    -- Auto-size text if bar is too narrow
-    local barW = frame:GetWidth()
-    if text:GetStringWidth() > barW - 4 then
+    -- Auto-size text if bar is too narrow (too short, for text rotated to
+    -- run along a vertical bar)
+    local room = (s.rotateText and s.orientation == "VERTICAL") and frame:GetHeight() or frame:GetWidth()
+    if text:GetStringWidth() > room - 4 then
         text:SetText(format("%.0f%%", pct))
     end
+    if frame._textPost then ns.DataBarPlaceText(frame, s) end
 
     EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("RepBar", frame, s)
 end
@@ -17111,11 +17075,13 @@ local function UpdateFavorBar()
     local pct = (current / st.needed) * 100
     text:SetText(format(EllesmereUI.L("House Level %d: %d / %d"), st.displayLevel or 1, current, st.needed))
 
-    -- Auto-size text if bar is too narrow
-    local barW = frame:GetWidth()
-    if text:GetStringWidth() > barW - 4 then
+    -- Auto-size text if bar is too narrow (too short, for text rotated to
+    -- run along a vertical bar)
+    local room = (s.rotateText and s.orientation == "VERTICAL") and frame:GetHeight() or frame:GetWidth()
+    if text:GetStringWidth() > room - 4 then
         text:SetText(format("%.0f%%", pct))
     end
+    if frame._textPost then ns.DataBarPlaceText(frame, s) end
 
     EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("FavorBar", frame, s)
 end
@@ -17320,7 +17286,7 @@ local function RegisterDataBarsWithUnlockMode()
 end
 
 function EAB_VTABLE.ExtraBars.CreateManagedDataBarFrames()
-    CreateXPBar()
+    ns.CreateXPBar()
     CreateRepBar()
     if ns._CreateFavorBar then ns._CreateFavorBar() end
 end
@@ -17403,6 +17369,50 @@ local function SetupDataBars()
 
     -- Phase 5: apply the current runtime visibility state and keep it in sync.
     EAB_VTABLE.ExtraBars.EnsureManagedDataBarRuntimeState()
+end
+
+-- The profile's one Blizzard data bar switch (useBlizzardDataBars: the XP,
+-- reputation and House Favor bars together), applied live. The XP Bar tab's
+-- Blizz Default style and the Use Blizzard's Rep Bars toggle both set it
+-- here. On: our built data bars hide (each update then runs its hidden
+-- path, so the Favor bar disarms its events) and Blizzard's status tracking
+-- bars return. Off: our built bars show unless set to Never and repaint, and
+-- Blizzard's hide. Returns true when a bar this client builds does not exist
+-- yet (they are built at login only while the switch is off), so the caller
+-- can offer a reload. On ns: the chunk is at the local cap.
+function ns.SetUseBlizzardDataBars(v)
+    local p = EAB.db.profile
+    p.useBlizzardDataBars = v
+    local anyMissing = false
+    for _, info in ipairs(EXTRA_BARS) do
+        local k = info.key
+        -- WoW Forever builds no House Favor bar: never a reload for it there.
+        if info.isDataBar and not (k == "FavorBar" and EllesmereUI.IS_FOREVER) then
+            local frame = dataBarFrames[k]
+            if not frame then
+                if not v then anyMissing = true end
+            elseif v then
+                frame:Hide()
+                if frame._updateFunc then frame._updateFunc() end
+            else
+                local s = p.bars[k]
+                if not s or not s.alwaysHidden then
+                    frame:Show()
+                    if frame._updateFunc then frame._updateFunc() end
+                end
+            end
+        end
+    end
+    if StatusTrackingBarManager then
+        if v then
+            StatusTrackingBarManager:Show()
+            StatusTrackingBarManager:RegisterAllEvents()
+        else
+            StatusTrackingBarManager:UnregisterAllEvents()
+            StatusTrackingBarManager:Hide()
+        end
+    end
+    return anyMissing
 end
 
 -------------------------------------------------------------------------------

@@ -102,6 +102,18 @@ function ns._appendDisplayPresetKeys(t)
         "threatColorHealth", "threatColorBorder", "threatColorName",
         "textSlotTopClassColor", "textSlotRightClassColor", "textSlotLeftClassColor", "textSlotCenterClassColor",
         "textSlotBottomLeftClassColor", "textSlotBottomRightClassColor",
+        "textSlotTopColorMode", "textSlotTopNameColorOn", "textSlotTopNameColor",
+        "textSlotTopLevelColorOn", "textSlotTopLevelColor", "textSlotTopLevelDiffOn",
+        "textSlotRightColorMode", "textSlotRightNameColorOn", "textSlotRightNameColor",
+        "textSlotRightLevelColorOn", "textSlotRightLevelColor", "textSlotRightLevelDiffOn",
+        "textSlotLeftColorMode", "textSlotLeftNameColorOn", "textSlotLeftNameColor",
+        "textSlotLeftLevelColorOn", "textSlotLeftLevelColor", "textSlotLeftLevelDiffOn",
+        "textSlotCenterColorMode", "textSlotCenterNameColorOn", "textSlotCenterNameColor",
+        "textSlotCenterLevelColorOn", "textSlotCenterLevelColor", "textSlotCenterLevelDiffOn",
+        "textSlotBottomLeftColorMode", "textSlotBottomLeftNameColorOn", "textSlotBottomLeftNameColor",
+        "textSlotBottomLeftLevelColorOn", "textSlotBottomLeftLevelColor", "textSlotBottomLeftLevelDiffOn",
+        "textSlotBottomRightColorMode", "textSlotBottomRightNameColorOn", "textSlotBottomRightNameColor",
+        "textSlotBottomRightLevelColorOn", "textSlotBottomRightLevelColor", "textSlotBottomRightLevelDiffOn",
         "tankHasAggroEnabled", "tankHasAggro", "classicTankAggro", "tankHasAggroOverrideMobType",
         "tankHasAggroOverrideBoss",
         "dpsHasAggro", "dpsNearAggro", "offTankAggroEnabled", "offTankAggro",
@@ -117,6 +129,7 @@ function ns._appendDisplayPresetKeys(t)
         "buffTextSize", "buffTextColor", "ccTextSize", "ccTextColor",
         "raidMarkerPos", "classificationSlot", "classificationShowInInstances",
         "factionSlot", "classificationIncludeFaction",
+        "classificationHideRare", "classificationHideQuest",
         "castNameSize", "castNameColor", "castCombineNameTarget",
         "castTargetSize", "castTargetClassColor", "castTargetColor",
         "showCastTimer", "castTimerSize", "castTimerColor", "targetScale",
@@ -364,6 +377,10 @@ local defaults = {
     factionSlot = "none",
     factionStyle = "pvp",  -- Icon Style: a key of EllesmereUI.FACTION_ART
     classificationIncludeFaction = false,  -- "Rare/Quest + Faction": the badge shares the classification slot
+    -- The classification element's two halves, each switchable in Core Positions:
+    -- the Rare Indicator (elite and rare marks) and the Quest Indicator.
+    classificationHideRare = false,
+    classificationHideQuest = false,
     factionOppositeOnly = false,
     factionPlayersOnly = false,
     factionPvP = "dim",  -- "dim" greys unflagged units, "only" hides them, "ignore" draws both alike
@@ -452,6 +469,9 @@ local defaults = {
     -- same gold on the ABG halo). Keep the two in step.
     dispelGlowColor = { r = 1.0, g = 0.788, b = 0.137 },
     dispelGlowUseTypeColor = false,
+    -- Enemy Buff Filter ("important" | "dispellable" | "showall"): unset reads
+    -- as Important; WoW Forever shows every enemy buff by default.
+    npEnemyBuffFilter = (EllesmereUI.IS_FOREVER == true) and "showall" or nil,
     castScale = 100,
     focusCastHeight = 100,
     questMobColorEnabled = false,
@@ -522,8 +542,8 @@ local defaults = {
     textSlotCenterColor = { r = 1, g = 1, b = 1 },
     textSlotBottomLeftColor = { r = 1, g = 1, b = 1 },
     textSlotBottomRightColor = { r = 1, g = 1, b = 1 },
-    -- Core Text Positions: per-slot Class / Reaction colour mode (the slot's swatch
-    -- pair); off = the slot colour above. Read through ns._npSlotClassOn.
+    -- Core Text Positions: per-slot class colour flag, read only by ns.NP_SlotColorMode
+    -- while the slot's Text Coloring mode (<slot>ColorMode, no default) is unset.
     textSlotTopClassColor = false, textSlotRightClassColor = false,
     textSlotLeftClassColor = false, textSlotCenterClassColor = false,
     textSlotBottomLeftClassColor = false, textSlotBottomRightClassColor = false,
@@ -1179,7 +1199,7 @@ function ns.NP_UpdateClassicLevel(plate)
         return
     end
     sk:Hide()
-    fs:SetText(ns.GetUnitLevelText(unit, true))
+    fs:SetText(ns.GetUnitLevelText(unit))
     -- The stock yellow, and the difficulty colour only where difficulty means
     -- something: a unit you cannot attack is never colour-ranked.
     local r, g, b = 1, 0.82, 0
@@ -2372,46 +2392,139 @@ do
     local NAME_FAMILY = {
         enemyName = true, levelName = true, nameLevel = true,
     }
+    -- Per slot: its Text Coloring key names (prebuilt, so reads build no strings) and
+    -- the materialized Level | Name / Name | Level format strings (NP_RefreshSlotNameParts).
+    local SK, PARTS = {}, {}
+    local PLAIN = { ln = "%s | %s", nl = "%s | %s", diff = false }
+    for i = 1, #textSlotKeys do
+        local s = textSlotKeys[i]
+        SK[s] = {
+            mode = s .. "ColorMode", class = s .. "ClassColor", color = s .. "Color",
+            nameOn = s .. "NameColorOn", name = s .. "NameColor",
+            lvlOn = s .. "LevelColorOn", lvl = s .. "LevelColor", diff = s .. "LevelDiffOn",
+        }
+        PARTS[s] = { ln = PLAIN.ln, nl = PLAIN.nl, diff = false }
+    end
     function ns.IsNameElement(element)
         return NAME_FAMILY[element] == true
     end
     -- Slot currently holding a name-family element (nil when none is slotted).
-    function ns.FindNameSlot()
+    -- db: a profile to read instead of the live one.
+    function ns.FindNameSlot(db)
+        db = db or p
         for _, key in ipairs(textSlotKeys) do
-            if NAME_FAMILY[GetTextSlot(key)] then return key end
+            if NAME_FAMILY[(db and db[key]) or defaults[key]] then return key end
         end
         return nil
     end
+    -- A slot's Core Text Positions "Text Coloring" mode: "custom" (the slot colour),
+    -- "class" (Hostility / Class, painted per unit) or "level" (Level Difficulty, the
+    -- unit's level difficulty colour; any text but Target of Target, which names
+    -- another unit). An unset <slot>ColorMode is derived from keys read
+    -- here and never written: levelDifficultyColor makes a standalone level "level";
+    -- <slot>ClassColor, or enemyNameTextReactionColor on the first name slot, makes
+    -- "class". The one place modes are derived. db: a profile to read instead of the
+    -- live one.
+    function ns.NP_SlotColorMode(slotKey, db)
+        db = db or p or defaults
+        local k = SK[slotKey]
+        if not k then return "custom" end
+        local el = db[slotKey] or defaults[slotKey]
+        local m = db[k.mode]
+        if m == "class" or m == "custom" then return m end
+        if m == "level" then return (el ~= "targetOfTarget") and "level" or "custom" end
+        if el == "level" and db.levelDifficultyColor == true then return "level" end
+        if db[k.class] == true then return "class" end
+        if db.enemyNameTextReactionColor == true and NAME_FAMILY[el]
+            and ns.FindNameSlot(db) == slotKey then
+            return "class"
+        end
+        return "custom"
+    end
+    -- Level | Name / Name | Level: the level part in the difficulty colour (applies
+    -- while the slot's mode is not "level"). A custom level colour turns it off; unset
+    -- follows levelDifficultyColor.
+    function ns.NP_SlotLevelDiff(slotKey, db)
+        db = db or p or defaults
+        local k = SK[slotKey]
+        if not k then return false end
+        if db[k.lvlOn] == true then return false end
+        local v = db[k.diff]
+        if v ~= nil then return v == true end
+        return db.levelDifficultyColor == true
+    end
+    -- A combo part's stored colour (part "name" or "level"), falling back to the slot
+    -- colour; r, g, b. Whether it applies is <slot>NameColorOn / <slot>LevelColorOn.
+    function ns.NP_SlotPartColor(slotKey, part, db)
+        db = db or p or defaults
+        local k = SK[slotKey]
+        if not k then return 1, 1, 1 end
+        local c = db[part == "level" and k.lvl or k.name] or db[k.color] or defaults[k.color]
+        if c then return c.r, c.g, c.b end
+        return 1, 1, 1
+    end
+    -- Materializes every slot's combo format strings: a part with a custom colour is
+    -- wrapped in its escape inside the format (the name stays a %s argument), and diff
+    -- marks a level part drawn in the difficulty colour. Run by NP_RefreshSlotClassFlags.
+    function ns.NP_RefreshSlotNameParts()
+        local db = p or defaults
+        for i = 1, #textSlotKeys do
+            local s = textSlotKeys[i]
+            local k, f = SK[s], PARTS[s]
+            local nm, lv = "%s", "%s"
+            if db[k.nameOn] == true then
+                nm = EllesmereUI.HexColor(ns.NP_SlotPartColor(s, "name", db)) .. "%s|r"
+            end
+            if db[k.lvlOn] == true then
+                lv = EllesmereUI.HexColor(ns.NP_SlotPartColor(s, "level", db)) .. "%s|r"
+            end
+            f.ln = lv .. " | " .. nm
+            f.nl = nm .. " | " .. lv
+            f.diff = ns.NP_SlotColorMode(s, db) ~= "level" and ns.NP_SlotLevelDiff(s, db)
+        end
+    end
+    -- r, g, b for a readable level: the skull's colour below 0, else the difficulty
+    -- colour (nil when attackability or the player's level is secret). "player" is the
+    -- options preview's stand-in mob, ranked as attackable like a hostile mob.
+    local function LevelRGB(unit, lvl)
+        if lvl < 0 then return EllesmereUI.GetLevelDifficultyColor(-1) end
+        return EllesmereUI.GetLevelColor(unit, lvl,
+            unit == "player" or (p and p.levelDifficultyColorFriendly))
+    end
+    -- The unit's level difficulty colour, r, g, b; nil while its level cannot be read.
+    function ns.NP_UnitLevelColor(unit)
+        local lvl = UnitEffectiveLevel(unit)
+        if type(lvl) ~= "number" or (issecretvalue and issecretvalue(lvl)) then return nil end
+        return LevelRGB(unit, lvl)
+    end
     -- Display string for the unit's EFFECTIVE level (so scaling/Chromie time read as the game
     -- ranks them). "??" for skull-ranked (-1) or unreadable (secret) levels, matching default UI.
-    -- Level Difficulty Color (text-slot cog) wraps it in Blizzard's difficulty
-    -- color; an unreadable (secret) level stays a plain "??". plain skips the
-    -- wrap for a level that paints its own colour (the Classic plate level).
-    function ns.GetUnitLevelText(unit, plain)
+    -- color "diff" wraps it in the difficulty colour (an unreadable level stays a plain
+    -- "??"); any other value returns it plain.
+    function ns.GetUnitLevelText(unit, color)
         local lvl = UnitEffectiveLevel(unit)
-        local col = not plain and p and p.levelDifficultyColor
         if type(lvl) ~= "number" or (issecretvalue and issecretvalue(lvl)) then
             return "??"
         end
-        if lvl < 0 then
-            if col then return EllesmereUI.ColorText("??", EllesmereUI.GetLevelDifficultyColor(-1)) end
-            return "??"
-        end
-        if col then
-            return EllesmereUI.ColorText(tostring(lvl),
-                EllesmereUI.GetLevelColor(unit, lvl, p.levelDifficultyColorFriendly))
-        end
-        return tostring(lvl)
+        local txt = lvl < 0 and "??" or tostring(lvl)
+        if color == "diff" then return EllesmereUI.ColorText(txt, LevelRGB(unit, lvl)) end
+        return txt
     end
     -- Write a name-family element's text into a FontString (shared by runtime update and
     -- options preview). name may be SECRET: only ever passed as a %s display arg, never inspected.
-    function ns.SetNameElementText(fs, element, name, unit)
-        if element == "level" then
+    -- slotKey (nil = FindNameSlot's) picks the combo's materialized part colours; the rest
+    -- of the text keeps the font string's colour.
+    function ns.SetNameElementText(fs, element, name, unit, slotKey)
+        if element == "levelName" or element == "nameLevel" then
+            local f = PARTS[slotKey or ns.FindNameSlot()] or PLAIN
+            local lvl = ns.GetUnitLevelText(unit, f.diff and "diff")
+            if element == "levelName" then
+                fs:SetFormattedText(f.ln, lvl, name)
+            else
+                fs:SetFormattedText(f.nl, name, lvl)
+            end
+        elseif element == "level" then
             fs:SetFormattedText("%s", ns.GetUnitLevelText(unit))
-        elseif element == "levelName" then
-            fs:SetFormattedText("%s | %s", ns.GetUnitLevelText(unit), name)
-        elseif element == "nameLevel" then
-            fs:SetFormattedText("%s | %s", name, ns.GetUnitLevelText(unit))
         else
             fs:SetText(name)
         end
@@ -4902,7 +5015,8 @@ function ns.RefreshAllSettings()
     -- Re-read the profile reference: RepointAllDBs may have swapped the profile table
     -- (spec-linked profiles). All color lookups via _C() read this local.
     p = ENP.db.profile
-    -- Before any plate repaints: the Class / Reaction slot flags the health pass reads.
+    -- Before any plate repaints: the Text Coloring slot flags the health pass reads
+    -- and the name text's combo formats.
     ns.NP_RefreshSlotClassFlags()
     ns.NP_RefreshThreatPctFlag()
     ns.NP_RefreshThreatColorFlag()
@@ -6132,7 +6246,7 @@ local function EnableClassPowerWatcher()
         classPowerWatcher:RegisterUnitEvent("UNIT_AURA", "player")
         classPowerWatcher:RegisterEvent("PLAYER_TARGET_CHANGED")
         classPowerWatcher:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-        -- Manual tracker events (TotS, Whirlwind, Bladestorm/Unhinged)
+        -- Manual tracker events (Whirlwind, Bladestorm/Unhinged)
         -- so tracking works even without EllesmereUIResourceBars loaded.
         classPowerWatcher:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         classPowerWatcher:RegisterEvent("PLAYER_DEAD")
@@ -6155,23 +6269,6 @@ local function EnableClassPowerWatcher()
                 ApplyClassPowerSetting()
             elseif event == "PLAYER_TARGET_CHANGED" then
                 RefreshClassPowerFull()
-            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                -- Route to manual trackers so they work standalone.
-                -- Skip if EllesmereUIResourceBars is loaded (it handles routing).
-                if _G._ERB_AceDB then
-                    RefreshClassPower()
-                    return
-                end
-                local unit, castGUID, spellID = ...
-                if unit == "player" and EllesmereUI then
-                    EllesmereUI.HandleTipOfTheSpear(event, unit, castGUID, spellID)
-                end
-                RefreshClassPower()
-            elseif event == "PLAYER_DEAD" or event == "PLAYER_ALIVE" then
-                if not _G._ERB_AceDB and EllesmereUI then
-                    EllesmereUI.HandleTipOfTheSpear(event)
-                end
-                RefreshClassPower()
             elseif event == "PLAYER_REGEN_ENABLED" then
                 RefreshClassPower()
             else
@@ -6499,10 +6596,11 @@ local function ResolveNeutralColor(unit)
     local c = _C("neutral")
     return c.r, c.g, c.b
 end
--- Enemy Name Text "Reaction Color" (EXTRAS toggle, default off): colors the name text
--- Hostile or Neutral to match the unit's reaction, independent of the health-bar palette.
--- Every NameplateFrame unit is an enemy (HideBlizzardFrame only suppresses Blizzard's frame
--- on UnitCanAttack units), so only these two reactions are ever relevant here. Same
+-- The Hostile or Neutral name colour (enemyNameHostileColor / enemyNameNeutralColor, shared
+-- by every text slot) for an NPC in a Hostility / Class text slot, matching the unit's
+-- reaction independent of the health-bar palette. Every NameplateFrame unit is an enemy
+-- (HideBlizzardFrame only suppresses Blizzard's frame on UnitCanAttack units), so only
+-- these two reactions are ever relevant here. Same
 -- reaction/UnitCanAttack idiom as the health-bar Neutral check below (GetReactionColor step 5)
 -- so a secret reaction read (identity-restricted units) falls through safely instead of erroring.
 local function GetEnemyNameReactionColor(unit)
@@ -6519,19 +6617,22 @@ local function GetEnemyNameReactionColor(unit)
     return c.r, c.g, c.b
 end
 
--- Core Text Positions "Class / Reaction Color" (textSlot<X>ClassColor, per slot, default
--- off): whatever a slot shows (name, level or health text) is painted per unit from
--- UpdateHealthColor. ns._npSlotClassOn is materialized at login and by RefreshAllSettings
--- (also the Spec Overrides refresher), so UpdateHealthColor pays one boolean read while
--- every slot keeps its custom colour. ns fields throughout: this file is at its local cap.
+-- Core Text Positions "Text Coloring" (ns.NP_SlotColorMode, per slot): a slot in
+-- Hostility / Class ("class") or Level Difficulty ("level") mode has whatever it shows
+-- painted per unit from UpdateHealthColor; "custom" keeps the static slot colour.
+-- ns._npSlotClassOn is materialized at login and by RefreshAllSettings (also the Spec
+-- Overrides refresher), so UpdateHealthColor pays one boolean read while every slot is
+-- custom. ns fields throughout: this file is at its local cap.
 ns._npSlotClassOn = false
 ns._npSlotClassName = false
 ns._npSlotClassFS = {}  -- plate font string keys painted in class mode
+ns._npSlotLevelFS = {}  -- plate font string keys painted in level mode
+ns._npSlotLevelCK = {}  -- parallel: the owning slot's colour key (unreadable-level fallback)
 -- Materialized with the class flags: the font string key each bottom slot owns
 -- (false = none, or a later slot rewrites that shared font string), whether
 -- either owns one (the cast show / hide re-anchor runs only then), and the slot
 -- showing Target of Target (false = none; its UNIT_TARGET registration follows
--- it) plus that slot's Class / Reaction mode. _npToTUnits caches "<unit>target".
+-- it) plus whether that slot is in class mode. _npToTUnits caches "<unit>target".
 ns._npBottomFS = { false, false }
 ns._npBottomUsed = false
 ns._npToTSlot = false
@@ -6543,12 +6644,9 @@ do
     -- the last slot writing a shared font string owns it.
     local SLOTS = { "textSlotRight", "textSlotLeft", "textSlotCenter",
         "textSlotBottomLeft", "textSlotBottomRight", "textSlotTop" }
-    local MODE = { "textSlotRightClassColor", "textSlotLeftClassColor",
-        "textSlotCenterClassColor", "textSlotBottomLeftClassColor",
-        "textSlotBottomRightClassColor", "textSlotTopClassColor" }
-    local owner, lastIdx = {}, {}
-    local TOT_COLOR_KEY = {}  -- slot -> its colour key (prebuilt for UpdateToT)
-    for i = 1, #SLOTS do TOT_COLOR_KEY[SLOTS[i]] = SLOTS[i] .. "Color" end
+    local owner, ownerSlot, lastIdx = {}, {}, {}
+    local COLOR_KEY = {}  -- slot -> its colour key (prebuilt for UpdateToT and the painter)
+    for i = 1, #SLOTS do COLOR_KEY[SLOTS[i]] = SLOTS[i] .. "Color" end
     -- The plate font string key an element renders on (nil for None).
     function ns.NP_ElementFSKey(el)
         if ns.IsNameElement(el) then return "name" end
@@ -6560,30 +6658,33 @@ do
         end
     end
     function ns.NP_RefreshSlotClassFlags()
-        local L = ns._npSlotClassFS
+        local L, V, VC = ns._npSlotClassFS, ns._npSlotLevelFS, ns._npSlotLevelCK
         wipe(L)
+        wipe(V)
+        wipe(VC)
         wipe(owner)
+        wipe(ownerSlot)
         wipe(lastIdx)
         ns._npToTSlot = false
         ns._npToTClass = false
         local B = ns._npBottomFS
+        -- The name is placed in FindNameSlot's slot (the first holding one), the
+        -- other shared font strings by the last slot writing them.
+        local nameSlot = ns.FindNameSlot()
         for i = 1, #SLOTS do
-            local el = GetTextSlot(SLOTS[i])
-            local key = ns.NP_ElementFSKey(el)
-            local on = (p and p[MODE[i]] == true) or false
+            local s = SLOTS[i]
+            local key = ns.NP_ElementFSKey(GetTextSlot(s))
             if key == "totText" then
                 -- Painted by UpdateToT from the target's class, never the plate unit's.
-                ns._npToTSlot = SLOTS[i]
-                ns._npToTClass = on
-            elseif key then
-                owner[key] = on
+                ns._npToTSlot = s
+                ns._npToTClass = ns.NP_SlotColorMode(s) == "class"
+            elseif key and (key ~= "name" or s == nameSlot) then
+                owner[key] = ns.NP_SlotColorMode(s)
+                ownerSlot[key] = s
             end
             if key then lastIdx[key] = i end
             if i == 4 or i == 5 then B[i - 3] = key or false end
         end
-        -- The name is placed in FindNameSlot's slot (the first holding one), the
-        -- other shared font strings by the last slot writing them.
-        local nameSlot = ns.FindNameSlot()
         for b = 1, 2 do
             if B[b] == "name" then
                 if nameSlot ~= SLOTS[b + 3] then B[b] = false end
@@ -6591,79 +6692,115 @@ do
                 B[b] = false
             end
         end
-        ns._npToTColorKey = ns._npToTSlot and TOT_COLOR_KEY[ns._npToTSlot] or nil
+        ns._npToTColorKey = ns._npToTSlot and COLOR_KEY[ns._npToTSlot] or nil
         ns._npBottomUsed = (B[1] or B[2]) and true or false
-        for key, on in pairs(owner) do
-            if on then L[#L + 1] = key end
+        for key, mode in pairs(owner) do
+            if mode == "class" then
+                L[#L + 1] = key
+            elseif mode == "level" then
+                V[#V + 1] = key
+                VC[#V] = COLOR_KEY[ownerSlot[key]]
+            end
         end
-        ns._npSlotClassName = owner.name == true
-        ns._npSlotClassOn = #L > 0
+        ns._npSlotClassName = owner.name == "class" or owner.name == "level"
+        ns._npSlotClassOn = (L[1] or V[1]) and true or false
+        -- The name text's combo part colours (read by SetNameElementText).
+        ns.NP_RefreshSlotNameParts()
     end
 end
--- Paints one plate's class-mode slots. Enemy players take the EUI class palette
--- (EllesmereUI.GetClassColor: custom class colours count; the bar's own class colour
--- reads RAID_CLASS_COLORS, so the two differ only under a custom palette). A redacted
+-- Paints one plate's class- and level-mode slots. Class mode: enemy players take the EUI
+-- class palette (EllesmereUI.GetClassColor: custom class colours count; the bar's own class
+-- colour reads RAID_CLASS_COLORS, so the two differ only under a custom palette). A redacted
 -- class token takes the restricted-unit palette, else Blizzard's class colour, handed
 -- straight to the font strings and never memoized (the memo entry is cleared instead).
--- Tapped NPCs take the plate's Tapped colour, other NPCs the Hostile / Neutral name
--- colours. The class token is read once per unit (keyed on the unit token; ClearUnit
--- resets it). Per font string memo on our plate (_scMemo), reset wherever the slot
--- colours are written statically. Returns true while the name's slot is in class mode.
--- An inline colour escape in the text (Level Text: Difficulty Color) still wins over it.
--- skipName leaves the name alone (Threat Colors "Text" holds it) and drops its memo entry,
--- so the first call without it repaints the name.
+-- Tapped NPCs take the Tapped name colour (default: the plate's Tapped grey), other
+-- NPCs the Hostile / Neutral name colours. The class token is read once per unit (keyed
+-- on the unit token; ClearUnit resets it). Level mode: the unit's level difficulty colour
+-- (NP_UnitLevelColor); while the level cannot be read the slot colour is written once
+-- (memo marker false). Per font string memo on our plate (_scMemo), reset wherever the
+-- slot colours are written statically. Returns true while the name's slot is in either
+-- mode. An inline colour escape in the text (a Level | Name part colour) still wins over
+-- it. skipName leaves the name alone (Threat Colors "Text" holds it) and drops its memo
+-- entry, so the first call without it repaints the name.
 function ns.NP_PaintSlotClassColors(plate, unit, skipName)
-    if plate._scUnit ~= unit then
-        plate._scUnit = unit
-        local tok = false
-        if UnitIsPlayer(unit) then
-            local _, t = UnitClass(unit)
-            if issecretvalue(t) then tok = true elseif t then tok = t end
-        end
-        plate._scTok = tok
-    end
     local m = plate._scMemo
     if not m then m = {}; plate._scMemo = m end
     local L = ns._npSlotClassFS
-    local tok = plate._scTok
-    if tok == true then
-        local _, t = UnitClass(unit)
-        local ok, sr, sg, sb = EllesmereUI.GetClassColorForRestrictedUnit(unit, t)
-        if not ok then
-            local c = C_ClassColor.GetClassColor(t)
-            if c then ok = true; sr, sg, sb = c:GetRGB() end
+    if L[1] then
+        if plate._scUnit ~= unit then
+            plate._scUnit = unit
+            local tok = false
+            if UnitIsPlayer(unit) then
+                local _, t = UnitClass(unit)
+                if issecretvalue(t) then tok = true elseif t then tok = t end
+            end
+            plate._scTok = tok
         end
-        if ok then
+        local tok = plate._scTok
+        local painted = false
+        if tok == true then
+            local _, t = UnitClass(unit)
+            local ok, sr, sg, sb = EllesmereUI.GetClassColorForRestrictedUnit(unit, t)
+            if not ok then
+                local c = C_ClassColor.GetClassColor(t)
+                if c then ok = true; sr, sg, sb = c:GetRGB() end
+            end
+            if ok then
+                painted = true
+                for i = 1, #L do
+                    local key = L[i]
+                    local e = m[key]
+                    if e then e[1] = nil end
+                    if not (skipName and key == "name") then
+                        plate[key]:SetTextColor(sr, sg, sb, 1)
+                    end
+                end
+            end
+        end
+        if not painted then
+            local r, g, b
+            if tok and tok ~= true then
+                local c = EllesmereUI.GetClassColor(tok)
+                r, g, b = c.r, c.g, c.b
+            elseif UnitIsTapDenied(unit) then
+                local c = (p and p.enemyNameTappedColor) or _C("tapped")
+                r, g, b = c.r, c.g, c.b
+            else
+                r, g, b = GetEnemyNameReactionColor(unit)
+            end
             for i = 1, #L do
                 local key = L[i]
                 local e = m[key]
-                if e then e[1] = nil end
-                if not (skipName and key == "name") then
-                    plate[key]:SetTextColor(sr, sg, sb, 1)
+                if not e then e = {}; m[key] = e end
+                if skipName and key == "name" then
+                    e[1] = nil
+                elseif e[1] ~= r or e[2] ~= g or e[3] ~= b then
+                    e[1], e[2], e[3] = r, g, b
+                    plate[key]:SetTextColor(r, g, b, 1)
                 end
             end
-            return ns._npSlotClassName
         end
     end
-    local r, g, b
-    if tok and tok ~= true then
-        local c = EllesmereUI.GetClassColor(tok)
-        r, g, b = c.r, c.g, c.b
-    elseif UnitIsTapDenied(unit) then
-        local c = _C("tapped")
-        r, g, b = c.r, c.g, c.b
-    else
-        r, g, b = GetEnemyNameReactionColor(unit)
-    end
-    for i = 1, #L do
-        local key = L[i]
-        local e = m[key]
-        if not e then e = {}; m[key] = e end
-        if skipName and key == "name" then
-            e[1] = nil
-        elseif e[1] ~= r or e[2] ~= g or e[3] ~= b then
-            e[1], e[2], e[3] = r, g, b
-            plate[key]:SetTextColor(r, g, b, 1)
+    local V = ns._npSlotLevelFS
+    if V[1] then
+        local r, g, b = ns.NP_UnitLevelColor(unit)
+        for i = 1, #V do
+            local key = V[i]
+            local e = m[key]
+            if not e then e = {}; m[key] = e end
+            if skipName and key == "name" then
+                e[1] = nil
+            elseif not r then
+                if e[1] ~= false then
+                    e[1] = false
+                    local ck = ns._npSlotLevelCK[i]
+                    local c = (p and p[ck]) or defaults[ck]
+                    plate[key]:SetTextColor(c.r, c.g, c.b, 1)
+                end
+            elseif e[1] ~= r or e[2] ~= g or e[3] ~= b then
+                e[1], e[2], e[3] = r, g, b
+                plate[key]:SetTextColor(r, g, b, 1)
+            end
         end
     end
     return ns._npSlotClassName
@@ -7583,15 +7720,9 @@ function NameplateFrame:ApplyAppearance()
         local nr, ng, nb = GetTextSlotColor(nameSlotKey)
         self.name:SetTextColor(nr, ng, nb, 1)
     end
-    -- Enemy Name Text "Reaction Color" cache: ApplyAppearance is a second writer of
-    -- self.name's color (the slot-color line above), so invalidate the skip-if-unchanged
-    -- cache here too -- otherwise a stale cache can wrongly skip re-applying the reaction
-    -- color on the very next UpdateHealthColor call (which always runs immediately after
-    -- this, from the same SetUnit), leaving the plate showing this slot color instead.
-    self._lastNameReactR, self._lastNameReactG, self._lastNameReactB = nil, nil, nil
-    -- The Threat Colors name memo too: the same static write replaces its tint.
+    -- The Threat Colors name memo: the static write above replaces its tint.
     self._nameThR, self._nameThG, self._nameThB = nil, nil, nil
-    -- Same for the Class / Reaction slot memo: the static slot colours written here and
+    -- Same for the Text Coloring slot memo: the static slot colours written here and
     -- in ApplyHealthTextAppearance below replace what it last painted.
     if self._scMemo then
         for _, e in pairs(self._scMemo) do e[1] = nil end
@@ -7873,7 +8004,7 @@ function NameplateFrame:EnsureToTText()
 end
 -- The unit's target's name, repainted on UNIT_TARGET (registered only while a
 -- slot shows it). Name and class token may be secret: they only reach setters.
--- Class / Reaction mode paints a player target in its class colour; anything
+-- The slot's Class text mode paints a player target in its class colour; anything
 -- else keeps the slot colour.
 function NameplateFrame:UpdateToT()
     local fs, unit, slotKey = self.totText, self.unit, ns._npToTSlot
@@ -8308,7 +8439,7 @@ function NameplateFrame:ClearUnit()
     -- next UpdateHealthColor uses that to hand them back if the new unit has no signal.
     self._threatBdKr, self._threatBdKg, self._threatBdKb = nil, nil, nil
     self._nameThR, self._nameThG, self._nameThB = nil, nil, nil
-    -- Class / Reaction slot colours: the next occupant's class token is read afresh.
+    -- Hostility / Class slot colours: the next occupant's class token is read afresh.
     self._scUnit = nil
     -- Health-text value memo (UpdateHealthValues): a recycled plate must
     -- always write its first values, never skip against the old unit's.
@@ -8826,15 +8957,15 @@ function NameplateFrame:UpdateHealthColor()
         self._threatBdKr, self._threatBdKg, self._threatBdKb = nil, nil, nil
         self:RepaintThreatBorder(unit)
     end
-    -- Enemy name text: three lanes can want it. Threat Colors "Text" wins while it has a
-    -- signal; next the Core Text Positions "Class / Reaction Color" slot mode (one boolean
-    -- read while no slot uses it), then the "Reaction Color" EXTRAS toggle. The slot mode
-    -- keeps painting its other font strings while threat holds the name (skipName drops
-    -- the name's memo, so it repaints the moment threat hands the name back). Each lane
-    -- keeps its own skip-if-unchanged cache, and handing the name from one to another
-    -- clears the previous owner's cache so the new owner always repaints once. Returning
-    -- the slot to its custom colour runs ApplyAppearance, whose static write and cache
-    -- resets hand the name back to the lanes below it.
+    -- Enemy name text: two lanes can want it. Threat Colors "Text" wins while it has a
+    -- signal; next the Core Text Positions Text Coloring slot mode, Hostility / Class or
+    -- Level Difficulty (one boolean read while every slot is custom). The slot mode keeps
+    -- painting its other font strings while threat holds the name (skipName drops the
+    -- name's memo, so it repaints the moment threat hands the name back). Each lane keeps
+    -- its own skip-if-unchanged cache, and handing the name from one to another clears the
+    -- previous owner's cache so the new owner always repaints once. A custom-mode name
+    -- threat hands back takes its static slot colour here; changing a slot's mode runs
+    -- ApplyAppearance, whose static write and cache resets hand the name back to the lanes.
     local nameThreat = tcName and tcOn
     local wasNameThreat = self._threatNameOn
     self._threatNameOn = nameThreat or nil
@@ -8850,32 +8981,15 @@ function NameplateFrame:UpdateHealthColor()
             self._nameThR, self._nameThG, self._nameThB = tcr, tcg, tcb
             self.name:SetTextColor(tcr, tcg, tcb, 1)
         end
-        self._lastNameReactR, self._lastNameReactG, self._lastNameReactB = nil, nil, nil
     elseif slotClassName then
-        -- (name painted by the slot's class mode)
+        -- (name painted by the slot's class or level mode)
         if wasNameThreat then self._nameThR, self._nameThG, self._nameThB = nil, nil, nil end
-    else
-        if wasNameThreat then self._nameThR, self._nameThG, self._nameThB = nil, nil, nil end
-        -- Enemy Name Text "Reaction Color" (EXTRAS toggle): zero cost while off (one field read),
-        -- other than the one-time restore below for a plate that was previously colored by this
-        -- feature. Piggybacks on this function's existing event-driven calls rather than
-        -- registering anything of its own.
-        if p and p.enemyNameTextReactionColor then
-            local nnr, nng, nnb = GetEnemyNameReactionColor(unit)
-            if nnr ~= self._lastNameReactR or nng ~= self._lastNameReactG or nnb ~= self._lastNameReactB then
-                self._lastNameReactR, self._lastNameReactG, self._lastNameReactB = nnr, nng, nnb
-                self.name:SetTextColor(nnr, nng, nnb, 1)
-            end
-        elseif self._lastNameReactR or wasNameThreat then
-            -- Toggled off after having been applied to this plate (or the threat lane just
-            -- handed the name back): restore the slot color directly here rather than
-            -- depending on ApplyAppearance re-running elsewhere.
-            self._lastNameReactR, self._lastNameReactG, self._lastNameReactB = nil, nil, nil
-            local nameSlotKey = ns.FindNameSlot()
-            if nameSlotKey then
-                local nr, ng, nb = GetTextSlotColor(nameSlotKey)
-                self.name:SetTextColor(nr, ng, nb, 1)
-            end
+    elseif wasNameThreat then
+        self._nameThR, self._nameThG, self._nameThB = nil, nil, nil
+        local nameSlotKey = ns.FindNameSlot()
+        if nameSlotKey then
+            local nr, ng, nb = GetTextSlotColor(nameSlotKey)
+            self.name:SetTextColor(nr, ng, nb, 1)
         end
     end
     -- Near-aggro glow (Non-Tank Threat cog): ns._reactionNearAggro was written
@@ -9049,6 +9163,7 @@ function NameplateFrame:UpdateName()
     end
     -- Standalone level renders on its own FontString and can share the plate with a
     -- name-family slot. Refreshed here (plate acquire/unit swap) so pooled reuse never stales.
+    -- Plain text: its colour is the slot's Text Coloring mode (font string colour).
     if self.levelText and self.levelText:IsShown() then
         self.levelText:SetText(ns.GetUnitLevelText(unit))
     end
@@ -9057,14 +9172,15 @@ function NameplateFrame:UpdateName()
     -- WoW Forever: the level in the box right of the bar.
     if self._fvLevelBox then ns.NP_UpdateForeverLevel(self) end
     -- The slotted name-family variant decides what renders: name or a level+name
-    -- combo. A nil slot keeps the plain-name write (RefreshNamePosition hides it).
+    -- combo (in the slot's materialized part colours). A nil slot keeps the plain-name
+    -- write (RefreshNamePosition hides it).
     local slot = ns.FindNameSlot()
     local el = slot and GetTextSlot(slot) or "enemyName"
     local name = EllesmereUI.WithSurname(UnitName(unit))
     if type(name) == "string" then
         -- WoW Forever: the slot's Name Format (nil function off Forever).
         if ns.NP_FormatName then name = ns.NP_FormatName(name, slot) end
-        ns.SetNameElementText(self.name, el, name, unit)
+        ns.SetNameElementText(self.name, el, name, unit, slot)
         if p and p.nameRaidMarkerEnabled == true then self:RefreshNamePosition(true) end
     end
 end
@@ -9087,7 +9203,8 @@ function NameplateFrame:UpdateClassification()
     end
     -- Quest mob indicator takes priority over elite/rare. With "Replace Quest Icon with
     -- Objective" on and a clean remaining count cached, draw that number instead of the icon.
-    if ns.IsQuestMob and ns.IsQuestMob(self.unit) then
+    -- Quest Indicator off: no quest scan, a quest mob shows its elite/rare mark instead.
+    if not (p and p.classificationHideQuest) and ns.IsQuestMob and ns.IsQuestMob(self.unit) then
         local objText = (p and p.replaceQuestIconWithObjective == true)
             and ns.GetQuestObjectiveText and ns.GetQuestObjectiveText(self.unit) or nil
         if objText then
@@ -9116,6 +9233,12 @@ function NameplateFrame:UpdateClassification()
         -- WoW Forever shows no elite or rare mark on its plates (the quest
         -- marks above stay).
         if ns._npForever then
+            self.classFrame:Hide()
+            self:UpdateNameWidth()
+            return
+        end
+        -- Rare Indicator off: no elite or rare marks.
+        if p and p.classificationHideRare then
             self.classFrame:Hide()
             self:UpdateNameWidth()
             return
@@ -11373,7 +11496,7 @@ function npAddon:OnEnable()
     ApplyClassPowerSetting()
     -- Apply spec-assigned preset on login (before UI is opened)
     if ns._ApplySpecPresetFromDB then ns._ApplySpecPresetFromDB() end
-    -- Class / Reaction slot (with Target of Target and the bottom slots), Threat %
+    -- Text Coloring slot (with Target of Target and the bottom slots), Threat %
     -- and Show Threat Colors flags for the first plates, after the seeds and the
     -- spec preset above rewrote the slots (RefreshAllSettings keeps them after).
     ns.NP_RefreshSlotClassFlags()
