@@ -190,8 +190,9 @@ end
 -------------------------------------------------------------------------------
 local EUI_Bank = CreateFrame("Frame", "EUI_BankFrame", UIParent)
 EUI_Bank:SetToplevel(true)
-EUI_Bank:SetFrameStrata("MEDIUM")
-EUI_Bank:SetFrameLevel(1)
+local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+EUI_Bank:SetFrameStrata(allowOtherWindows and "MEDIUM" or "HIGH")
+EUI_Bank:SetFrameLevel(allowOtherWindows and 1 or 50)
 EUI_Bank:EnableMouse(true)
 EUI_Bank:SetMovable(true)
 EUI_Bank:SetClampedToScreen(true)
@@ -1037,6 +1038,18 @@ do
     end
     _purchaseBtnChar = MakeSecurePurchaseBtn(Enum.BankType.Character)
     _purchaseBtnWarband = MakeSecurePurchaseBtn(Enum.BankType.Account)
+end
+
+function EUI_Bank:ApplyWindowLayering()
+    local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+    local strata = allowOtherWindows and "MEDIUM" or "HIGH"
+    self:SetFrameStrata(strata)
+    self:SetFrameLevel(allowOtherWindows and 1 or 50)
+    bagsWin:SetFrameLevel(self:GetFrameLevel() + 20)
+    _purchaseBtnChar:SetFrameStrata(strata)
+    _purchaseBtnWarband:SetFrameStrata(strata)
+    _purchaseBtnChar:SetFrameLevel(sidebar:GetFrameLevel() + 20)
+    _purchaseBtnWarband:SetFrameLevel(sidebar:GetFrameLevel() + 20)
 end
 
 -- Sidebar header: "Tabs" label + collapse arrow

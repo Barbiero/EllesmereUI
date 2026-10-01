@@ -110,6 +110,29 @@ local EUI = EllesmereUI
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
+local layerUpdateFrame = CreateFrame("Frame")
+function EUI_Bags:ApplyWindowLayering()
+    -- The bank's purchase buttons are secure, so defer layer changes in combat.
+    if InCombatLockdown() then
+        layerUpdateFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    layerUpdateFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+    local strata = allowOtherWindows and "MEDIUM" or "HIGH"
+    self:SetFrameStrata(strata)
+    self:SetFrameLevel(allowOtherWindows and 1 or 100)
+    EUI_BagsWindow:SetFrameStrata(strata)
+    EUI_BagsReagent:SetFrameStrata(strata)
+    local sf = self._scrollFrame
+    if sf and not self._assignSelectMode and not self._pinSelectMode then
+        sf:SetFrameStrata(strata)
+    end
+    local bank = _G.EUI_BankFrame
+    if bank and bank.ApplyWindowLayering then bank:ApplyWindowLayering() end
+end
+layerUpdateFrame:SetScript("OnEvent", function() EUI_Bags:ApplyWindowLayering() end)
+
 -- Tracked currencies are PER CHARACTER: their input feed (Blizzard's currency
 -- tab via the TokenFrame.OnTokenWatchChanged sync below) is per-character, so
 -- a shared store can only bleed across characters. Stored at the EllesmereUIDB
@@ -7724,9 +7747,7 @@ local function StartAddon()
     end
 
     EUI_Bags:SetClampedToScreen(true)
-    -- Share the normal panel strata so clicking the AH or bags can raise either.
-    EUI_Bags:SetFrameStrata("MEDIUM")
-    EUI_Bags:SetFrameLevel(1)
+    EUI_Bags:ApplyWindowLayering()
     EUI_Bags:EnableMouse(true)
     EUI_Bags:SetMovable(true)
 
@@ -7929,7 +7950,7 @@ local function StartAddon()
     -- Bag overview window
     EUI_BagsWindow:SetSize(280, 80)
     EUI_BagsWindow:SetPoint("BOTTOMRIGHT", EUI_Bags._bagsBtn, "TOPRIGHT", 0, 2)
-    EUI_BagsWindow:SetFrameStrata("MEDIUM")
+    EUI_BagsWindow:SetFrameStrata(EUI_Bags:GetFrameStrata())
     EUI_BagsWindow:SetToplevel(true)
     EUI_BagsWindow:EnableMouse(true)
     EUI_BagsWindow.bg = EUI_BagsWindow:CreateTexture(nil, "BACKGROUND")
@@ -7940,7 +7961,7 @@ local function StartAddon()
 
     EUI_BagsReagent:SetSize(320, 300)
     EUI_BagsReagent:SetPoint("BOTTOMRIGHT", EUI_Bags, "BOTTOMLEFT", -10, 0)
-    EUI_BagsReagent:SetFrameStrata("MEDIUM")
+    EUI_BagsReagent:SetFrameStrata(EUI_Bags:GetFrameStrata())
     EUI_BagsReagent:SetToplevel(true)
     EUI_BagsReagent:EnableMouse(true)
     EUI_BagsReagent.bg = EUI_BagsReagent:CreateTexture(nil, "BACKGROUND")

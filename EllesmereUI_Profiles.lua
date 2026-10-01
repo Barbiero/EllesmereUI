@@ -1403,6 +1403,12 @@ local REFRESH_ADDON_STEPS = {
     function() if _G._EQT_RefreshAll then _G._EQT_RefreshAll() end end,
     -- Chat (sidebar icons, borders, fonts, visibility)
     function() if _G._ECHAT_RefreshAll then _G._ECHAT_RefreshAll() end end,
+    -- Bags (window order follows the selected profile immediately)
+    function()
+        if _G.EUI_Bags and _G.EUI_Bags.ApplyWindowLayering then
+            _G.EUI_Bags:ApplyWindowLayering()
+        end
+    end,
     -- Friends List + Mythic Timer
     function()
         if _G._EFR_ApplyFriends then _G._EFR_ApplyFriends() end
