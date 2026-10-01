@@ -429,6 +429,36 @@ initFrame:SetScript("OnEvent", function(self)
         -- tooltip too; the reskin-driven rows gray out individually inside the popup.
         if not EllesmereUI._prebuilding then
             local leftRgn = ttCursorRow._leftRegion
+            -- Health strip texture dropdown: the shared bar catalogue behind a
+            -- "Blizzard" entry (the unset default). The triple lives on ns so the
+            -- SharedMedia appender, which registers by table identity, gets the same
+            -- tables on every build.
+            if not ns.ttStripTex then
+                local tex, names, order = EllesmereUI.BuildBarTextureTables()
+                ns.ttStripTex = { tex = tex, names = names, order = order }
+            end
+            local st = ns.ttStripTex
+            EllesmereUI.AppendSharedMediaTextures(st.names, st.order, nil, st.tex)
+            local stripTexValues, stripTexOrder = { blizzard = "Blizzard" }, { "blizzard" }
+            for _, key in ipairs(st.order) do
+                if key ~= "---" then
+                    stripTexValues[key] = st.names[key] or key
+                    stripTexOrder[#stripTexOrder + 1] = key
+                end
+            end
+            stripTexValues._menuOpts = {
+                itemHeight = 28,
+                background = function(key)
+                    if key == "blizzard" then return "Interface\\TargetingFrame\\UI-StatusBar" end
+                    return EllesmereUI.ResolveTexturePath(st.tex, key, nil)
+                end,
+            }
+            local function stripHidden()
+                return not (EllesmereUIDB and EllesmereUIDB.tooltipHideHealthStrip == false)
+            end
+            local function applyStripStyle()
+                if EllesmereUI._applyTooltipHealthStripStyle then EllesmereUI._applyTooltipHealthStripStyle() end
+            end
             EllesmereUI.BuildInlineCog(leftRgn, {
                 gap = 9,
                 title = "Tooltip Content",
@@ -502,13 +532,35 @@ initFrame:SetScript("OnEvent", function(self)
                           SetCVar("UberTooltips", v and "1" or "0")
                       end },
                     { type="toggle", label="Hide Unit Health Strip",
-                      get=function()
-                          return not (EllesmereUIDB and EllesmereUIDB.tooltipHideHealthStrip == false)
-                      end,
+                      get=stripHidden,
                       set=function(v)
                           if not EllesmereUIDB then EllesmereUIDB = {} end
                           EllesmereUIDB.tooltipHideHealthStrip = v
                           if EllesmereUI._applyTooltipHealthStrip then EllesmereUI._applyTooltipHealthStrip() end
+                      end },
+                    -- Shown only while the strip is visible; they restyle the reskinned bar.
+                    { type="dropdown", label="Health Strip Texture",
+                      values=stripTexValues, order=stripTexOrder,
+                      hidden=stripHidden,
+                      disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+                      get=function()
+                          return EllesmereUIDB and EllesmereUIDB.tooltipHealthStripTexture or "blizzard"
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.tooltipHealthStripTexture = (v ~= "blizzard") and v or nil
+                          applyStripStyle()
+                      end },
+                    { type="slider", label="Health Strip Height", min=1, max=8, step=1,
+                      hidden=stripHidden,
+                      disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+                      get=function()
+                          return EllesmereUIDB and EllesmereUIDB.tooltipHealthStripHeight or 3
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.tooltipHealthStripHeight = (v ~= 3) and v or nil
+                          applyStripStyle()
                       end },
                 },
             })
@@ -1792,6 +1844,16 @@ initFrame:SetScript("OnEvent", function(self)
             buildContent = BuildLFGMenuContent,
         },
         {
+            key   = "legacysystem",
+            title = "Progress Legacy",
+            desc  = "The Progress Legacy window (reward track, challenges and the legacy tree) in the house style.",
+            reloadMsg = "Changing the Progress Legacy reskin requires a UI reload to fully swap between Blizzard and Ellesmere styles.",
+            setEnabled = function(v)
+                if not EllesmereUIDB then EllesmereUIDB = {} end
+                EllesmereUIDB.reskinLegacySystem = v
+            end,
+        },
+        {
             key   = "greatvault",
             title = "Great Vault",
             desc  = "Weekly rewards window with custom tile backgrounds, progress colors, and completion states.",
@@ -2240,9 +2302,54 @@ initFrame:SetScript("OnEvent", function(self)
         for i = #WINDOWS, 1, -1 do
             if WINDOWS[i].key == "bagbar" then table.remove(WINDOWS, i) end
         end
+        -- The Progress Legacy skin exists only on Forever; drop its card on retail.
+        for i = #WINDOWS, 1, -1 do
+            if WINDOWS[i].key == "legacysystem" then table.remove(WINDOWS, i) end
+        end
+    end
+
+    -- XP Bar: a proper card in the list, but not a window reskin -- its style lives in
+    -- EllesmereUIDB.xpBarStyle/xpForeverFrameAtlas, so it carries its own getStyle/setStyle
+    -- and is marked `custom` (Apply-to-All / Reset skip it; it has no enable bool). Forever
+    -- only, and only when the EllesmereUI Action Bars XP data bar is present to apply it.
+    if EllesmereUI.IS_FOREVER and C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIActionBars") then
+        WINDOWS[#WINDOWS + 1] = {
+            key = "xpbar",
+            title = "XP Bar",
+            desc = "Experience bar style: the EllesmereUI look, Blizzard's default, or the Forever client art (Legacy or Professions frame).",
+            custom = true,
+            styleValues = {
+                default = "Default", forever_legacy = "Forever (Gold)",
+                forever_prof = "Forever (Professions)", eui = "EllesmereUI",
+            },
+            styleOrder = { "default", "forever_legacy", "forever_prof", "eui" },
+            getStyle = function()
+                local s = (EllesmereUIDB and EllesmereUIDB.xpBarStyle) or "eui"
+                if s == "forever" then
+                    local fa = EllesmereUIDB and EllesmereUIDB.xpForeverFrameAtlas
+                    return (fa == "Professions-skillbar-frame") and "forever_prof" or "forever_legacy"
+                end
+                return s
+            end,
+            setStyle = function(v)
+                EllesmereUIDB = EllesmereUIDB or {}
+                local style = v
+                if v == "forever_legacy" then
+                    EllesmereUIDB.xpForeverFrameAtlas = "Legacy-Progressbar-Frame"; style = "forever"
+                elseif v == "forever_prof" then
+                    EllesmereUIDB.xpForeverFrameAtlas = "Professions-skillbar-frame"; style = "forever"
+                end
+                local needReload = EllesmereUI._SetXPBarStyle and EllesmereUI._SetXPBarStyle(style)
+                if needReload and WSReloadPopup then
+                    WSReloadPopup("Switching the XP bar between the EllesmereUI bar and Blizzard's own needs a UI reload.")
+                end
+            end,
+        }
     end
 
     local function WSGetStyle(win)
+        if win.getStyle then return win.getStyle() end
         return EllesmereUI.GetBlizzWindowStyle(win.key)
     end
 
@@ -2262,6 +2369,9 @@ initFrame:SetScript("OnEvent", function(self)
     local function WSSetStyle(win, style, suppressPopup)
         local old = WSGetStyle(win)
         if old == style then return false end
+        -- Custom cards (e.g. XP Bar) store their own style and handle their own reload
+        -- popup; they aren't window reskins, so skip the enable-bool / look-slot path.
+        if win.setStyle then win.setStyle(style); return false end
         if not EllesmereUIDB then EllesmereUIDB = {} end
         -- A pick here belongs to the whole UI's current look: the Style
         -- page's Apply to All saves it into that look's window slot when
@@ -2780,7 +2890,7 @@ initFrame:SetScript("OnEvent", function(self)
             local crossed = false
             for _, win in ipairs(WINDOWS) do
                 local style = (_wsApplyAllStyle == "off" and win.blizzDefault) or _wsApplyAllStyle
-                if not WSStyleOwned(win) and WSSetStyle(win, style, true) then crossed = true end
+                if not win.custom and not WSStyleOwned(win) and WSSetStyle(win, style, true) then crossed = true end
             end
             EllesmereUI:RefreshPage()
             if crossed then
@@ -3303,6 +3413,8 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUIDB.uberTooltips = nil
                 EllesmereUIDB.uberTooltipsManual = nil
                 EllesmereUIDB.tooltipHideHealthStrip = nil
+                EllesmereUIDB.tooltipHealthStripTexture = nil
+                EllesmereUIDB.tooltipHealthStripHeight = nil
                 EllesmereUIDB.showItemMaxStacks = nil
                 EllesmereUIDB.itemStackModifier = nil
                 EllesmereUIDB.tooltipShowGuildRank = nil
@@ -3408,6 +3520,7 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUI._applyTooltipCursorAnchor then EllesmereUI._applyTooltipCursorAnchor() end
             if EllesmereUI._applyTooltipFixedAnchor then EllesmereUI._applyTooltipFixedAnchor() end
             if EllesmereUI._applyTooltipHealthStrip then EllesmereUI._applyTooltipHealthStrip() end
+            if EllesmereUI._applyTooltipHealthStripStyle then EllesmereUI._applyTooltipHealthStripStyle() end
             if EllesmereUI._refreshCharSheetSocketPanel then EllesmereUI._refreshCharSheetSocketPanel() end
             if EllesmereUI._refreshCharSheetSlotFlyoutArrows then EllesmereUI._refreshCharSheetSlotFlyoutArrows() end
         end,

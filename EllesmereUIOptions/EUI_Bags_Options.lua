@@ -271,6 +271,20 @@ initFrame:SetScript("OnEvent", function(self)
                   setValue=function(v) db.profile.bagStackSplitter = v and true or false end }
             ); y = y - h
 
+            -- Allow Windows Over Bags
+            _, h = W:DualRow(parent, y,
+                { type="toggle", text="Allow Windows Over Bags",
+                  tooltip="Click another window, such as the Auction House, to bring it in front of the bags. Click the bags to bring them forward again.",
+                  getValue=function() return db.profile.bagAllowWindowsOverBags ~= false end,
+                  setValue=function(v)
+                      db.profile.bagAllowWindowsOverBags = v and true or false
+                      if _G.EUI_Bags and _G.EUI_Bags.ApplyWindowLayering then
+                          _G.EUI_Bags:ApplyWindowLayering()
+                      end
+                  end },
+                EllesmereUI.BlankRowCfg()
+            ); y = y - h
+
             ---------------------------------------------------------------------------
             --  ITEMS
             ---------------------------------------------------------------------------
@@ -977,6 +991,9 @@ initFrame:SetScript("OnEvent", function(self)
                 if bdb._profileDefaults then
                     EllesmereUI.Lite.DeepMergeDefaults(p, bdb._profileDefaults)
                 end
+            end
+            if _G.EUI_Bags and _G.EUI_Bags.ApplyWindowLayering then
+                _G.EUI_Bags:ApplyWindowLayering()
             end
             -- Wipe per-character data from root DB
             if EllesmereUIDB then

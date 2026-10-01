@@ -7,6 +7,7 @@ local ns = select(2, ...)
 EllesmereUI._ModuleNS["EllesmereUIBags"] = ns  -- LOD options files read this module ns via the registry
 
 EUI_Bags = CreateFrame("Frame", "EUI_MainBagFrame", UIParent)
+EUI_Bags:SetToplevel(true)
 EUI_Bags:Hide()
 -- Auto-size state: reset on close (next open sizes from its first/active tab);
 -- while open it only grows, never shrinks.
@@ -108,6 +109,29 @@ local EUI = EllesmereUI
 -- Profile access helper (DB created in EUI_Bags_Options.lua, loaded first per TOC)
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
+
+local layerUpdateFrame = CreateFrame("Frame")
+function EUI_Bags:ApplyWindowLayering()
+    -- The bank's purchase buttons are secure, so defer layer changes in combat.
+    if InCombatLockdown() then
+        layerUpdateFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    layerUpdateFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+    local strata = allowOtherWindows and "MEDIUM" or "HIGH"
+    self:SetFrameStrata(strata)
+    self:SetFrameLevel(allowOtherWindows and 1 or 100)
+    EUI_BagsWindow:SetFrameStrata(strata)
+    EUI_BagsReagent:SetFrameStrata(strata)
+    local sf = self._scrollFrame
+    if sf and not self._assignSelectMode and not self._pinSelectMode then
+        sf:SetFrameStrata(strata)
+    end
+    local bank = _G.EUI_BankFrame
+    if bank and bank.ApplyWindowLayering then bank:ApplyWindowLayering() end
+end
+layerUpdateFrame:SetScript("OnEvent", function() EUI_Bags:ApplyWindowLayering() end)
 
 -- Tracked currencies are PER CHARACTER: their input feed (Blizzard's currency
 -- tab via the TokenFrame.OnTokenWatchChanged sync below) is per-character, so
@@ -3551,7 +3575,7 @@ ExitPinSelectMode = function()
         ov._fadeOut:Play()
     end
     local sf = EUI_Bags._scrollFrame
-    if sf then sf:SetFrameStrata("HIGH") end
+    if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
 end
 
 -------------------------------------------------------------------------------
@@ -3576,7 +3600,7 @@ local function ExitAssignSelectMode()
         ov._fadeOut:Play()
     end
     local sf = EUI_Bags._scrollFrame
-    if sf then sf:SetFrameStrata("HIGH") end
+    if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
 end
 
 EnterAssignSelectMode = function(catKey)
@@ -6384,8 +6408,7 @@ local function StartAddon()
     end
 
     EUI_Bags:SetClampedToScreen(true)
-    EUI_Bags:SetFrameStrata("HIGH")
-    EUI_Bags:SetFrameLevel(100)
+    EUI_Bags:ApplyWindowLayering()
     EUI_Bags:EnableMouse(true)
     EUI_Bags:SetMovable(true)
 
@@ -6418,6 +6441,7 @@ local function StartAddon()
         EUI_Bags:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", newLeft, newTop)
     end)
     EUI_Bags:SetScript("OnMouseDown", function(self, button)
+        self:Raise()
         local noShift = BP().bagMoveNoShift
         -- A controller's emulated Shift reads as a Shift key, not the physical
         -- left one, so it also counts while a controller is in use.
@@ -6467,7 +6491,8 @@ local function StartAddon()
     -- Blizzard's backpack open/close sounds, played on the frame's show/hide
     -- transitions as Blizzard's container frames do: a Show on an already open
     -- bag fires no OnShow, and the login pre-build never shows the frame.
-    EUI_Bags:HookScript("OnShow", function()
+    EUI_Bags:HookScript("OnShow", function(self)
+        self:Raise()
         PlaySound(SOUNDKIT.IG_BACKPACK_OPEN)
         CaptureTrackedGold()
         -- Repaint if the unmerge state changed while hidden: the flag-flip refresh is gated on
@@ -6669,7 +6694,8 @@ local function StartAddon()
     -- Bag overview window
     EUI_BagsWindow:SetSize(280, 80)
     EUI_BagsWindow:SetPoint("BOTTOMRIGHT", EUI_Bags._bagsBtn, "TOPRIGHT", 0, 2)
-    EUI_BagsWindow:SetFrameStrata("HIGH")
+    EUI_BagsWindow:SetFrameStrata(EUI_Bags:GetFrameStrata())
+    EUI_BagsWindow:SetToplevel(true)
     EUI_BagsWindow:EnableMouse(true)
     EUI_BagsWindow.bg = EUI_BagsWindow:CreateTexture(nil, "BACKGROUND")
     EUI_BagsWindow.bg:SetAllPoints()
@@ -6679,7 +6705,8 @@ local function StartAddon()
 
     EUI_BagsReagent:SetSize(320, 300)
     EUI_BagsReagent:SetPoint("BOTTOMRIGHT", EUI_Bags, "BOTTOMLEFT", -10, 0)
-    EUI_BagsReagent:SetFrameStrata("HIGH")
+    EUI_BagsReagent:SetFrameStrata(EUI_Bags:GetFrameStrata())
+    EUI_BagsReagent:SetToplevel(true)
     EUI_BagsReagent:EnableMouse(true)
     EUI_BagsReagent.bg = EUI_BagsReagent:CreateTexture(nil, "BACKGROUND")
     EUI_BagsReagent.bg:SetAllPoints()
