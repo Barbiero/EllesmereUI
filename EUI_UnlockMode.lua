@@ -414,13 +414,16 @@ function EllesmereUI.RepositionBarToMover(barKey)
     if not m then return end
     local bar = UM.GetBarFrame(barKey)
     if not bar then return end
-    local mL, mT = m:GetLeft(), m:GetTop()
-    if not mL or not mT then return end
-    -- GetLeft/GetTop and SetPoint TOPLEFT vs UIParent TOPLEFT share one space;
-    -- Y offset from UIParent TOPLEFT is negative (top of screen = 0).
+    local mX, mY = m:GetCenter()
+    local barScale = bar:GetEffectiveScale()
+    if not mX or not mY or not barScale or barScale <= 0 then return end
+    -- Pin center to center: the mover still has the old size here, so a corner
+    -- pin would shift the element by half the size change. The mover center is
+    -- converted into the bar's own scale (SetPoint offsets use the bar's scale).
+    local ratio = m:GetEffectiveScale() / barScale
     pcall(function()
         bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", mL, mT - UIParent:GetHeight())
+        bar:SetPoint("CENTER", UIParent, "BOTTOMLEFT", mX * ratio, mY * ratio)
     end)
 end
 
