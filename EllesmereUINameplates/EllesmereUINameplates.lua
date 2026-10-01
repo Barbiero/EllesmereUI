@@ -164,6 +164,8 @@ local defaults = {
     absorbStyle = "blizzard",
     absorbCleanAlpha = 30,
     absorbColor = { r = 1, g = 1, b = 1 },
+    -- Shield placement, the unit frames' set: overlay / overlayReverse / right / left.
+    absorbEdgeMode = "overlay",
     hostile = { r = 0.39, g = 0.11, b = 0.09 },
     neutral = { r = 0.81, g = 0.72, b = 0.19 },
     tapped  = { r = 0.50, g = 0.50, b = 0.50 },
@@ -1881,7 +1883,7 @@ function ns.ApplyAbsorbStyle(plate)
         if c then r, g, b = c.r or 1, c.g or 1, c.b or 1 end
     end
     local mask = plate._absorbMask
-    for _, bar in ipairs({ plate.absorb, plate.absorbForward, plate.absorbOverflow }) do
+    for _, bar in ipairs({ plate.absorb, plate.absorbForward }) do
         if bar then
             bar:SetStatusBarTexture(tex)
             bar:SetStatusBarColor(r, g, b, alpha)
@@ -1892,6 +1894,96 @@ function ns.ApplyAbsorbStyle(plate)
             end
         end
     end
+    local mode = (p and p.absorbEdgeMode) or defaults.absorbEdgeMode
+    if plate._absEdge ~= mode then
+        ns.NP_LayoutAbsorbBars(plate, plate.health, mode)
+        -- A shield already up repaints in its new placement (the forward
+        -- bar's visibility is decided by the paint).
+        if plate.unit and plate.MarkHealthDirty and not plate._absorbHidden then
+            plate._absorbEdge = true
+            plate:MarkHealthDirty()
+        end
+    end
+end
+
+-- Shield absorbs, drawn like the unit frames' and secret-safe: both bars take
+-- the raw absorb over 0..maxHealth and two clip frames do the split visually,
+-- so no Lua math ever touches a (possibly secret) absorb amount, and the
+-- health bar keeps its own range (the shield never squeezes it).
+--   _absMissClip: health fill edge -> bar's right end (the empty health).
+--   _absCurClip:  bar's left end -> health fill edge (the filled health), or
+--                 the whole bar in the edge placements.
+--   absorbForward: in the missing clip, fills right from the health edge, so
+--                  it shows min(absorb, missing). Overlay placement only.
+--   absorb: in the filled clip, placed per absorbEdgeMode:
+--     overlay        = fills left from the bar's right end; the clip shows
+--                      only what exceeds empty health, over the health fill
+--     overlayReverse = the whole shield fills left from the health edge
+--     right / left   = the whole shield from that end of the bar
+-- Shared with the options preview (owner is any table holding the bars).
+function ns.NP_BuildAbsorbBars(owner, health, mask)
+    local fillTex = health:GetStatusBarTexture()
+    local lvl = health:GetFrameLevel() + 1
+    local curClip = CreateFrame("Frame", nil, health)
+    curClip:SetClipsChildren(true)
+    curClip:SetFrameLevel(lvl)
+    local missClip = CreateFrame("Frame", nil, health)
+    missClip:SetClipsChildren(true)
+    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", -1, 0)
+    missClip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
+    missClip:SetFrameLevel(lvl)
+    local fw = CreateFrame("StatusBar", nil, missClip)
+    fw:SetReverseFill(false)
+    fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
+    fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
+    local ab = CreateFrame("StatusBar", nil, curClip)
+    for _, bar in ipairs({ ab, fw }) do
+        bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+        local fill = bar:GetStatusBarTexture()
+        if fill and mask then fill:AddMaskTexture(mask) end
+        bar:SetFrameLevel(lvl)
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(0)
+        bar:Hide()
+    end
+    owner._absCurClip, owner._absMissClip = curClip, missClip
+    owner.absorb, owner.absorbForward = ab, fw
+end
+
+-- Seats the filled clip and the shield bar for a placement. Settings-time
+-- only, never per paint.
+function ns.NP_LayoutAbsorbBars(owner, health, mode)
+    local fillTex = health:GetStatusBarTexture()
+    local curClip, ab = owner._absCurClip, owner.absorb
+    curClip:ClearAllPoints()
+    ab:ClearAllPoints()
+    if mode == "right" or mode == "left" then
+        curClip:SetAllPoints(health)
+    else
+        curClip:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+        curClip:SetPoint("BOTTOMRIGHT", fillTex, "BOTTOMRIGHT", 0, 0)
+    end
+    if mode == "left" then
+        ab:SetReverseFill(false)
+        ab:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+        ab:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
+    elseif mode == "overlayReverse" then
+        ab:SetReverseFill(true)
+        ab:SetPoint("TOPRIGHT", fillTex, "TOPRIGHT", 0, 0)
+        ab:SetPoint("BOTTOMRIGHT", fillTex, "BOTTOMRIGHT", 0, 0)
+    else
+        ab:SetReverseFill(true)
+        ab:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
+        ab:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
+    end
+    if mode ~= "overlay" then owner.absorbForward:Hide() end
+    owner._absEdge = mode
+end
+
+-- Both bars span the health bar so their textures render at bar scale.
+function ns.NP_SizeAbsorbBars(owner, w, h)
+    owner.absorb:SetSize(w, h)
+    owner.absorbForward:SetSize(w, h)
 end
 
 function ns.ApplyAbsorbStyleAll()
@@ -4086,43 +4178,15 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
     absorbMask:SetTexture("Interface\\Buttons\\WHITE8X8")
     plate._absorbMask = absorbMask
 
-    plate.absorb = CreateFrame("StatusBar", nil, plate.health)
-    plate.absorb:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    plate.absorb:GetStatusBarTexture():AddMaskTexture(absorbMask)
-    plate.absorb:SetReverseFill(true)
-    plate.absorb:SetPoint("TOPRIGHT", plate.health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-    plate.absorb:SetPoint("BOTTOMRIGHT", plate.health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-    plate.absorb:SetWidth(GetHealthBarWidth())
-    plate.absorb:SetHeight(GetHealthBarHeight())
-    plate.absorb:SetFrameLevel(plate.health:GetFrameLevel())
-    plate.absorbForward = CreateFrame("StatusBar", nil, plate.health)
-    plate.absorbForward:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    plate.absorbForward:GetStatusBarTexture():AddMaskTexture(absorbMask)
-    plate.absorbForward:SetReverseFill(false)
-    plate.absorbForward:SetPoint("TOPLEFT", plate.health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-    plate.absorbForward:SetPoint("BOTTOMLEFT", plate.health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-    plate.absorbForward:SetWidth(GetHealthBarWidth())
-    plate.absorbForward:SetHeight(GetHealthBarHeight())
-    plate.absorbForward:SetFrameLevel(plate.health:GetFrameLevel())
-    plate.absorbForward:Hide()
-    plate.absorbOverflow = CreateFrame("StatusBar", nil, plate.health)
-    plate.absorbOverflow:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
-    plate.absorbOverflow:SetReverseFill(false)
-    plate.absorbOverflow:SetPoint("TOPLEFT", plate.health, "TOPRIGHT", 0, 0)
-    plate.absorbOverflow:SetPoint("BOTTOMLEFT", plate.health, "BOTTOMRIGHT", 0, 0)
-    plate.absorbOverflow:SetWidth(0)
-    plate.absorbOverflow:SetFrameLevel(plate.health:GetFrameLevel())
-    plate.absorbOverflow:Hide()
-    plate.absorbOverflowDivider = plate.health:CreateTexture(nil, "OVERLAY", nil, 7)
-    plate.absorbOverflowDivider:SetColorTexture(0, 0, 0, 1)
-    plate.absorbOverflowDivider:SetPoint("TOPRIGHT", plate.health, "TOPRIGHT", 0, 0)
-    plate.absorbOverflowDivider:SetPoint("BOTTOMRIGHT", plate.health, "BOTTOMRIGHT", 0, 0)
-    plate.absorbOverflowDivider:SetWidth(1)
-    plate.absorbOverflowDivider:Hide()
+    ns.NP_BuildAbsorbBars(plate, plate.health, absorbMask)
+    ns.NP_SizeAbsorbBars(plate, GetHealthBarWidth(), GetHealthBarHeight())
+    ns.NP_LayoutAbsorbBars(plate, plate.health, (p and p.absorbEdgeMode) or defaults.absorbEdgeMode)
     if CreateUnitHealPredictionCalculator then
         plate.hpCalculator = CreateUnitHealPredictionCalculator()
+        -- Configured once: plain max health (the shield never widens the
+        -- bar's range) and absorbs clamped to it (a shield fills at most the bar).
         if plate.hpCalculator.SetMaximumHealthMode then
-            plate.hpCalculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.WithAbsorbs)
+            plate.hpCalculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.Default)
             plate.hpCalculator:SetDamageAbsorbClampMode(Enum.UnitDamageAbsorbClampMode.MaximumHealth)
         end
     end
@@ -7691,7 +7755,7 @@ function NameplateFrame:ApplyAppearance()
     self.health:ClearAllPoints()
     self.health:SetPoint("CENTER", self, "CENTER", 0, GetNameplateYOffset())
     self.health:SetSize(GetHealthBarWidth(), GetHealthBarHeight())
-    self.absorb:SetSize(GetHealthBarWidth(), GetHealthBarHeight())
+    ns.NP_SizeAbsorbBars(self, GetHealthBarWidth(), GetHealthBarHeight())
     -- (Classic WoW UI seats its health border from self:ApplyBorder below,
     -- once the bar carries its new size. A second seat here would repeat the
     -- level's font, anchors and unit reads for nothing.)
@@ -7930,12 +7994,6 @@ function NameplateFrame:ApplyAppearance()
         end
     end
     PositionAuraSlot(self.cc, 2, ccSlot, self, ccSz, ccH, GetAuraSpacing("ccs"), GetAuraSlotOffsets("ccSlot"))
-    if self.absorbForward then
-        self.absorbForward:SetSize(GetHealthBarWidth(), GetHealthBarHeight())
-    end
-    if self.absorbOverflow then
-        self.absorbOverflow:SetHeight(GetHealthBarHeight())
-    end
     ApplyHealthBarTexture(self)
     ns.ApplyCastBarTexture(self)
     ns.ApplyAbsorbStyle(self)
@@ -8430,7 +8488,6 @@ function NameplateFrame:ClearUnit()
     self.nameplate = nil
     self._absorbHidden = nil
     self._maxHPValid = nil
-    self._absMode = nil
     self._lastHCr, self._lastHCg, self._lastHCb = nil, nil, nil
     self._mirrorPending = nil
     -- Threat Colors border/text channels: drop the skip-if-unchanged caches so a recycled
@@ -8486,16 +8543,7 @@ function NameplateFrame:ClearUnit()
     if self.rightArrow then self.rightArrow:Hide() end
     HideClassPowerOnPlate(self)
     self.absorb:Hide()
-    if self.absorbForward then
-        self.absorbForward:Hide()
-    end
-    if self.absorbOverflow then
-        self.absorbOverflow:Hide()
-        self.absorbOverflow:SetWidth(0)
-    end
-    if self.absorbOverflowDivider then
-        self.absorbOverflowDivider:Hide()
-    end
+    self.absorbForward:Hide()
     self:Hide()
     self:SetScale(1)
     self._curScale = nil
@@ -8545,7 +8593,6 @@ function NameplateFrame:UpdateHealthValues()
             -- cached max belongs to the old unit, drop it too.
             self._absorbHidden = nil
             self._maxHPValid = nil
-            self._absMode = nil
             -- Only refresh auras for the lockout when one was actually active
             -- (zero cost when the Cast Lockout feature is off / no lockout).
             if self._castLockout then
@@ -8568,7 +8615,7 @@ function NameplateFrame:UpdateHealthValues()
         end
     end
 
-    local curHealth, maxHealth, absorbAmt, maxWithAbsorbs
+    local curHealth, maxHealth, absorbAmt
 
     -- LEAN PATH: the last full pass proved this unit carries no absorb, and no
     -- UNIT_ABSORB_AMOUNT_CHANGED edge has fired since (that handler arms
@@ -8598,121 +8645,47 @@ function NameplateFrame:UpdateHealthValues()
 
     if self.hpCalculator and self.hpCalculator.GetMaximumHealth and UnitGetDetailedHealPrediction then
         UnitGetDetailedHealPrediction(unit, nil, self.hpCalculator)
-
-        self.hpCalculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.Default)
         curHealth = self.hpCalculator:GetCurrentHealth()
         maxHealth = self.hpCalculator:GetMaximumHealth()
         absorbAmt = self.hpCalculator:GetDamageAbsorbs()
-        -- maxWithAbsorbs is fetched LAZILY in the secret-absorb branch below (its only
-        -- consumer): the dominant no-absorb path must not pay two mode swaps + a getter.
     else
         curHealth = UnitHealth(unit)
         maxHealth = UnitHealthMax(unit)
         absorbAmt = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
-        maxWithAbsorbs = maxHealth
     end
 
+    -- The health bar keeps plain max health whatever the shield: the shield
+    -- draws over it rather than squeezing it.
+    self.health:SetMinMaxValues(0, maxHealth)
+    self.health:SetValue(curHealth)
+
+    -- A secret absorb can't be tested for zero, so it always draws (a zero
+    -- value renders nothing).
     local absorbIsSecret = issecretvalue and issecretvalue(absorbAmt)
-
-    -- PERF: skip ALL absorb work when absorbs are 0 and were already 0 (most M+ mobs have none).
-    local absorbZero = not absorbIsSecret and (not absorbAmt or absorbAmt <= 0)
-    if absorbZero and self._absorbHidden then
-        -- Fast path: absorbs were and still are zero
-        self.health:SetMinMaxValues(0, maxHealth)
-        self.health:SetValue(curHealth)
-    elseif absorbIsSecret then
-        self._absorbHidden = false
-        if maxWithAbsorbs == nil and self.hpCalculator and self.hpCalculator.GetMaximumHealth then
-            self.hpCalculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.WithAbsorbs)
-            maxWithAbsorbs = self.hpCalculator:GetMaximumHealth()
-            self.hpCalculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.Default)
-        end
-        -- Geometry, fill direction and sibling visibility are SHAPE, not value:
-        -- pushed once on entering this branch (stamped _absMode), never per
-        -- tick. Only the range/value pushes below carry secrets. The stamp is
-        -- cleared by the zero branch, ClearUnit and both token-swap sites.
-        if self._absMode ~= "secret" then
-            self._absMode = "secret"
-            self.absorb:ClearAllPoints()
-            if self.absorbForward then self.absorbForward:ClearAllPoints() end
-            self.absorb:SetReverseFill(false)
-            self.absorb:SetPoint("TOPLEFT", self.health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-            self.absorb:SetPoint("BOTTOMLEFT", self.health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-            self.absorb:Show()
-            if self.absorbForward then self.absorbForward:Hide() end
-            if self.absorbOverflow then self.absorbOverflow:Hide(); self.absorbOverflow:SetWidth(0) end
-            if self.absorbOverflowDivider then self.absorbOverflowDivider:Hide() end
-        end
-        self.health:SetMinMaxValues(0, maxWithAbsorbs or maxHealth)
-        self.health:SetValue(curHealth)
-        self.absorb:SetMinMaxValues(0, maxWithAbsorbs or maxHealth)
-        self.absorb:SetValue(absorbAmt)
-    else
-        -- Plain absorb shape (same stamp discipline as the secret branch).
-        if self._absMode ~= "plain" then
-            self._absMode = "plain"
-            self.absorb:ClearAllPoints()
-            self.absorb:SetReverseFill(true)
-            self.absorb:SetPoint("TOPRIGHT", self.health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-            self.absorb:SetPoint("BOTTOMRIGHT", self.health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-            if self.absorbForward then
-                self.absorbForward:ClearAllPoints()
-                self.absorbForward:SetReverseFill(false)
-                self.absorbForward:SetPoint("TOPLEFT", self.health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-                self.absorbForward:SetPoint("BOTTOMLEFT", self.health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-            end
-        end
-        self.health:SetMinMaxValues(0, maxHealth)
-        self.health:SetValue(curHealth)
-        self.absorb:SetMinMaxValues(0, maxHealth)
-        if self.absorbForward then self.absorbForward:SetMinMaxValues(0, maxHealth) end
-
-        local absorbValue = absorbAmt or 0
-        if absorbValue <= 0 then
+    if not absorbIsSecret and (not absorbAmt or absorbAmt <= 0) then
+        -- No shield: hide once, then the lean path carries the plate until
+        -- the next absorb edge.
+        if not self._absorbHidden then
             self._absorbHidden = true
-            -- Entering the lean path: the bar bounds may still be an absorb-
-            -- extended max from the secret branch -- force one clean re-push.
-            self._maxHPValid = nil
-            -- The bars go hidden here; whichever branch re-shows them must
-            -- re-push its shape, so the stamp is dropped.
-            self._absMode = nil
             self.absorb:Hide()
-            if self.absorbForward then self.absorbForward:Hide() end
-            if self.absorbOverflow then self.absorbOverflow:Hide(); self.absorbOverflow:SetWidth(0) end
-            if self.absorbOverflowDivider then self.absorbOverflowDivider:Hide() end
+            self.absorbForward:Hide()
+        end
+    else
+        self._absorbHidden = false
+        -- Both bars take the raw absorb over max health; the clip frames do
+        -- the split (ns.NP_BuildAbsorbBars), so no Lua math touches it.
+        self.absorb:SetMinMaxValues(0, maxHealth)
+        self.absorb:SetValue(absorbAmt)
+        self.absorb:Show()
+        -- The forward bar fills empty health in the Overlay placement only;
+        -- the others draw the whole shield through the main bar.
+        local fw = self.absorbForward
+        if self._absEdge == "overlay" then
+            fw:SetMinMaxValues(0, maxHealth)
+            fw:SetValue(absorbAmt)
+            fw:Show()
         else
-            self._absorbHidden = false
-            local missing = maxHealth - curHealth
-            if missing < 0 then missing = 0 end
-            local forwardAbsorb = math.min(absorbValue, missing)
-            local remainingAbsorb = absorbValue - forwardAbsorb
-            if remainingAbsorb < 0 then remainingAbsorb = 0 end
-            local backfillAbsorb = math.min(remainingAbsorb, curHealth or 0)
-            local overflowAbsorb = remainingAbsorb - backfillAbsorb
-            if overflowAbsorb < 0 then overflowAbsorb = 0 end
-
-            if self.absorbForward then
-                self.absorbForward:SetValue(forwardAbsorb)
-                if forwardAbsorb > 0 then self.absorbForward:Show() else self.absorbForward:Hide() end
-            end
-            self.absorb:SetValue(backfillAbsorb)
-            if backfillAbsorb > 0 then self.absorb:Show() else self.absorb:Hide() end
-
-            if self.absorbOverflow then
-                self.absorbOverflow:SetMinMaxValues(0, maxHealth)
-                self.absorbOverflow:SetValue(overflowAbsorb)
-                if overflowAbsorb > 0 then
-                    self.absorbOverflow:Show()
-                    self.absorbOverflow:SetWidth(self.health:GetWidth())
-                    if self.absorbOverflowDivider then self.absorbOverflowDivider:Show() end
-                else
-                    self.absorbOverflow:Hide()
-                    self.absorbOverflow:SetWidth(0)
-                    if self.absorbOverflowDivider then self.absorbOverflowDivider:Hide() end
-                end
-            elseif self.absorbOverflowDivider then
-                self.absorbOverflowDivider:Hide()
-            end
+            fw:Hide()
         end
     end
     end -- lean-gate else (full absorb path)
@@ -9157,7 +9130,6 @@ function NameplateFrame:UpdateName()
             ns.ClearHoverExtras(self)
             self:ApplyTarget()
             self._maxHPValid = nil
-            self._absMode = nil
             if ns._npToTSlot or self._totEv then self:SyncToT(actualUnit) end
         end
     end
