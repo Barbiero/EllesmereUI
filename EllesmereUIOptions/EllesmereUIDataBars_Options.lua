@@ -2909,6 +2909,14 @@ initFrame:SetScript("OnEvent", function(self)
                     typeRows[#typeRows + 1] = MkToggle("Force English Units (K/M/B)", "forceEnglishUnits",
                         "Always use K/M/B instead of localized units.")
                 end
+            elseif b.type == "profession" or b.type == "profession2" then
+                typeRows = {
+                    { type = "dropdown", text = "Text Display",
+                      values = { name = "Name and Bar", values = "Values" },
+                      order = { "name", "values" },
+                      getValue = function() return s.textDisplay or "name" end,
+                      setValue = function(v) s.textDisplay = v; Apply() end },
+                }
             elseif b.type == "xprep" then
                 typeRows = {
                     { type = "dropdown", text = "Mode",
