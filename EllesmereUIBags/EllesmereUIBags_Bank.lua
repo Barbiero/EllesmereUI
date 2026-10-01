@@ -189,8 +189,10 @@ end
 --  Main Frame
 -------------------------------------------------------------------------------
 local EUI_Bank = CreateFrame("Frame", "EUI_BankFrame", UIParent)
-EUI_Bank:SetFrameStrata("HIGH")
-EUI_Bank:SetFrameLevel(50)
+EUI_Bank:SetToplevel(true)
+local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+EUI_Bank:SetFrameStrata(allowOtherWindows and "MEDIUM" or "HIGH")
+EUI_Bank:SetFrameLevel(allowOtherWindows and 1 or 50)
 EUI_Bank:EnableMouse(true)
 EUI_Bank:SetMovable(true)
 EUI_Bank:SetClampedToScreen(true)
@@ -366,10 +368,12 @@ end
 --  until a bag is placed in it (Blizzard's Camelot BankFrame bag buttons).
 -------------------------------------------------------------------------------
 local RefreshBankBags
+local bankBagsWindow
 if EUI.IS_FOREVER then
     local BANK_BAG_SLOTS = Enum.BagIndex.Characterbanktab
 
     local bagsWin = CreateFrame("Frame", nil, EUI_Bank)
+    bankBagsWindow = bagsWin
     bagsWin:Hide()
     bagsWin:SetFrameLevel(EUI_Bank:GetFrameLevel() + 20)
     bagsWin:EnableMouse(true)
@@ -682,6 +686,7 @@ end
 --  Shift+Drag to Move
 -------------------------------------------------------------------------------
 EUI_Bank:SetScript("OnMouseDown", function(self, button)
+    self:Raise()
     if button == "LeftButton" and IsShiftKeyDown() then
         self:StartMoving()
         self._moving = true
@@ -1019,7 +1024,7 @@ do
     local function MakeSecurePurchaseBtn(bankType)
         local b = CreateFrame("Button", nil, sidebar, "BankPanelPurchaseButtonScriptTemplate")
         b:SetAttribute("overrideBankType", bankType)
-        b:SetFrameStrata("HIGH")
+        b:SetFrameStrata(sidebar:GetFrameStrata())
         b:SetFrameLevel(sidebar:GetFrameLevel() + 20)
         b:EnableMouse(true)
         b:SetAlpha(0)
@@ -1035,6 +1040,20 @@ do
     end
     _purchaseBtnChar = MakeSecurePurchaseBtn(Enum.BankType.Character)
     _purchaseBtnWarband = MakeSecurePurchaseBtn(Enum.BankType.Account)
+end
+
+function EUI_Bank:ApplyWindowLayering()
+    local allowOtherWindows = BP().bagAllowWindowsOverBags ~= false
+    local strata = allowOtherWindows and "MEDIUM" or "HIGH"
+    self:SetFrameStrata(strata)
+    self:SetFrameLevel(allowOtherWindows and 1 or 50)
+    if bankBagsWindow then
+        bankBagsWindow:SetFrameLevel(self:GetFrameLevel() + 20)
+    end
+    _purchaseBtnChar:SetFrameStrata(strata)
+    _purchaseBtnWarband:SetFrameStrata(strata)
+    _purchaseBtnChar:SetFrameLevel(sidebar:GetFrameLevel() + 20)
+    _purchaseBtnWarband:SetFrameLevel(sidebar:GetFrameLevel() + 20)
 end
 
 -- Sidebar header: "Tabs" label + collapse arrow
@@ -2921,6 +2940,7 @@ eventFrame:SetScript("OnEvent", function(_, event)
         local bankScale = BP().bagScale or 1
         EUI_Bank:SetScale(bankScale)
         EUI_Bank:Show()
+        EUI_Bank:Raise()
         -- Controller cursor: scroll step buttons and a visible scrollbar,
         -- built only once a controller is in use.
         if EUI_Bank._padBuilt or EUI.PadInUse() then

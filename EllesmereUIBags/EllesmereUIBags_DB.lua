@@ -49,6 +49,7 @@ local BAGS_DEFAULTS = {
         bagHideOneBagWarning  = false,
         bagHideAddCategory    = false,
         bagMoveNoShift        = false,
+        bagAllowWindowsOverBags = true,
         bagStackSplitter      = false,
         enableGoldTracking    = true,
         detachReagentBag      = false,
