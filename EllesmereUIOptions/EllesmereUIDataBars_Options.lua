@@ -68,17 +68,18 @@ initFrame:SetScript("OnEvent", function(self)
     local TYPE_LABEL = {}
     for _, t in ipairs(ns.BLOCK_TYPES) do TYPE_LABEL[t.key] = t.label end
 
-    -- A saved block whose type registers no factory on WoW Forever (crests,
-    -- spec, great vault) shows only its empty slot there. The live bar
+    -- A saved block whose type registers no factory on this client (crests,
+    -- spec, great vault on WoW Forever; supplies on Midnight) builds no slot
+    -- there. The live bar
     -- measures it at zero, so it collapses out of the solve, except in a role:
     -- as the bar's Fill Remaining block it still takes the leftover span, and
     -- as its Force Centered block it still splits the bar at the center (the
     -- toggles on any shown block move either role). The page mirrors the live
     -- bar: no preview segment and no settings section. The entry stays in the
     -- bar's saved list untouched, so the profile still carries it back to
-    -- retail.
+    -- the other client.
     local function BlockHidden(b)
-        return EllesmereUI.IS_FOREVER and not ns.BlockFactories[b.type]
+        return not ns.BlockFactories[b.type]
     end
 
     -- Typical content extents (real-bar px) for auto-fit blocks that have no
@@ -87,7 +88,7 @@ initFrame:SetScript("OnEvent", function(self)
         clock = 150, fps = 70, ms = 70, gold = 150, xprep = 140, spec = 130,
         profession = 120, travel = 40, micromenu = 340, currency = 90, spacer = 40,
         durability = 70, combat = 105, profession2 = 120, greatvault = 100,
-        location = 140, coords = 70, crests = 160, ilvl = 70,
+        location = 140, coords = 70, crests = 160, ilvl = 70, supplies = 70,
         bags = 50,
     }
 
@@ -2506,7 +2507,7 @@ initFrame:SetScript("OnEvent", function(self)
                 profession = true, profession2 = true, currency = true,
                 greatvault = true, audio = true, location = true, coords = true,
                 ilvl = true, bags = true,
-                ldb = true,
+                ldb = true, supplies = true,
             }
             if ICON_COLOR_BLOCKS[b.type] then
                 local function IconFlagsOff()
@@ -2663,7 +2664,9 @@ initFrame:SetScript("OnEvent", function(self)
                           Apply()
                       end }
                 end
-                if b.type == "location" then
+                if b.type == "supplies" then
+                    iconRowRight = MkToggleOn("Show Icon", "showIcon")
+                elseif b.type == "location" then
                     iconRowRight = MkToggleOn("Show Icon", "showIcon",
                         "Shows the map pin next to the zone name.")
                 elseif b.type == "coords" then
@@ -3025,6 +3028,14 @@ initFrame:SetScript("OnEvent", function(self)
                     -- Individual button toggles live in the "Menu Elements"
                     -- checklist dropdown appended after the shared row loop.
                 }
+            elseif b.type == "supplies" then
+                typeRows = {
+                    { type = "dropdown", text = "Visible Items",
+                      values = { __placeholder = "..." }, order = { "__placeholder" },
+                      getValue = function() return "__placeholder" end,
+                      setValue = function() end },
+                    MkToggle("Show Label", "showLabel"),
+                }
             elseif b.type == "currency" then
                 local cValues, cOrder = ns.BuildCurrencyList()
                 cValues._noLoc = true
@@ -3213,6 +3224,24 @@ initFrame:SetScript("OnEvent", function(self)
                 local rightCfg = typeRows[k + 1]
                 if not rightCfg then rightCfg = { type = "label", text = "" } end
                 row, h = W:DualRow(parent, y, typeRows[k], rightCfg);  y = y - h
+                if b.type == "supplies" and k == 1 and not EllesmereUI._prebuilding then
+                    local region = row._leftRegion
+                    if region._control then region._control:Hide() end
+                    local dropdown, refresh = EllesmereUI.BuildVisOptsCBDropdown(
+                        region, 210, region:GetFrameLevel() + 2, ns.ClassResourceChoices,
+                        function(key) return ns.ClassResourceShown(s, key) end,
+                        function(key, value)
+                            s.hiddenItems = s.hiddenItems or {}
+                            s.hiddenItems[key] = not value
+                            Apply()
+                        end, nil, 10, true)
+                    PP.Point(dropdown, "RIGHT", region, "RIGHT", -20, 0)
+                    region._control = dropdown
+                    region._lastInline = nil
+                    if refresh then EllesmereUI.RegisterWidgetRefresh(refresh) end
+                    parent._edbClickTargets["block:" .. blockId .. ":resources"] =
+                        { section = secHdr, target = row, slotSide = "left" }
+                end
                 -- Latency: the Show Icon toggle rides this row's right slot and
                 -- carries the inline icon-color swatches built after the loop.
                 if b.type == "ms" and k == 1 then msIconRow = row end
