@@ -8237,3 +8237,23 @@ L["Your own XP and reputation bars are created on reload."] = "Suas próprias ba
 L["a Background Opacity above 0"] = "uma Opacidade do Fundo acima de 0"
 L["iLvl"] = true
 L["is"] = "está"
+
+-- == Unlock Mode Anchors / Raid Frames ==
+L["Action Bars can only width match\nto other Action Bars"] = "Barras de Ação só podem corresponder a largura\ncom outras Barras de Ação"
+L["An element cannot anchor to itself"] = "Um elemento não pode ancorar em si mesmo"
+L["Anchor this element first"] = "Ancore este elemento primeiro"
+L["Click any element\nto set as the Fallback Anchor"] = "Clique em um elemento\npara defini-lo como âncora de reserva"
+L["Click any element\nto set as the Override Anchor"] = "Clique em um elemento\npara defini-lo como âncora de substituição"
+L["Fallback Anchor: Change"] = "Âncora de reserva: alterar"
+L["Fallback Anchor: Clear"] = "Âncora de reserva: limpar"
+L["Fallback Anchor: Select"] = "Âncora de reserva: selecionar"
+L["Fill Color's Dark Mode choice drives a Dark Mode override condition, so it can't be changed while editing an override"] = "A escolha de Modo Escuro da Cor de Preenchimento aciona uma condição de substituição de Modo Escuro e não pode ser alterada enquanto uma substituição está sendo editada."
+L["Forever"] = true
+L["In Party & Raid"] = "Em Grupo e Raide"
+L["In Raid"] = "Em Raide"
+L["Override Anchor"] = "Âncora de substituição"
+L["The fallback must differ from\nthe main anchor target"] = "A reserva deve ser diferente\ndo alvo da âncora principal"
+L["This would create a circular anchor"] = "Isso criaria uma ancoragem circular"
+L["This would create a circular height match"] = "Isso criaria uma correspondência de altura circular"
+L["This would create a circular width match"] = "Isso criaria uma correspondência de largura circular"
+L["Toggle Orientation"] = "Alternar orientação"
