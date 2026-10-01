@@ -478,7 +478,8 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
 
         -- Color mode (custom | accent | reactive) + bar texture.
         local rp = REACTIVE_PREVIEW[barKey] or { 1, 1, 1 }
-        _, h = W:DualRow(parent, y,
+        local xpColorRow
+        xpColorRow, h = W:DualRow(parent, y,
             { type="multiSwatch", text="Color",
               swatches = {
                   { tooltip = "Custom Color",
@@ -539,6 +540,59 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
                   S().barTexture = v
                   ns.ApplyDataBarLayout(barKey)
               end });  y = y - h
+
+        -- Forever XP bar: a cog on the Color row for the professions flipbook fill --
+        -- a Fill picker (Default colour, or a per-profession animated flipbook) plus
+        -- Play Anims (loop) and Smart Anims (flash on XP gain, overrides Play Anims).
+        if barKey == "XPBar" and EllesmereUI.IS_FOREVER and xpColorRow and not EllesmereUI._prebuilding then
+            local DB = function() _G.EllesmereUIDB = _G.EllesmereUIDB or {}; return _G.EllesmereUIDB end
+            -- Build the Fill dropdown from the flipbooks that actually exist on this client.
+            local FLIP_CANDS = {
+                { "Skillbar_Fill_Flipbook_Alchemy",        "Alchemy" },
+                { "Skillbar_Fill_Flipbook_Blacksmithing",  "Blacksmithing" },
+                { "Skillbar_Fill_Flipbook_Enchanting",     "Enchanting" },
+                { "Skillbar_Fill_Flipbook_Engineering",    "Engineering" },
+                { "Skillbar_Fill_Flipbook_Herbalism",      "Herbalism" },
+                { "Skillbar_Fill_Flipbook_Inscription",    "Inscription" },
+                { "Skillbar_Fill_Flipbook_Jewelcrafting",  "Jewelcrafting" },
+                { "Skillbar_Fill_Flipbook_Leatherworking", "Leatherworking" },
+                { "Skillbar_Fill_Flipbook_Mining",         "Mining" },
+                { "Skillbar_Fill_Flipbook_Skinning",       "Skinning" },
+                { "Skillbar_Fill_Flipbook_Tailoring",      "Tailoring" },
+                { "Skillbar_Fill_Flipbook_Cooking",        "Cooking" },
+                { "Skillbar_Fill_Flipbook_Fishing",        "Fishing" },
+            }
+            local fillVals = { default = "Default (color)" }
+            local fillOrder = { "default" }
+            for _, c in ipairs(FLIP_CANDS) do
+                if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(c[1]) then
+                    fillVals[c[1]] = c[2]; fillOrder[#fillOrder + 1] = c[1]
+                end
+            end
+            local function NoFlip() return (DB().xpFvFillAtlas or "default") == "default" end
+            EllesmereUI.BuildInlineCog(xpColorRow._leftRegion, {
+                title = "Fill",
+                tip = "Use a Forever professions flipbook as the XP bar fill, and how it animates.",
+                captureRegion = xpColorRow._leftRegion,
+                rows = {
+                    { type="dropdown", label="Fill", values=fillVals, order=fillOrder,
+                      get=function() return DB().xpFvFillAtlas or "default" end,
+                      set=function(v)
+                          DB().xpFvFillAtlas = (v ~= "default") and v or nil
+                          ns.ApplyDataBarLayout(barKey)
+                          EllesmereUI:RefreshPage()
+                      end },
+                    { type="toggle", label="Play Anims", disabled=NoFlip,
+                      disabledTooltip="Pick a flipbook Fill first.",
+                      get=function() return DB().xpFvFillAnim == 1 end,
+                      set=function(on) DB().xpFvFillAnim = on and 1 or 0; ns.ApplyDataBarLayout(barKey) end },
+                    { type="toggle", label="Smart Anims (on XP gain)", disabled=NoFlip,
+                      disabledTooltip="Pick a flipbook Fill first.",
+                      get=function() return DB().xpFvFillSmart == 1 end,
+                      set=function(on) DB().xpFvFillSmart = on and 1 or 0; ns.ApplyDataBarLayout(barKey) end },
+                },
+            })
+        end
 
         -- Custom Border rows, built only while the option is on: Border Style |
         -- Border Size (the ICONS setter and the BAR BACKGROUND slider), then
@@ -726,10 +780,7 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
 
         if not EllesmereUI._prebuilding then
             local rgn = textRow._rightRegion
-            EllesmereUI.BuildInlineCog(rgn, { icon = EllesmereUI.DIRECTIONS_ICON, anchorTo = rgn._control,
-                title = "Bar Text Offsets",
-                disabled = _blizzDis, disabledTooltip = BLIZZ_DIS_TIP, rawTooltip = true,
-                rows = {
+            local textRows = {
                     { type="dropdown", label="Anchor",
                       tooltip="Where the bar text sits inside the bar; the offsets nudge it from there.",
                       values = { center="Center", top="Top", bottom="Bottom", left="Left", right="Right" },
@@ -748,7 +799,21 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
                           S().textOffsetY = v
                           ns.ApplyDataBarLayout(barKey)
                       end },
-                },
+            }
+            -- XP bar: append the percentage after the raw values, e.g.
+            -- "Level 40 - 1234 / 5678 (21.7%)". Only meaningful with raw values shown.
+            if barKey == "XPBar" then
+                textRows[#textRows + 1] = { type="toggle", label="Show %",
+                    tooltip="Append the XP percentage after the raw values.",
+                    disabled=function() return not S().showRawValues end,
+                    disabledTooltip="Requires raw values (Show Values).",
+                    get=function() return S().showPercent end,
+                    set=function(v) S().showPercent = v; ns.ApplyDataBarLayout(barKey) end }
+            end
+            EllesmereUI.BuildInlineCog(rgn, { icon = EllesmereUI.DIRECTIONS_ICON, anchorTo = rgn._control,
+                title = "Bar Text Offsets",
+                disabled = _blizzDis, disabledTooltip = BLIZZ_DIS_TIP, rawTooltip = true,
+                rows = textRows,
             })
         end
 
@@ -810,9 +875,25 @@ local function BuildMenuBagsXPPage(pageName, parent, yOffset)
                 }, { size = 20, disabled = DivOff, disabledTooltip = DivTip, rawTooltip = _blizzDis })
                 -- No anchorTo: the cog chains left of the two swatches.
                 EllesmereUI.BuildInlineCog(lRgn, {
-                    title = "Divider Text",
+                    title = "Dividers",
                     disabled = DivOff, disabledTooltip = DivTip, rawTooltip = _blizzDis,
                     rows = {
+                        { type="dropdown", label="5% Line Style",
+                          values={ solid="Solid", dotted="Dotted", dashed="Dashed" },
+                          order={ "solid", "dotted", "dashed" },
+                          disabled=DivOff, disabledTooltip=DivTip,
+                          get=function() return S().divider5Style or "dashed" end,
+                          set=function(v)
+                              S().divider5Style = v
+                              ns.ApplyDataBarLayout(barKey)
+                          end },
+                        { type="toggle", label="Smart Ticks",
+                          disabled=DivOff, disabledTooltip=DivTip,
+                          get=function() return S().smartTicks end,
+                          set=function(v)
+                              S().smartTicks = v
+                              ns.ApplyDataBarLayout(barKey)
+                          end },
                         { type="toggle", label="Show Divider Text",
                           get=function() return S().showDividerText end,
                           set=function(v)

@@ -2308,7 +2308,48 @@ initFrame:SetScript("OnEvent", function(self)
         end
     end
 
+    -- XP Bar: a proper card in the list, but not a window reskin -- its style lives in
+    -- EllesmereUIDB.xpBarStyle/xpForeverFrameAtlas, so it carries its own getStyle/setStyle
+    -- and is marked `custom` (Apply-to-All / Reset skip it; it has no enable bool). Forever
+    -- only, and only when the EllesmereUI Action Bars XP data bar is present to apply it.
+    if EllesmereUI.IS_FOREVER and C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIActionBars") then
+        WINDOWS[#WINDOWS + 1] = {
+            key = "xpbar",
+            title = "XP Bar",
+            desc = "Experience bar style: the EllesmereUI look, Blizzard's default, or the Forever client art (Legacy or Professions frame).",
+            custom = true,
+            styleValues = {
+                default = "Default", forever_legacy = "Forever (Gold)",
+                forever_prof = "Forever (Professions)", eui = "EllesmereUI",
+            },
+            styleOrder = { "default", "forever_legacy", "forever_prof", "eui" },
+            getStyle = function()
+                local s = (EllesmereUIDB and EllesmereUIDB.xpBarStyle) or "eui"
+                if s == "forever" then
+                    local fa = EllesmereUIDB and EllesmereUIDB.xpForeverFrameAtlas
+                    return (fa == "Professions-skillbar-frame") and "forever_prof" or "forever_legacy"
+                end
+                return s
+            end,
+            setStyle = function(v)
+                EllesmereUIDB = EllesmereUIDB or {}
+                local style = v
+                if v == "forever_legacy" then
+                    EllesmereUIDB.xpForeverFrameAtlas = "Legacy-Progressbar-Frame"; style = "forever"
+                elseif v == "forever_prof" then
+                    EllesmereUIDB.xpForeverFrameAtlas = "Professions-skillbar-frame"; style = "forever"
+                end
+                local needReload = EllesmereUI._SetXPBarStyle and EllesmereUI._SetXPBarStyle(style)
+                if needReload and WSReloadPopup then
+                    WSReloadPopup("Switching the XP bar between the EllesmereUI bar and Blizzard's own needs a UI reload.")
+                end
+            end,
+        }
+    end
+
     local function WSGetStyle(win)
+        if win.getStyle then return win.getStyle() end
         return EllesmereUI.GetBlizzWindowStyle(win.key)
     end
 
@@ -2328,6 +2369,9 @@ initFrame:SetScript("OnEvent", function(self)
     local function WSSetStyle(win, style, suppressPopup)
         local old = WSGetStyle(win)
         if old == style then return false end
+        -- Custom cards (e.g. XP Bar) store their own style and handle their own reload
+        -- popup; they aren't window reskins, so skip the enable-bool / look-slot path.
+        if win.setStyle then win.setStyle(style); return false end
         if not EllesmereUIDB then EllesmereUIDB = {} end
         -- A pick here belongs to the whole UI's current look: the Style
         -- page's Apply to All saves it into that look's window slot when
@@ -2846,7 +2890,7 @@ initFrame:SetScript("OnEvent", function(self)
             local crossed = false
             for _, win in ipairs(WINDOWS) do
                 local style = (_wsApplyAllStyle == "off" and win.blizzDefault) or _wsApplyAllStyle
-                if not WSStyleOwned(win) and WSSetStyle(win, style, true) then crossed = true end
+                if not win.custom and not WSStyleOwned(win) and WSSetStyle(win, style, true) then crossed = true end
             end
             EllesmereUI:RefreshPage()
             if crossed then
