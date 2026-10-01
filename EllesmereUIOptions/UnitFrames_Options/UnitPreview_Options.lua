@@ -2104,7 +2104,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         end
 
         -- Donor settings for mini frames (border/texture inherit from
-        -- focus/target/player; text SIZES are the unit's own -- see
+        -- target/focus/player; text SIZES are the unit's own -- see
         -- ApplyPreviewTextPositions)
         local isMini = (unitKey == "pet" or unitKey == "boss" or unitKey == "targettarget" or unitKey == "focustarget")
         local ds = s
@@ -2865,7 +2865,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         end
 
         -- Border size and color (encompasses health+power+BTB+above pips)
-        local bs = bds.borderSize or 1
+        local bs = (unitKey == "targettarget" and s.borderSizeOverride) or bds.borderSize or 1
         local bc = bds.borderColor or { r = 0, g = 0, b = 0 }
         local bTexKey = bds.borderTexture or "solid"
         local borderH = bh2 + (s.bottomTextBar and btbIsAtt and (s.bottomTextBarHeight or 16) or 0)
@@ -2874,7 +2874,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         border:SetPoint("TOPRIGHT", barArea, "TOPRIGHT", 0, 0)
         border:SetHeight(borderH)
         EllesmereUI.ApplyBorderStyle(border, bs, bc.r, bc.g, bc.b, bds.borderAlpha or 1, bTexKey, bds.borderTextureOffset, bds.borderTextureOffsetY, bds.borderTextureShiftX, bds.borderTextureShiftY, "unitframes", bs, nil,
-            EllesmereUI.BorderPx(bds.borderSizePx, bs, bTexKey))
+            EllesmereUI.BorderPx((unitKey ~= "targettarget" or not s.borderSizeOverride) and bds.borderSizePx, bs, bTexKey))
 
         -- Class Power Pips update (player only)
         if cpPipContainer and cpPips then
@@ -3599,10 +3599,10 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
 
         -- Recalculate border sizes after scale change so they stay pixel-perfect
         if border then
-            local bs2 = bds.borderSize or 1
+            local bs2 = (unitKey == "targettarget" and s.borderSizeOverride) or bds.borderSize or 1
             local bTex2 = bds.borderTexture or "solid"
             EllesmereUI.ApplyBorderStyle(border, bs2, (bds.borderColor or {r=0,g=0,b=0}).r, (bds.borderColor or {r=0,g=0,b=0}).g, (bds.borderColor or {r=0,g=0,b=0}).b, bds.borderAlpha or 1, bTex2, bds.borderTextureOffset, bds.borderTextureOffsetY, bds.borderTextureShiftX, bds.borderTextureShiftY, "unitframes", bs2, nil,
-                EllesmereUI.BorderPx(bds.borderSizePx, bs2, bTex2))
+                EllesmereUI.BorderPx((unitKey ~= "targettarget" or not s.borderSizeOverride) and bds.borderSizePx, bs2, bTex2))
         end
         if castbar then
             if PP.GetBorders(castbar) then PP.SetBorderSize(castbar, 1) end
@@ -3692,7 +3692,8 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         end
         if s.portraitSeparator or pf._portraitSeparator then
             ns.UpdatePortraitSeparator(pf, portraitFrame, s, effectiveSide,
-                sp and isAttached, EllesmereUI.BlizzStyle.Get("unitframes"), true)
+                sp and isAttached, EllesmereUI.BlizzStyle.Get("unitframes"), true,
+                unitKey == "targettarget" and bds or nil)
         end
         -- Color Custom Borders: while the Magic border copy shows, both
         -- separators are tinted Magic at full opacity in place, as the live
