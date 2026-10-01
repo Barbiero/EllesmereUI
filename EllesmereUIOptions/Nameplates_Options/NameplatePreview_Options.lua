@@ -897,6 +897,9 @@ local function BuildNameplatePreview(parent, parentW)
             if EllesmereUI._prebuilding then return end
             local ib = ns.GetIconBorderEnabled
             local db = DB()
+            if (db and db.castIconSeparator) or cast._iconSeam then
+                ns.NP_ApplyCastIconSeparator(cast, castParts.iconFrame, db, customOn and showIcon)
+            end
             sTex = DBVal("customBorderTexture") or defaults.customBorderTexture
             sPath = EllesmereUI.ResolveBorderTexture(sTex)
             sSz = DBVal("customBorderSize") or defaults.customBorderSize
@@ -908,6 +911,7 @@ local function BuildNameplatePreview(parent, parentW)
             sSX, sSY = DBVal("customBorderShiftX"), DBVal("customBorderShiftY")
             sMult = EllesmereUI.PP.mult
             local castOn = customOn and showIcon and DBVal("castIconCustomBorder") == true
+                and DBVal("castbarIconInWidth") ~= true
                 and (not ib or ib("cast"))
             -- Above the icon, as the live border sits at the icon's level + 3.
             paint(castParts.iconFrame, castOn, 3)

@@ -491,6 +491,7 @@ local defaults = {
     -- (debuffs, buffs, crowd control) wear the plate's custom border instead of their
     -- 1px edge. Read only while Border is Custom.
     castIconCustomBorder = false,
+    castIconSeparator = false,
     auraIconCustomBorder = false,
     bgAlpha = 1.0,
     bgColor = { r = 0.12, g = 0.12, b = 0.12 },
@@ -2876,6 +2877,62 @@ function ns.ApplyFrameIconBorder(frame, enabled, adjustIconInset)
         PP.Point(frame.icon, "BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
     end
 end
+function ns.NP_CanShowCastIconSeparator(db)
+    if not db or db.castbarIconInWidth ~= true or db.showCastIcon == false
+        or db.castIconFullSize == true or ns.NP_Blizz() then return false end
+    local tex = db.customBorderTexture or defaults.customBorderTexture
+    return (db.customBorderSize or defaults.customBorderSize) > 0
+        and (tex == "solid" or tex == "" or EllesmereUI.GetBorderCompanion(tex, "sepV") ~= nil)
+end
+
+-- Shared by live plates and the preview; the cast bar owns this lazy divider.
+function ns.NP_ApplyCastIconSeparator(cast, icon, db, customOn, strata)
+    local seam = cast._iconSeam
+    if not (db and db.castIconSeparator == true and customOn and ns.NP_CanShowCastIconSeparator(db)) then
+        if seam then
+            seam:Hide()
+            EllesmereUI.RegisterPxReapply(seam, nil)
+        end
+        return
+    end
+    if not seam then
+        seam = CreateFrame("Frame", nil, cast)
+        seam:SetAllPoints(cast)
+        seam:EnableMouse(false)
+        seam._tex = seam:CreateTexture(nil, "OVERLAY", nil, 7)
+        cast._iconSeam = seam
+    end
+    seam:SetFrameStrata(strata or cast:GetFrameStrata())
+    seam:SetFrameLevel(icon:GetFrameLevel() + 5)
+    seam._key = db.customBorderTexture or defaults.customBorderTexture
+    seam._size = db.customBorderSize or defaults.customBorderSize
+    seam._px = EllesmereUI.BorderPx(db.customBorderSizePx, seam._size, seam._key)
+    seam._right = db.castIconOnRight == true
+    local c = db.customBorderColor or defaults.customBorderColor
+    seam._tex:SetVertexColor(c.r, c.g, c.b, db.customBorderAlpha or defaults.customBorderAlpha)
+    ns.NP_LayoutCastIconSeparator(seam)
+    seam:Show()
+    EllesmereUI.RegisterPxReapply(seam, strata and ns.NP_LayoutCastIconSeparator or nil)
+end
+
+function ns.NP_LayoutCastIconSeparator(seam)
+    local t, es = seam._tex, seam:GetEffectiveScale()
+    if EllesmereUI.GetBorderCompanion(seam._key, "sepV") then
+        EllesmereUI.PlaceBorderDividerV(t, seam, seam._right, false, seam._key, seam._size, seam._px, es)
+        return
+    end
+    local onePixel = es > 0 and PP.perfect / es or PP.mult
+    t:SetColorTexture(1, 1, 1, 1)
+    t:SetTexCoord(0, 1, 0, 1)
+    t:ClearAllPoints()
+    local top = seam._right and "TOPRIGHT" or "TOPLEFT"
+    local bottom = seam._right and "BOTTOMRIGHT" or "BOTTOMLEFT"
+    t:SetPoint(top, seam, top, 0, 0)
+    t:SetPoint(bottom, seam, bottom, 0, 0)
+    t:SetWidth(math.max(1, math.floor((seam._px or seam._size) + 0.5)) * onePixel)
+    t:Show()
+end
+
 -- Every write of the cast spell icon's border goes through here. Custom Border on
 -- Spell Icon (castIconCustomBorder, Border = Custom): the icon wears the plate's custom
 -- border in place of its 1px edge. The border is our own frame, a child of the cast bar
@@ -2885,12 +2942,17 @@ end
 -- re-apply cannot bring it back. MEDIUM strata lifts it out of the plate's flattened
 -- layer above the icon art (the lift's strata while the cast bar is lifted). Style
 -- inputs restyle only when one moved; a colour change (Use Target Border Color on the
--- target) is a plain tint. Off, this is the 1px edge call plus one field read.
+-- target) is a plain tint. Off, this is the 1px edge call plus the opt-in gates.
 function ns.ApplyCastIconBorder(plate)
     local icon = plate and plate.castIconFrame
     if not icon then return end
+    if (p and p.castIconSeparator) or plate.cast._iconSeam then
+        ns.NP_ApplyCastIconSeparator(plate.cast, icon, p, ns.IsCustomBorderEnabled(),
+            plate._castOverlayLifted and plate.cast:GetFrameStrata() or "MEDIUM")
+    end
     local bf = plate._castIconBorder
     if not (p and p.castIconCustomBorder and ns.IsCustomBorderEnabled()
+            and not ns.GetCastIconInWidth()
             and GetShowCastIcon() and ns.GetIconBorderEnabled("cast")) then
         if bf and bf:IsShown() then
             EllesmereUI.ApplyBorderStyle(bf, 0)
@@ -4169,8 +4231,10 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
         -- WoW Forever: the level box right of the bar, sized to it (the
         -- style latched at enable, before any plate).
         if ns._npForever then ns.NP_ApplyForeverLevelBox(plate) end
-        -- Custom Border on Spell Icon follows border style edits (one field read while off).
-        if p and p.castIconCustomBorder then ns.ApplyCastIconBorder(plate) end
+        -- The spell icon border and divider follow border style edits.
+        if (p and (p.castIconCustomBorder or p.castIconSeparator)) or (plate.cast and plate.cast._iconSeam) then
+            ns.ApplyCastIconBorder(plate)
+        end
     end
     function plate:ApplyBorderColor()
         if not PP then return end
@@ -4210,7 +4274,9 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
         end
         -- ...and border colour edits and the target tint's restore (a tint only), on the
         -- threat path too: untargeting a threat-tinted plate drops the target colour here.
-        if p and p.castIconCustomBorder then ns.ApplyCastIconBorder(plate) end
+        if (p and (p.castIconCustomBorder or p.castIconSeparator)) or (plate.cast and plate.cast._iconSeam) then
+            ns.ApplyCastIconBorder(plate)
+        end
     end
     -- Target glow, arrows and focus overlay are lazy (EnsureGlow / EnsureArrows /
     -- EnsureFocusOverlay): only 1 plate shows them, saving ~14 objects per plate.
@@ -5026,6 +5092,8 @@ function ns.RefreshAllSettings()
     for _, plate in pairs(ns.plates) do
         if plate.unit and plate.nameplate then
             plate:SetUnit(plate.unit, plate.nameplate)
+        elseif plate.cast and plate.cast._iconSeam then
+            ns.ApplyCastIconBorder(plate)
         end
     end
     -- WoW Forever's Show Level Box (per profile): on a flip the level
