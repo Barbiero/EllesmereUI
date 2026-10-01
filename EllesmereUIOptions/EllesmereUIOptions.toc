@@ -41,6 +41,7 @@ CooldownManager_Options\Pickers_Options.lua
 CooldownManager_Options\SpellPicker_Options.lua
 EUI_CooldownManager_Options.lua
 EUI_CooldownManager_TalentConditions.lua
+EUI_CooldownManager_BarGlowConditions.lua
 EUI_DamageMeters_Options.lua
 EllesmereUIDataBars_Options.lua
 EUI_ForeverEssentials_Options.lua
