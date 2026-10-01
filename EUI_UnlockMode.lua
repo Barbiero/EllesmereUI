@@ -409,10 +409,10 @@ end
 -- re-place it at the mover's current screen position (else resizing makes it jump).
 -- On EllesmereUI to avoid an upvalue in CreateMover (Lua 5.1 limit: 60).
 function EllesmereUI.RepositionBarToMover(barKey)
-    if not isUnlocked then return end
-    local m = movers[barKey]
+    if not UM.isUnlocked then return end
+    local m = UM.movers[barKey]
     if not m then return end
-    local bar = GetBarFrame(barKey)
+    local bar = UM.GetBarFrame(barKey)
     if not bar then return end
     local mL, mT = m:GetLeft(), m:GetTop()
     if not mL or not mT then return end
