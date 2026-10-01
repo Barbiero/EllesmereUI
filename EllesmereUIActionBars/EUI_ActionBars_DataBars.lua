@@ -1,9 +1,30 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_DataBars.lua
+--
+--  What the XP, Reputation and House Favor bars share: frame, layout, border,
+--  text, visibility and unlock mode registration. Loads after the main file
+--  and before EUI_ActionBars_XPBar.lua, which calls into it through ns.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, type = ipairs, type
+local max = math.max
+local InCombatLockdown = InCombatLockdown
+local C_Timer_After = C_Timer.After
+
+local EAB, EAB_VTABLE, BAR_LOOKUP, EXTRA_BARS = ns.EAB, ns.EAB_VTABLE, ns.BAR_LOOKUP, ns.EXTRA_BARS
+local ResolveBorderThickness = ns.ResolveBorderThickness
+local I = ns._internals
+local AttachDataBarHoverHooks, dataBarFrames = I.AttachDataBarHoverHooks, I.dataBarFrames
+
 -------------------------------------------------------------------------------
 --  Data Bars (XP, Reputation and House Favor bars): the frame, layout,
 --  border, text and visibility all three share. The XP bar's own code is
 --  in EUI_ActionBars_XPBar.lua (loaded after this file; called through ns).
 -------------------------------------------------------------------------------
--- dataBarFrames is forward-declared near barFrames at the top of the file
+-- dataBarFrames is forward-declared near barFrames at the top of the main file
 ns.dataBarFrames = dataBarFrames
 
 -- Reputation and House Favor bar colors (the XP bar's are in
@@ -931,3 +952,4 @@ function ns.SetUseBlizzardDataBars(v)
     return anyMissing
 end
 
+I.SetupDataBars = SetupDataBars -- called by EUI_ActionBars_ExtraBars.lua

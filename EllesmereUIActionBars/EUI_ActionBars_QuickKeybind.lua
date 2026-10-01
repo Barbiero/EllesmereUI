@@ -1,3 +1,33 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_QuickKeybind.lua
+--
+--  Quick Keybind Mode support for the EAB buttons and the paging arrows, and
+--  the Swiftmend brightness scan that closed the main file. Loads after
+--  EUI_ActionBars_ExtraBars.lua and reads the main file through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, pairs = ipairs, pairs
+local InCombatLockdown = InCombatLockdown
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+local RegisterAttributeDriver = RegisterAttributeDriver
+local GetBindingKey = GetBindingKey
+local EFD = ns.EFD
+
+local EAB, barButtons = ns.EAB, ns.barButtons
+local LayoutPagingFrame, ResolveBorderThickness = ns.LayoutPagingFrame, ns.ResolveBorderThickness
+local I = ns._internals
+local BAR_CONFIG, barFrames, hoverStates, _quickKeybindState = I.BAR_CONFIG, I.barFrames, I.hoverStates, I._quickKeybindState
+local InitPagingQuickKeybindButton, SyncPagingAlpha, StopFade = I.InitPagingQuickKeybindButton, I.SyncPagingAlpha, I.StopFade
+local SHOWGRID, SetShowGridInsecure = I.SHOWGRID, I.SetShowGridInsecure
+local SafeEnableMouseMotionOnly, ShouldQuickKeybindSurfaceBar = I.SafeEnableMouseMotionOnly, I.ShouldQuickKeybindSurfaceBar
+local EAB_UpdateQuickKeybindButtons -- assigned below, published as ns.EAB_UpdateQuickKeybindButtons
+local _pagingFrame -- set by the main file through ns._PagingFrameBind
+function ns._PagingFrameBind(f) _pagingFrame = f end
+
 -------------------------------------------------------------------------------
 --  QuickKeybind compatibility: modern QuickKeybind works off visible
 --  buttons' `commandName` plus `DoModeChange(...)`. Blizzard's stock helpers
@@ -729,3 +759,5 @@ end)
         end
     end)
 end)()
+
+ns.EAB_UpdateQuickKeybindButtons = EAB_UpdateQuickKeybindButtons -- called by the main file

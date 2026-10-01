@@ -818,7 +818,6 @@ function ns.EABQueueGrid(show)
     end)
 end
 local _quickKeybindState = { open = false, closePending = false, art = {}, FinishClose = nil }
-local EAB_UpdateQuickKeybindButtons -- forward-declared for early event hooks
 
 local function ShouldQuickKeybindSurfaceBar(s)
     if not _quickKeybindState.open or not s or s.enabled == false then
@@ -2620,6 +2619,7 @@ local function SetupPagingFrame()
     downBtn.commandName = "PREVIOUSACTIONPAGE"
 
     _pagingFrame = f
+    ns._PagingFrameBind(f)
     return f
 end
 
@@ -3254,14 +3254,6 @@ local function SetupBar(info, skipProtected)
     end
     return frame, ns.BuildBarButtons(info, frame, skipProtected)
 end
-
--- Main-chunk locals EUI_ActionBars_Events.lua and EUI_ActionBars_Chrome.lua
--- re-import by name.
-ns._internals = {
-    BAR_CONFIG = BAR_CONFIG, BINDING_MAP = BINDING_MAP, BUTTON_EVENT_LISTS = BUTTON_EVENT_LISTS,
-    ReRegisterButtonEvents = ReRegisterButtonEvents, barFrames = barFrames,
-    _fadeAlpha = _fadeAlpha, extraBarHolders = extraBarHolders,
-}
 
 -------------------------------------------------------------------------------
 --  First-Install Capture: no saved vars, so read Blizzard Edit Mode settings
@@ -4585,8 +4577,8 @@ end
 _quickKeybindState.ReassertButtonsAfterCombatChange = function()
     if not _quickKeybindState.open then return end
     C_Timer_After(0, function()
-        if _quickKeybindState.open and EAB_UpdateQuickKeybindButtons then
-            EAB_UpdateQuickKeybindButtons(true)
+        if _quickKeybindState.open and ns.EAB_UpdateQuickKeybindButtons then
+            ns.EAB_UpdateQuickKeybindButtons(true)
         end
     end)
 end
@@ -6824,7 +6816,6 @@ end
 --  Mouseover Fade System
 -------------------------------------------------------------------------------
 local hoverStates = {}  -- shared by action bars, data bars, and extra bars
-local AttachExtraBarHoverHooks  -- forward declaration; defined near SetupExtraBarHolder
 
 -- Every mouseover-enabled bar follows the same state machine: entering marks
 -- it hovered and fades in, leaving schedules a guarded fade-out on the next
@@ -7104,7 +7095,7 @@ function EAB:RefreshMouseover(onlyHoverGated)
                     -- Ensure extra bars have hover hooks attached (may not have been
                     -- set up at load time if mouseover was disabled then)
                     if info.visibilityOnly and not info.isDataBar and not info.isBlizzardMovable then
-                        AttachExtraBarHoverHooks(info)
+                        ns.AttachExtraBarHoverHooks(info)
                     end
                     local state = hoverStates[key]
                     -- A bar the cursor is sitting on keeps what the hover gave it. This
@@ -13516,3 +13507,17 @@ function EAB:FinishSetup()
     end
 end
 
+-- Main-chunk locals the other EUI_ActionBars_*.lua files re-import by name.
+ns._internals = {
+    BAR_CONFIG = BAR_CONFIG, BINDING_MAP = BINDING_MAP, BUTTON_EVENT_LISTS = BUTTON_EVENT_LISTS,
+    ReRegisterButtonEvents = ReRegisterButtonEvents, barFrames = barFrames,
+    _fadeAlpha = _fadeAlpha, extraBarHolders = extraBarHolders,
+    dataBarFrames = dataBarFrames, blizzMovableHolders = blizzMovableHolders,
+    BLIZZ_MOVABLE_OVERLAY = BLIZZ_MOVABLE_OVERLAY, hoverStates = hoverStates,
+    AttachDataBarHoverHooks = AttachDataBarHoverHooks, _quickKeybindState = _quickKeybindState,
+    FormatHotkeyText = FormatHotkeyText, StopFade = StopFade,
+    SafeEnableMouse = SafeEnableMouse, SafeEnableMouseMotionOnly = SafeEnableMouseMotionOnly,
+    ShouldQuickKeybindSurfaceBar = ShouldQuickKeybindSurfaceBar,
+    SHOWGRID = SHOWGRID, SetShowGridInsecure = SetShowGridInsecure,
+    SyncPagingAlpha = SyncPagingAlpha, InitPagingQuickKeybindButton = InitPagingQuickKeybindButton,
+}

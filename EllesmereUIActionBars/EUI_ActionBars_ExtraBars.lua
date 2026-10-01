@@ -1,3 +1,30 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_ExtraBars.lua
+--
+--  Blizzard movable frames (Extra Action Button, Encounter Bar), the holders
+--  for the Micro Menu and Bag Bar, and the extra bars setup. Loads after
+--  EUI_ActionBars_DataBars.lua and reads the main file through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, pairs, type, pcall = ipairs, pairs, type, pcall
+local max = math.max
+local wipe = wipe
+local InCombatLockdown = InCombatLockdown
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+local GetBindingKey = GetBindingKey
+
+local EAB, EAB_VTABLE, EXTRA_BARS = ns.EAB, ns.EAB_VTABLE, ns.EXTRA_BARS
+local ForceCooldownPaint = ns.ForceCooldownPaint
+local I = ns._internals
+local BLIZZ_MOVABLE_OVERLAY, FormatHotkeyText, SafeEnableMouse = I.BLIZZ_MOVABLE_OVERLAY, I.FormatHotkeyText, I.SafeEnableMouse
+local SetupDataBars, _quickKeybindState = I.SetupDataBars, I._quickKeybindState
+local blizzMovableHolders, extraBarHolders, hoverStates = I.blizzMovableHolders, I.extraBarHolders, I.hoverStates
+local AttachExtraBarHoverHooks -- assigned below, published as ns.AttachExtraBarHoverHooks
+
 -------------------------------------------------------------------------------
 --  Blizzard Movable Frames (Extra Action Button, Encounter Bar): creates
 --  non-secure holder frames, reparents Blizzard frames into them, and
@@ -911,3 +938,4 @@ extraBarFrame:SetScript("OnEvent", function(self)
 end)
 
 
+ns.AttachExtraBarHoverHooks = AttachExtraBarHoverHooks -- called by the main file
