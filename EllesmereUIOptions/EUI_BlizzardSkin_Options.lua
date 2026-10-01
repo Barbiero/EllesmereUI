@@ -1844,6 +1844,16 @@ initFrame:SetScript("OnEvent", function(self)
             buildContent = BuildLFGMenuContent,
         },
         {
+            key   = "legacysystem",
+            title = "Progress Legacy",
+            desc  = "The Progress Legacy window (reward track, challenges and the legacy tree) in the house style.",
+            reloadMsg = "Changing the Progress Legacy reskin requires a UI reload to fully swap between Blizzard and Ellesmere styles.",
+            setEnabled = function(v)
+                if not EllesmereUIDB then EllesmereUIDB = {} end
+                EllesmereUIDB.reskinLegacySystem = v
+            end,
+        },
+        {
             key   = "greatvault",
             title = "Great Vault",
             desc  = "Weekly rewards window with custom tile backgrounds, progress colors, and completion states.",
@@ -2291,6 +2301,10 @@ initFrame:SetScript("OnEvent", function(self)
         -- The Bag Bar skin exists only on Forever; drop its card on retail.
         for i = #WINDOWS, 1, -1 do
             if WINDOWS[i].key == "bagbar" then table.remove(WINDOWS, i) end
+        end
+        -- The Progress Legacy skin exists only on Forever; drop its card on retail.
+        for i = #WINDOWS, 1, -1 do
+            if WINDOWS[i].key == "legacysystem" then table.remove(WINDOWS, i) end
         end
     end
 
