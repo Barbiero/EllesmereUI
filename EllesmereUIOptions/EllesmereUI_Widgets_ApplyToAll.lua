@@ -1,3 +1,17 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_ApplyToAll.lua
+--  Apply to All / Apply to Multiple: the sync flashes, the multi-apply
+--  dropdown and the sync icon.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local EXPRESSWAY = EllesmereUI.EXPRESSWAY
+local ShowWidgetTooltip = EllesmereUI.ShowWidgetTooltip
+local HideWidgetTooltip = EllesmereUI.HideWidgetTooltip
+
 --------------------------------------------------------------------------------
 --  PlaySyncFlash -- accent-colored 4-edge border glow on a target frame
 --  Pooled: one glow frame per target, reused across flashes.
@@ -604,3 +618,6 @@ local function BuildSyncIcon(opts)
     return applyBtn
 end
 
+EllesmereUI.BuildSyncIcon       = BuildSyncIcon
+EllesmereUI.BuildMultiApplyDropdown = BuildMultiApplyDropdown
+end  -- end deferred init

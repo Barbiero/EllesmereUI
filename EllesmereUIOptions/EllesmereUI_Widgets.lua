@@ -2162,6 +2162,18 @@ function WidgetFactory:Checkbox(parent, text, yOffset, getValue, setValue, toolt
     return frame, ROW_H
 end
 
+-- Helpers the other EllesmereUI_Widgets_*.lua files share; not public API.
+EllesmereUI._widgetInternals = {
+    SL = SL,
+    TagOptionRow = TagOptionRow,
+    DDResolveLabel = DDResolveLabel,
+    IndexSlotForSearch = IndexSlotForSearch,
+    AddControlDisabledTooltip = AddControlDisabledTooltip,
+    PixelizeSliderCfg = PixelizeSliderCfg,
+    QueueLabelClamp = QueueLabelClamp,
+    LabelTooltipText = LabelTooltipText,
+}
+
 -------------------------------------------------------------------------------
 --  Exports  (widget helpers EllesmereUI table for EllesmereUI_Presets.lua)
 -------------------------------------------------------------------------------
@@ -2326,21 +2338,8 @@ end
 
 EllesmereUI.BuildSliderCore     = BuildSliderCore
 EllesmereUI.BuildDropdownControl = BuildDropdownControl
-EllesmereUI.BuildColorSwatch    = BuildColorSwatch
-EllesmereUI.BuildTrioColorSwatch = BuildTrioColorSwatch
 EllesmereUI.BuildToggleControl   = BuildToggleControl
-EllesmereUI.BuildInlineToggle    = BuildInlineToggle
-EllesmereUI.BuildInlineCog       = BuildInlineCog
 EllesmereUI.BuildCheckboxControl = BuildCheckboxControl
-EllesmereUI.BuildCogPopup       = BuildCogPopup
-EllesmereUI.BuildSyncIcon       = BuildSyncIcon
-EllesmereUI.BuildMultiApplyDropdown = BuildMultiApplyDropdown
-EllesmereUI.BuildSegmentedControl = BuildSegmentedControl
-EllesmereUI.BuildLessCommonExpander   = BuildLessCommonExpander
-EllesmereUI.FinishLessCommonExpander  = FinishLessCommonExpander
-EllesmereUI.SetLessCommonSearchActive = SetLessCommonSearchActive
-EllesmereUI.SectionToggleSetValue     = SectionToggleSetValue
-EllesmereUI.DependentSetValue         = DependentSetValue
 
 -------------------------------------------------------------------------------
 --  ShowPickMenu -- generic pick-one context menu (right-click "Add To" on

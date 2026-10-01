@@ -1,3 +1,37 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_Color.lua
+--  Color widgets: HSV helpers, the color picker popup, the color swatches
+--  and the factory's color rows. Loads right after EllesmereUI_Widgets.lua.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local MakeFont = EllesmereUI.MakeFont
+local MakeBorder = EllesmereUI.MakeBorder
+local RowBg = EllesmereUI.RowBg
+local RegisterWidgetRefresh = EllesmereUI.RegisterWidgetRefresh
+local EXPRESSWAY = EllesmereUI.EXPRESSWAY
+local CONTENT_PAD = EllesmereUI.CONTENT_PAD
+local TEXT_WHITE = EllesmereUI.TEXT_WHITE
+local MEDIA_PATH = EllesmereUI.MEDIA_PATH
+local CS = EllesmereUI.CS
+local TEXT_DIM_R = EllesmereUI.TEXT_DIM_R
+local TEXT_DIM_G = EllesmereUI.TEXT_DIM_G
+local TEXT_DIM_B = EllesmereUI.TEXT_DIM_B
+local TEXT_DIM_A = EllesmereUI.TEXT_DIM_A
+local BORDER_R = EllesmereUI.BORDER_R
+local BORDER_G = EllesmereUI.BORDER_G
+local BORDER_B = EllesmereUI.BORDER_B
+local MakeStyledButton = EllesmereUI.MakeStyledButton
+local RB_COLOURS = EllesmereUI.RB_COLOURS
+local ShowWidgetTooltip = EllesmereUI.ShowWidgetTooltip
+local HideWidgetTooltip = EllesmereUI.HideWidgetTooltip
+local WI = EllesmereUI._widgetInternals
+local TagOptionRow = WI.TagOptionRow
+local WidgetFactory = EllesmereUI.Widgets
+
 -------------------------------------------------------------------------------
 --  HSV RGB Conversion Helpers
 -------------------------------------------------------------------------------
@@ -924,3 +958,6 @@ function WidgetFactory:ColorPicker(parent, text, yOffset, getValue, setValue, ha
     return frame, ROW_H
 end
 
+EllesmereUI.BuildColorSwatch    = BuildColorSwatch
+EllesmereUI.BuildTrioColorSwatch = BuildTrioColorSwatch
+end  -- end deferred init

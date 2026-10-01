@@ -1,3 +1,29 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_CogPopup.lua
+--  BuildCogPopup, the shared cog settings popup. Reads BuildColorSwatch, so
+--  it loads after EllesmereUI_Widgets_Color.lua.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local SolidTex = EllesmereUI.SolidTex
+local MakeFont = EllesmereUI.MakeFont
+local MakeBorder = EllesmereUI.MakeBorder
+local MakeDropdownArrow = EllesmereUI.MakeDropdownArrow
+local EXPRESSWAY = EllesmereUI.EXPRESSWAY
+local ELLESMERE_GREEN = EllesmereUI.ELLESMERE_GREEN
+local BORDER_COLOR = EllesmereUI.BORDER_COLOR
+local WI = EllesmereUI._widgetInternals
+local PixelizeSliderCfg = WI.PixelizeSliderCfg
+local ResolveDisabledTip = EllesmereUI.ResolveDisabledTip
+local DDText = EllesmereUI.DDText
+local BuildSliderCore = EllesmereUI.BuildSliderCore
+local BuildDropdownControl = EllesmereUI.BuildDropdownControl
+local BuildToggleControl = EllesmereUI.BuildToggleControl
+local BuildColorSwatch = EllesmereUI.BuildColorSwatch
+
 -------------------------------------------------------------------------------
 --  BuildCogPopup -- reusable cog settings popup with consistent layout
 --  opts = { title = "Popup Title", rows = {
@@ -1223,3 +1249,5 @@ local function BuildCogPopup(opts)
     return popupFrame, showFn
 end
 
+EllesmereUI.BuildCogPopup       = BuildCogPopup
+end  -- end deferred init

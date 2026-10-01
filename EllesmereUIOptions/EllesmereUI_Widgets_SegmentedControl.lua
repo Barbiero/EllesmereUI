@@ -1,3 +1,17 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_SegmentedControl.lua
+--  BuildSegmentedControl, the pill-shaped tab bar of the multi-edit headers.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local ELLESMERE_GREEN = EllesmereUI.ELLESMERE_GREEN
+local MEDIA_PATH = EllesmereUI.MEDIA_PATH
+local ShowWidgetTooltip = EllesmereUI.ShowWidgetTooltip
+local HideWidgetTooltip = EllesmereUI.HideWidgetTooltip
+
 -------------------------------------------------------------------------------
 --  Segmented Control  (pill-shaped tab bar for multi-edit headers)
 --  cfg = {
@@ -418,3 +432,5 @@ end
 
 
 
+EllesmereUI.BuildSegmentedControl = BuildSegmentedControl
+end  -- end deferred init

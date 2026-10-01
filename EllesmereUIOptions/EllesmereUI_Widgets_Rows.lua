@@ -1,3 +1,66 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_Rows.lua
+--  Factory rows: buttons, the keybind button, DualRow, TripleRow and the
+--  other multi-slot rows. Reads BuildColorSwatch, so it loads after
+--  EllesmereUI_Widgets_Color.lua.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local SolidTex = EllesmereUI.SolidTex
+local MakeFont = EllesmereUI.MakeFont
+local MakeBorder = EllesmereUI.MakeBorder
+local RowBg = EllesmereUI.RowBg
+local MakeDropdownArrow = EllesmereUI.MakeDropdownArrow
+local RegisterWidgetRefresh = EllesmereUI.RegisterWidgetRefresh
+local EXPRESSWAY = EllesmereUI.EXPRESSWAY
+local CONTENT_PAD = EllesmereUI.CONTENT_PAD
+local TEXT_WHITE_R = EllesmereUI.TEXT_WHITE_R
+local TEXT_WHITE_G = EllesmereUI.TEXT_WHITE_G
+local TEXT_WHITE_B = EllesmereUI.TEXT_WHITE_B
+local BORDER_R = EllesmereUI.BORDER_R
+local BORDER_G = EllesmereUI.BORDER_G
+local BORDER_B = EllesmereUI.BORDER_B
+local DD_BG_R = EllesmereUI.DD_BG_R
+local DD_BG_G = EllesmereUI.DD_BG_G
+local DD_BG_B = EllesmereUI.DD_BG_B
+local DD_BG_A = EllesmereUI.DD_BG_A
+local DD_BG_HA = EllesmereUI.DD_BG_HA
+local DD_BRD_A = EllesmereUI.DD_BRD_A
+local DD_TXT_A = EllesmereUI.DD_TXT_A
+local DUAL_ITEM_W = EllesmereUI.DUAL_ITEM_W
+local DUAL_GAP = EllesmereUI.DUAL_GAP
+local TRIPLE_ITEM_W = EllesmereUI.TRIPLE_ITEM_W
+local TRIPLE_GAP = EllesmereUI.TRIPLE_GAP
+local MakeStyledButton = EllesmereUI.MakeStyledButton
+local WB_COLOURS = EllesmereUI.WB_COLOURS
+local RB_COLOURS = EllesmereUI.RB_COLOURS
+local ShowWidgetTooltip = EllesmereUI.ShowWidgetTooltip
+local HideWidgetTooltip = EllesmereUI.HideWidgetTooltip
+local DisabledTooltip = EllesmereUI.DisabledTooltip
+local isRussian = GetLocale() == "ruRU"
+local WI = EllesmereUI._widgetInternals
+local SL = WI.SL
+local TagOptionRow = WI.TagOptionRow
+local DDResolveLabel = WI.DDResolveLabel
+local IndexSlotForSearch = WI.IndexSlotForSearch
+local AddControlDisabledTooltip = WI.AddControlDisabledTooltip
+local PixelizeSliderCfg = WI.PixelizeSliderCfg
+local QueueLabelClamp = WI.QueueLabelClamp
+local LabelTooltipText = WI.LabelTooltipText
+local WidgetFactory = EllesmereUI.Widgets
+local ResolveDisabledTip = EllesmereUI.ResolveDisabledTip
+local BuildDropdownMenu = EllesmereUI.BuildDropdownMenu
+local WireDropdownScripts = EllesmereUI.WireDropdownScripts
+local WD_DD_COLOURS = EllesmereUI.WD_DD_COLOURS
+local BuildSliderCore = EllesmereUI.BuildSliderCore
+local BuildDropdownControl = EllesmereUI.BuildDropdownControl
+local BuildToggleControl = EllesmereUI.BuildToggleControl
+local BuildCheckboxControl = EllesmereUI.BuildCheckboxControl
+local BuildColorSwatch = EllesmereUI.BuildColorSwatch
+
 -- Button  (execute action, matches the reset/reload button style)
 function WidgetFactory:Button(parent, text, yOffset, onClick)
     local ROW_H = 50
@@ -1377,3 +1440,4 @@ function WidgetFactory:Spacer(parent, yOffset, height)
     return frame, height
 end
 
+end  -- end deferred init

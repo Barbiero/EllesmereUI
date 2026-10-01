@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_RowAddons.lua
+--  Row add-ons: inline toggle, cog and button, the less-common expander,
+--  inline swatches, the section gates and the cursor anchor row. Reads
+--  BuildCogPopup and BuildColorSwatch, so it loads after
+--  EllesmereUI_Widgets_CogPopup.lua.
+--  DEFERRED: body runs on first EllesmereUI:EnsureLoaded() call, not at load.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+EllesmereUI._deferredInits[#EllesmereUI._deferredInits + 1] = function()
+local PP = EllesmereUI.PanelPP
+local RegisterWidgetRefresh = EllesmereUI.RegisterWidgetRefresh
+local MakeStyledButton = EllesmereUI.MakeStyledButton
+local WB_COLOURS = EllesmereUI.WB_COLOURS
+local ShowWidgetTooltip = EllesmereUI.ShowWidgetTooltip
+local HideWidgetTooltip = EllesmereUI.HideWidgetTooltip
+local ResolveDisabledTip = EllesmereUI.ResolveDisabledTip
+local BuildToggleControl = EllesmereUI.BuildToggleControl
+local BuildColorSwatch = EllesmereUI.BuildColorSwatch
+local BuildCogPopup = EllesmereUI.BuildCogPopup
+
 -- Inline toggle: a small toggle placed inline inside a DualRow half-region,
 -- chaining left of the control (slider/dropdown) like the sync icon / cog. Used
 -- to gate the row's control (e.g. enable/disable the duration text). The toggle
@@ -350,6 +372,14 @@ local function DependentSetValue(pred, fn)
     end
 end
 
+EllesmereUI.BuildInlineToggle    = BuildInlineToggle
+EllesmereUI.BuildInlineCog       = BuildInlineCog
+EllesmereUI.BuildLessCommonExpander   = BuildLessCommonExpander
+EllesmereUI.FinishLessCommonExpander  = FinishLessCommonExpander
+EllesmereUI.SetLessCommonSearchActive = SetLessCommonSearchActive
+EllesmereUI.SectionToggleSetValue     = SectionToggleSetValue
+EllesmereUI.DependentSetValue         = DependentSetValue
+
 -------------------------------------------------------------------------------
 --  BuildCursorAnchorRow
 --  Shared "Anchor to Cursor" row used by CDM, Resource Bars, and any future section that supports cursor anchoring.
@@ -444,3 +474,4 @@ local function BuildCursorAnchorRow(opts)
 end
 EllesmereUI.BuildCursorAnchorRow = BuildCursorAnchorRow
 
+end  -- end deferred init

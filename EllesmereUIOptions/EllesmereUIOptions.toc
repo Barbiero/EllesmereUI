@@ -12,6 +12,12 @@
 # Widget factory first: everything below builds pages with it. File order
 # mirrors the original suite load order (parent files, then children A-Z).
 EllesmereUI_Widgets.lua
+EllesmereUI_Widgets_Color.lua
+EllesmereUI_Widgets_Rows.lua
+EllesmereUI_Widgets_CogPopup.lua
+EllesmereUI_Widgets_SegmentedControl.lua
+EllesmereUI_Widgets_ApplyToAll.lua
+EllesmereUI_Widgets_RowAddons.lua
 EllesmereUI_Widgets_AuraPopups.lua
 EllesmereUI_Widgets_CheckboxDropdowns.lua
 EllesmereUI_Widgets_Visibility.lua
