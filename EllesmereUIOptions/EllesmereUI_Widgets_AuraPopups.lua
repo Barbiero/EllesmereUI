@@ -1,3 +1,11 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_AuraPopups.lua
+--  Tracked auras and spell blacklist popups shared by the aura filter
+--  options. Loads right after EllesmereUI_Widgets.lua.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+
 -- Tracked Auras popup: the shared INCLUDED/EXCLUDED spell-list editor (announcement-popup chrome; two tri-state
 -- columns with per-column Add buttons; adding an ID to one list removes it from the other). Storage-agnostic --
 -- callers pass list accessors and an onChanged applier. Used by the nameplate slot filters and the target/focus/boss unit frame debuff filters.

@@ -1,3 +1,13 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_PageParts.lua
+--  Shared page parts: unlock placeholder, max duration and sound dropdown
+--  data, the Global Settings rows and module card, and the manager-page
+--  parts. Read at load by the Fonts and Textures options files, so it
+--  loads before them.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+
 -------------------------------------------------------------------------------
 --  BuildUnlockPlaceholder
 --  Reusable overlay that mirrors the unlock mode mover style. Shows accent-colored text (default "Move in

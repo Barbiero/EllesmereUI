@@ -1,3 +1,12 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_CheckboxDropdowns.lua
+--  Checkbox dropdowns shared by the options pages: the empty-filter
+--  warning, BuildVisOptsCBDropdown and its drag-reorder variant. Loads
+--  right after EllesmereUI_Widgets.lua.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+
 -- Empty-selection warning for a filter dropdown whose selection is allowed
 -- to reach "shows nothing" (PAB buff/debuff Filters, RF Debuff Manager base
 -- Filters): while hasContentFn() is false, the dropdown carries a red border

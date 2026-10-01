@@ -1,3 +1,11 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EllesmereUI_Widgets_Visibility.lua
+--  Unified visibility row and its checklist. Builds on the checkbox
+--  dropdown, so it loads after EllesmereUI_Widgets_CheckboxDropdowns.lua.
+-------------------------------------------------------------------------------
+local EllesmereUI = _G.EllesmereUI
+
 -------------------------------------------------------------------------------
 --  Unified Visibility Row (opts contract for the 10 module callers)
 --  ONE control replacing the "Visibility" + "Visibility Options" pair. Every condition is
