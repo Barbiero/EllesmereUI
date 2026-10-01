@@ -2919,6 +2919,17 @@ initFrame:SetScript("OnEvent", function(self)
                 }
             elseif b.type == "xprep" then
                 typeRows = {
+                    { type = "dropdown", text = "Text Display",
+                      values = { off = "Off", values = "Values", percentage = "Percentage" },
+                      order = { "off", "values", "percentage" },
+                      getValue = function() return ns.GetXPRepTextDisplay(s) end,
+                      setValue = function(v) s.textDisplay = v; Apply() end },
+                    { type = "dropdown", text = "Text Format",
+                      values = { context = "With Level / Faction", plain = "Value Only" },
+                      order = { "context", "plain" },
+                      getValue = function() return s.textFormat or "context" end,
+                      setValue = function(v) s.textFormat = v; Apply() end,
+                      disabled = function() return ns.GetXPRepTextDisplay(s) == "off" end },
                     { type = "dropdown", text = "Mode",
                       tooltip = "Automatic shows XP while leveling and reputation at max level.",
                       values = { auto = "Automatic", xp = "Experience", rep = "Reputation" },
