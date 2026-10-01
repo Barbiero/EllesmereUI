@@ -86,12 +86,13 @@ local function MakeProfessionBlock(blockCfg, slot, content, barCtx, secondary)
         local isSide = barCtx.IsVertical()
 
         local iconTex = profData.icon
-        if profIcons[profData.id] then
-            iconTex = MEDIA_PROF .. profIcons[profData.id] .. ".png"
-        end
+        local custom = (blockCfg.settings or {}).iconStyle ~= "wow" and profIcons[profData.id]
+        if custom then iconTex = MEDIA_PROF .. custom .. ".png" end
         -- Show Icon (default ON): hidden drops the icon and its gap from the layout; the text/bar stack keeps the icon's vertical band.
         local showIcon = (blockCfg.settings or {}).showIcon ~= false
         profIcon:SetTexture(iconTex)
+        -- The profession's stock icon (Blizzard style, or no custom art) has a baked-in border.
+        if custom then profIcon:SetTexCoord(0, 1, 0, 1) else K.CropStockIcon(profIcon) end
         if showIcon then
             profIcon:SetSize(iconSize, iconSize); profIcon:Show()
         else

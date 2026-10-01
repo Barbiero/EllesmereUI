@@ -2142,8 +2142,8 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Scale (icons + texts scale together as a group). Micro menu:
                 -- alignment is meaningless (the button strip lays itself out), so its
                 -- slot hosts an Enable Text toggle instead -- a view over the existing
-                -- hideSocialText key (default enabled). The Text Position cog still
-                -- moves the counter texts.
+                -- hideSocialText key (default enabled). Its Text Position cog
+                -- moves the counters (custom icon style only).
                 local alignLeftCfg
                 if b.type == "micromenu" then
                     alignLeftCfg = { type = "toggle", text = "Enable Text",
@@ -2181,32 +2181,35 @@ initFrame:SetScript("OnEvent", function(self)
                 do
                     -- Text Position cog: offsets the TEXT only (factories
                     -- inject these into every text anchor; icons stay put).
-                    EllesmereUI.BuildInlineCog(alignRow._leftRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
-                        title = "Text Position",
-                        rows = {
-                            { type = "slider", label = "X Offset", min = -50, max = 50, step = 1,
-                              get = function()
-                                  local v = b.textXOff
-                                  if v == nil then v = 0 end
-                                  return v
-                              end,
-                              set = function(v)
-                                  b.textXOff = v
-                                  if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
-                              end },
-                            { type = "slider", label = "Y Offset", min = -50, max = 50, step = 1,
-                              get = function()
-                                  local v = b.textYOff
-                                  if v == nil then v = 0 end
-                                  return v
-                              end,
-                              set = function(v)
-                                  b.textYOff = v
-                                  if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
-                              end },
-                        },
-                    })
-
+                    -- Blizzard-style micro menu counters sit beside their
+                    -- icons and ignore the offsets.
+                    if b.type ~= "micromenu" or s.iconStyle ~= "wow" then
+                        EllesmereUI.BuildInlineCog(alignRow._leftRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
+                            title = "Text Position",
+                            rows = {
+                                { type = "slider", label = "X Offset", min = -50, max = 50, step = 1,
+                                  get = function()
+                                      local v = b.textXOff
+                                      if v == nil then v = 0 end
+                                      return v
+                                  end,
+                                  set = function(v)
+                                      b.textXOff = v
+                                      if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
+                                  end },
+                                { type = "slider", label = "Y Offset", min = -50, max = 50, step = 1,
+                                  get = function()
+                                      local v = b.textYOff
+                                      if v == nil then v = 0 end
+                                      return v
+                                  end,
+                                  set = function(v)
+                                      b.textYOff = v
+                                      if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
+                                  end },
+                            },
+                        })
+                    end
                     -- Content Position cog (next to Content Scale): offsets
                     -- the WHOLE block content group, text included.
                     EllesmereUI.BuildInlineCog(alignRow._rightRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
@@ -2516,7 +2519,7 @@ initFrame:SetScript("OnEvent", function(self)
                       getValue = function()
                           local c = b.iconColor
                           if c then return c.r or 1, c.g or 1, c.b or 1 end
-                          return ns.BlockIconDefault(b.type)
+                          return ns.BlockIconDefault(b.type, s)
                       end,
                       setValue = function(r, g, bl)
                           b.iconColor = { r = r, g = g, b = bl }
@@ -2534,7 +2537,7 @@ initFrame:SetScript("OnEvent", function(self)
                               b.useIconAccentColor = nil
                               b.useIconDefaultColor = nil
                               if b.iconColor == nil then
-                                  local dr, dg2, db2 = ns.BlockIconDefault(b.type)
+                                  local dr, dg2, db2 = ns.BlockIconDefault(b.type, s)
                                   b.iconColor = { r = dr, g = dg2, b = db2 }
                               end
                               ApplyBlockColor(); EllesmereUI:RefreshPage()
@@ -2572,7 +2575,7 @@ initFrame:SetScript("OnEvent", function(self)
                       end,
                       refreshAlpha = function() return b.useIconAccentColor and 1 or 0.3 end },
                     { tooltip = "Default", hasAlpha = false,
-                      getValue = function() return ns.BlockIconDefault(b.type) end,
+                      getValue = function() return ns.BlockIconDefault(b.type, s) end,
                       setValue = function() end,
                       onClick = function()
                           -- Mode switch only -- the stored custom color stays
@@ -2592,7 +2595,7 @@ initFrame:SetScript("OnEvent", function(self)
                     -- lowest durability); same mode semantics, clearer name.
                     iconColorCfg.swatches[4].tooltip = "Dynamic"
                 end
-                if b.type == "spec" then
+                if b.type == "spec" and s.iconStyle ~= "wow" then
                     -- Spec defaults to CLASS color: no Default swatch; the Class swatch
                     -- reads as selected in the nothing-stored state, and a legacy
                     -- stored Default-mode flag (from when the swatch existed) lights it
@@ -2603,7 +2606,7 @@ initFrame:SetScript("OnEvent", function(self)
                         return (IconFlagsOff() and b.iconColor == nil) and 1 or 0.3
                     end
                 end
-                if b.type == "profession" or b.type == "profession2" then
+                if (b.type == "profession" or b.type == "profession2") and s.iconStyle ~= "wow" then
                     -- Professions default to ACCENT (matches the skill-bar
                     -- fill), so they carry no Default swatch -- and Accent
                     -- reads as selected in the nothing-stored state too.
@@ -3180,6 +3183,32 @@ initFrame:SetScript("OnEvent", function(self)
             local goldTipRow
             local crestListRow
             local bagsLowRow
+            -- Icon Style: a plain dropdown, as on the Damage Meters page. It
+            -- fills the next free type-row slot; micromenu puts it beside
+            -- Menu Elements instead. The page refresh re-evaluates the
+            -- style-dependent swatches.
+            local iconStyleCfg
+            if ns.BlockHasIconStyle(b.type) then
+                iconStyleCfg = { type = "dropdown", text = "Icon Style",
+                    values = { custom = "Custom", wow = "Blizzard" },
+                    order = { "custom", "wow" },
+                    -- Item Level shows its icon only as the "Icon" prefix.
+                    disabled = function()
+                        if b.type == "ilvl" then return s.prefix ~= "icon" end
+                        if b.type == "gold" then return s.showIcons == false end
+                        return s.showIcon == false
+                    end,
+                    disabledTooltip = b.type == "ilvl" and "Prefix: Icon" or "Show Icon",
+                    getValue = function() return s.iconStyle or "custom" end,
+                    setValue = function(v)
+                        s.iconStyle = v
+                        Apply()
+                        -- Rebuild: swatches and the micro menu Text Position
+                        -- cog depend on the style.
+                        EllesmereUI:RefreshPage(true)
+                    end }
+                if b.type ~= "micromenu" then typeRows[#typeRows + 1] = iconStyleCfg end
+            end
             for k = 1, #typeRows, 2 do
                 local rightCfg = typeRows[k + 1]
                 if not rightCfg then rightCfg = { type = "label", text = "" } end
@@ -3478,7 +3507,7 @@ initFrame:SetScript("OnEvent", function(self)
                       values = { __placeholder = "..." }, order = { "__placeholder" },
                       getValue = function() return "__placeholder" end,
                       setValue = function() end },
-                    { type = "label", text = "" });  y = y - h
+                    iconStyleCfg or EllesmereUI.BlankRowCfg());  y = y - h
                 do
                     local leftRgn = mmRow._leftRegion
                     if leftRgn._control then leftRgn._control:Hide() end
