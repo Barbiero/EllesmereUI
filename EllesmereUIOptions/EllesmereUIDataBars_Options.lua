@@ -3520,11 +3520,14 @@ initFrame:SetScript("OnEvent", function(self)
                     { key = "shop",    label = "Shop" },
                     { key = "help",    label = "Help" },
                 }
-                -- WoW Forever has a separate Talents button, right after the Spellbook.
+                -- WoW Forever has separate Talents, Professions and Legacy
+                -- buttons, right after the Spellbook.
                 if EllesmereUI.IS_FOREVER then
                     for i, el in ipairs(MM_ELEMENTS) do
                         if el.key == "spell" then
                             table.insert(MM_ELEMENTS, i + 1, { key = "talent", label = "Talents" })
+                            table.insert(MM_ELEMENTS, i + 2, { key = "profession", label = "Professions" })
+                            table.insert(MM_ELEMENTS, i + 3, { key = "legacy", label = "Legacy" })
                             break
                         end
                     end
@@ -3532,7 +3535,7 @@ initFrame:SetScript("OnEvent", function(self)
                 local mmRow
                 mmRow, h = W:DualRow(parent, y,
                     { type = "dropdown", text = "Menu Elements",
-                      tooltip = "Which micro menu buttons this block shows.",
+                      tooltip = "Which micro menu buttons this block shows, and their order.",
                       values = { __placeholder = "..." }, order = { "__placeholder" },
                       getValue = function() return "__placeholder" end,
                       setValue = function() end },
@@ -3540,16 +3543,23 @@ initFrame:SetScript("OnEvent", function(self)
                 do
                     local leftRgn = mmRow._leftRegion
                     if leftRgn._control then leftRgn._control:Hide() end
-                    local cbDD, cbDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                    -- Rows follow the block's saved button order.
+                    local labels, items = {}, {}
+                    for _, el in ipairs(MM_ELEMENTS) do labels[el.key] = el.label end
+                    for _, key in ipairs(ns.GetMicroMenuOrder(s, {})) do
+                        if labels[key] then items[#items + 1] = { key = key, label = labels[key] } end
+                    end
+                    local cbDD, cbDDRefresh = EllesmereUI.BuildReorderCBDropdown(
                         leftRgn, 210, leftRgn:GetFrameLevel() + 2,
-                        MM_ELEMENTS,
+                        items,
                         function(k)
-                            return s[k] ~= false
+                            return ns.MicroMenuButtonOn(s, k)
                         end,
                         function(k, v)
                             if v then s[k] = true else s[k] = false end
                             Apply()
-                        end)
+                        end,
+                        { setOrder = function(keys) ns.SetMicroMenuOrder(s, keys); Apply() end })
                     PP.Point(cbDD, "RIGHT", leftRgn, "RIGHT", -20, 0)
                     leftRgn._control = cbDD
                     leftRgn._lastInline = nil

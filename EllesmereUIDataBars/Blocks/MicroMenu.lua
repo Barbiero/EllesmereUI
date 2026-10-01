@@ -18,6 +18,7 @@ local type             = type
 local pcall            = pcall
 local format           = string.format
 local tinsert          = table.insert
+local tremove          = table.remove
 local tconcat          = table.concat
 local floor            = math.floor
 local max              = math.max
@@ -224,6 +225,39 @@ if EllesmereUI.IS_FOREVER then
             break
         end
     end
+    -- Forever-only micro buttons, placed after the Talents entry. Default
+    -- off (opt-in via Menu Elements). Professions uses the shared
+    -- menu-professions art; its Blizzard icon style shows the Professions
+    -- frame's overview tab icon (wowIcon).
+    MM_MICRO_BUTTON_NAMES.profession = "ProfessionMicroButton"
+    MM_MICRO_BUTTON_NAMES.legacy     = "LegacyMicroButton"
+    MM_ICON_FILE.legacy = "menu-legacy"
+    local extras = {
+        { key = 'profession', binding = 'TOGGLEPROFESSIONBOOK', label = PROFESSIONS_BUTTON or 'Professions',
+          icon = MM_MEDIA .. "menu-professions.png", wowIcon = 8197101 },
+        { key = 'legacy', binding = false, label = 'Legacy' },
+    }
+    for i, def in ipairs(mmButtonDefs) do
+        if def.key == 'talent' then
+            for j, extra in ipairs(extras) do
+                tinsert(mmButtonDefs, i + j, extra)
+                tinsert(mmButtonOrder, i + j, extra.key)
+                mmButtonDefsByKey[extra.key] = extra
+            end
+            break
+        end
+    end
+    -- Achievements, PvP, Housing, Adventure Guide and Shop stay out of the
+    -- Forever strip and options checklist. Saved settings keep their keys.
+    local FOREVER_OFF = { ach = true, pvp = true, housing = true, journal = true, shop = true }
+    for i = #mmButtonDefs, 1, -1 do
+        local key = mmButtonDefs[i].key
+        if FOREVER_OFF[key] then
+            tremove(mmButtonDefs, i)
+            tremove(mmButtonOrder, i)
+            mmButtonDefsByKey[key] = nil
+        end
+    end
 end
 
 -- Whether a block shows one button. A button added after blocks were saved
@@ -235,6 +269,50 @@ local function MMButtonOn(mm, key)
         return def and def.onWhenUnset or false
     end
     return v
+end
+ns.MicroMenuButtonOn = MMButtonOn
+
+local function IndexOf(list, key)
+    for i = 1, #list do if list[i] == key then return i end end
+end
+
+-- Saved order first (unknown and repeated keys dropped). A default key the
+-- saved order lacks (new, or saved on the other client: profiles are shared)
+-- goes back behind its default predecessor, not to the end.
+local orderSeen = {}
+function ns.GetMicroMenuOrder(settings, out)
+    wipe(out); wipe(orderSeen)
+    if type(settings.buttonOrder) == "table" then
+        for _, key in ipairs(settings.buttonOrder) do
+            if mmButtonDefsByKey[key] and not orderSeen[key] then
+                out[#out + 1] = key; orderSeen[key] = true
+            end
+        end
+    end
+    for i, key in ipairs(mmButtonOrder) do
+        if not orderSeen[key] then
+            local at = i > 1 and IndexOf(out, mmButtonOrder[i - 1]) or 0
+            tinsert(out, at + 1, key)
+        end
+    end
+    return out
+end
+-- Refresh's scratch for the resolved order (read straight through, never kept).
+local orderScratch = {}
+
+-- Saves a reordered strip. Saved keys this client lacks (the other client's
+-- buttons) stay behind the key they followed, so neither client loses its order.
+function ns.SetMicroMenuOrder(settings, keys)
+    local old = settings.buttonOrder
+    if type(old) == "table" then
+        for i, key in ipairs(old) do
+            if not mmButtonDefsByKey[key] and not IndexOf(keys, key) then
+                local at = i > 1 and IndexOf(keys, old[i - 1]) or 0
+                tinsert(keys, at + 1, key)
+            end
+        end
+    end
+    settings.buttonOrder = keys
 end
 
 
@@ -883,8 +961,8 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         elseif microBtnName then
             microRef = _G[microBtnName]
         end
-        if (key == 'housing' or key == 'talent') and not microRef then
-            -- Skip housing and talents if the Blizzard micro button does not exist.
+        if (key == 'housing' or key == 'talent' or key == 'profession' or key == 'legacy') and not microRef then
+            -- Skip optional buttons whose Blizzard micro button does not exist.
             return nil
         end
         local frame
@@ -1003,7 +1081,7 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         local ICON_SIZE = GetIconSize()
         local isVertical = barCtx.IsVertical()
         local totalWidth, totalHeight, prev = 0, 0, nil
-        for _, key in ipairs(mmButtonOrder) do
+        for _, key in ipairs(ns.GetMicroMenuOrder(mm, orderScratch)) do
             local frame = frames[key]
             -- Hide buttons toggled off after creation; lay out enabled ones.
             if frame and not MMButtonOn(mm, key) then
