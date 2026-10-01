@@ -368,10 +368,12 @@ end
 --  until a bag is placed in it (Blizzard's Camelot BankFrame bag buttons).
 -------------------------------------------------------------------------------
 local RefreshBankBags
+local bankBagsWindow
 if EUI.IS_FOREVER then
     local BANK_BAG_SLOTS = Enum.BagIndex.Characterbanktab
 
     local bagsWin = CreateFrame("Frame", nil, EUI_Bank)
+    bankBagsWindow = bagsWin
     bagsWin:Hide()
     bagsWin:SetFrameLevel(EUI_Bank:GetFrameLevel() + 20)
     bagsWin:EnableMouse(true)
@@ -1045,7 +1047,9 @@ function EUI_Bank:ApplyWindowLayering()
     local strata = allowOtherWindows and "MEDIUM" or "HIGH"
     self:SetFrameStrata(strata)
     self:SetFrameLevel(allowOtherWindows and 1 or 50)
-    bagsWin:SetFrameLevel(self:GetFrameLevel() + 20)
+    if bankBagsWindow then
+        bankBagsWindow:SetFrameLevel(self:GetFrameLevel() + 20)
+    end
     _purchaseBtnChar:SetFrameStrata(strata)
     _purchaseBtnWarband:SetFrameStrata(strata)
     _purchaseBtnChar:SetFrameLevel(sidebar:GetFrameLevel() + 20)
