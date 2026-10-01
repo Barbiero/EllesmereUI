@@ -11103,6 +11103,24 @@ function ns.SetupViewerHooks()
         -- CooldownManager context, so the group is born correctly billed.
         local _btTicker
         cdmBuffTickFrame:RegisterUnitEvent("UNIT_AURA", "player")
+        -- Target auras: a Bar Glow on a tracked TARGET debuff (e.g. Freezing) changes
+        -- with no player aura edge, so with a player-only listener its glow waited
+        -- for some unrelated player aura (or a target swap) -- seconds late. The
+        -- target unit is added only while a Bar Glow tracks a non-self aura (Bar
+        -- Glows' SetupOverlays calls this with its want, remembered in
+        -- ns._bgWantTargetAuras in case it runs before this block), so glows on
+        -- your own buffs never pay for target (raid boss) aura churn.
+        ns.SetBarGlowTargetAuras = function(want)
+            want = want and true or false
+            if want == ns._bgTargetAuras then return end
+            ns._bgTargetAuras = want
+            if want then
+                cdmBuffTickFrame:RegisterUnitEvent("UNIT_AURA", "player", "target")
+            else
+                cdmBuffTickFrame:RegisterUnitEvent("UNIT_AURA", "player")
+            end
+        end
+        ns.SetBarGlowTargetAuras(ns._bgWantTargetAuras)
         cdmBuffTickFrame:RegisterEvent("PLAYER_TOTEM_UPDATE")
         cdmBuffTickFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
         -- Target-applied auras bind and release on this edge and on no player-scoped
@@ -11139,9 +11157,13 @@ function ns.SetupViewerHooks()
                     local full    = updateInfo.isFullUpdate
                     local removed = updateInfo.removedAuraInstanceIDs
                     local added   = updateInfo.addedAuras
+                    -- A stack change arrives as an UPDATE (no add/remove), so a
+                    -- stack-gated Bar Glow's count stayed stale until some other
+                    -- edge. Read only while a stack-gated glow exists (nil otherwise).
+                    local updated = ns._barGlowStackSids and updateInfo.updatedAuraInstanceIDs
                     if issecretvalue(full) or issecretvalue(removed)
-                       or issecretvalue(added)
-                       or full or removed or added then
+                       or issecretvalue(added) or issecretvalue(updated)
+                       or full or removed or added or updated then
                         ns._acGen = (ns._acGen or 0) + 1
                     end
                 end
