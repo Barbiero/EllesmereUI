@@ -11,6 +11,8 @@
 
 # Main Luas
 EllesmereUIActionBars.lua
+EUI_ActionBars_Events.lua
+EUI_ActionBars_Chrome.lua
 EUI_ActionBars_XPBar.lua
 EUI_ActionBars_Flyout.lua
 

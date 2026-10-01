@@ -3255,6 +3255,14 @@ local function SetupBar(info, skipProtected)
     return frame, ns.BuildBarButtons(info, frame, skipProtected)
 end
 
+-- Main-chunk locals EUI_ActionBars_Events.lua and EUI_ActionBars_Chrome.lua
+-- re-import by name.
+ns._internals = {
+    BAR_CONFIG = BAR_CONFIG, BINDING_MAP = BINDING_MAP, BUTTON_EVENT_LISTS = BUTTON_EVENT_LISTS,
+    ReRegisterButtonEvents = ReRegisterButtonEvents, barFrames = barFrames,
+    _fadeAlpha = _fadeAlpha, extraBarHolders = extraBarHolders,
+}
+
 -------------------------------------------------------------------------------
 --  First-Install Capture: no saved vars, so read Blizzard Edit Mode settings
 --  for initial bar positions, icon counts, orientation and visibility.

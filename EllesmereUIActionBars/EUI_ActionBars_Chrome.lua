@@ -1,3 +1,22 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Chrome.lua
+--
+--  Bar chrome and end caps for the action bars and the extra bars. Loads
+--  right after the main file and reads it through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local pairs = pairs
+local min, max = math.min, math.max
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+
+local EAB, BAR_LOOKUP = ns.EAB, ns.BAR_LOOKUP
+local I = ns._internals
+local _fadeAlpha, extraBarHolders = I._fadeAlpha, I.extraBarHolders
+
 -------------------------------------------------------------------------------
 --  The action bars' chrome. Every action bar can
 --  carry end caps, left, right or both (the End Caps checklist), in the

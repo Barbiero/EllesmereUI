@@ -1,3 +1,27 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Events.lua
+--
+--  The central event dispatcher for the action bar buttons, the assist and
+--  charge cooldown helpers it drives, ForceButtonRefresh and bar dormancy.
+--  Loads right after the main file and reads it through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, pairs, type, pcall = ipairs, pairs, type, pcall
+local floor = math.floor
+local InCombatLockdown = InCombatLockdown
+local C_Timer_After = C_Timer.After
+local GetBindingKey = GetBindingKey
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE, BAR_LOOKUP = ns.EAB, ns.EAB_VTABLE, ns.BAR_LOOKUP
+local ForceCooldownPaint, barButtons = ns.ForceCooldownPaint, ns.barButtons
+local I = ns._internals
+local BAR_CONFIG, BINDING_MAP, BUTTON_EVENT_LISTS = I.BAR_CONFIG, I.BINDING_MAP, I.BUTTON_EVENT_LISTS
+local ReRegisterButtonEvents, barFrames = I.ReRegisterButtonEvents, I.barFrames
+
 -------------------------------------------------------------------------------
 --  Central Event Dispatcher: registers action bar events on a SINGLE frame
 --  and dispatches to all buttons, avoiding the per-button registration that
