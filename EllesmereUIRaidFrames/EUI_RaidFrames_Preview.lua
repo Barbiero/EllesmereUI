@@ -1,3 +1,39 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Preview.lua
+--
+--  Options preview for the raid and party frames: fake members, the preview
+--  aura ticker, the real-frame overlay and the size preview. Loads right
+--  after the main file and reads it through ns only.
+-------------------------------------------------------------------------------
+local ADDON_NAME, ns = ...
+
+local max          = math.max
+local abs          = math.abs
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local type         = type
+local tostring     = tostring
+local tinsert      = table.insert
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local InCombatLockdown      = InCombatLockdown
+local C_Timer               = C_Timer
+local CreateFrame           = CreateFrame
+
+local PixelSnap, UpdateVisibility = ns.PixelSnap, ns.UpdateVisibility
+local I = ns._internals
+local ApplyFont, ApplyRoleIcon, DISPEL_ICON_ATLAS = I.ApplyFont, I.ApplyRoleIcon, I.DISPEL_ICON_ATLAS
+local GetDispelColor, IsPowerBarEnabled, LayoutGroups = I.GetDispelColor, I.IsPowerBarEnabled, I.LayoutGroups
+local LayoutTopNameBar, MOVER_GROUPS, ResolveHealthTexture = I.LayoutTopNameBar, I.MOVER_GROUPS, I.ResolveHealthTexture
+local defaults = I.defaults
+
+-- Main-file locals assigned after load; the main file re-binds them on
+-- every write (CreateHeaders, OnInitialize, OnEnable).
+local db, PP, containerFrame
+function ns._PreviewBind(d, p, c) db, PP, containerFrame = d, p, c end
+
 -------------------------------------------------------------------------------
 --  Options preview (fake raid members when options panel is open)
 --  Shows 20 buttons with randomized class colors and names so the user

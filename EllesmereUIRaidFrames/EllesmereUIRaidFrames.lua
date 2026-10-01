@@ -10296,6 +10296,7 @@ local function CreateHeaders()
 
     -- Container frame for positioning (not secure, just holds headers)
     containerFrame = CreateFrame("Frame", "EllesmereUIRaidFrameContainer", UIParent)
+    ns._PreviewBind(db, PP, containerFrame)
     containerFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     containerFrame:SetSize(1, 1)
     containerFrame:SetFrameStrata(ns._ResolveFrameStrata(false))
@@ -15312,6 +15313,14 @@ do
 end
 
 ns.GetFFD = GetFFD
+-- Main-chunk locals EUI_RaidFrames_Preview.lua re-imports by name.
+ns._internals = {
+    ApplyFont = ApplyFont, ApplyRoleIcon = ApplyRoleIcon, DISPEL_ICON_ATLAS = DISPEL_ICON_ATLAS,
+    GetDispelColor = GetDispelColor, IsPowerBarEnabled = IsPowerBarEnabled, LayoutGroups = LayoutGroups,
+    LayoutTopNameBar = LayoutTopNameBar, MOVER_GROUPS = MOVER_GROUPS,
+    ResolveHealthTexture = ResolveHealthTexture, defaults = defaults,
+}
+
 -------------------------------------------------------------------------------
 --  External tracker integration (frame-provider APIs)
 -------------------------------------------------------------------------------
@@ -15443,6 +15452,7 @@ function ERF:OnInitialize()
     self.db = EllesmereUI.Lite.NewDB("EllesmereUIRaidFramesDB", defaults, true)
     db = self.db
     ns.db = db
+    ns._PreviewBind(db, PP, containerFrame)
 
     -- Migration: the legacy "Threat Borders" toggle (showThreat) became the
     -- "threatBorderSize" slider. Preserve intent for users who turned it off
@@ -15476,6 +15486,7 @@ end
 -------------------------------------------------------------------------------
 function ERF:OnEnable()
     PP = EllesmereUI.PanelPP or EllesmereUI.PP
+    ns._PreviewBind(db, PP, containerFrame)
 
     -- First-install default position: left edge of frame at 200px from screen
     -- left, vertically centered.
