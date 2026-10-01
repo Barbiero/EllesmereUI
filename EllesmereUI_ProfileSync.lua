@@ -745,9 +745,9 @@ do
             local bg = _syncPopup:CreateTexture(nil, "BACKGROUND")
             bg:SetAllPoints(); bg:SetColorTexture(15/255, 17/255, 22/255, 1)
             _syncPopup._bg = bg
-            -- Controller cursor: born hidden, so the Show below runs its OnShow
-            -- (the click-away) on the first open too.
-            if EllesmereUI.PadInUse() then _syncPopup:Hide() end
+            -- Born hidden, so the Show below runs its OnShow (the click-away)
+            -- on the first open too.
+            _syncPopup:Hide()
             EllesmereUI.TrackOverlay(_syncPopup)
             EllesmereUI.PadHint(_syncPopup, "nodepass")
         end
