@@ -6,7 +6,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  aura ticker, the real-frame overlay and the size preview. Loads right
 --  after the main file and reads it through ns only.
 -------------------------------------------------------------------------------
-local ADDON_NAME, ns = ...
+local _, ns = ...
 
 local max          = math.max
 local abs          = math.abs
