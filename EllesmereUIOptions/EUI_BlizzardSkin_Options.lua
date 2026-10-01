@@ -429,6 +429,36 @@ initFrame:SetScript("OnEvent", function(self)
         -- tooltip too; the reskin-driven rows gray out individually inside the popup.
         if not EllesmereUI._prebuilding then
             local leftRgn = ttCursorRow._leftRegion
+            -- Health strip texture dropdown: the shared bar catalogue behind a
+            -- "Blizzard" entry (the unset default). The triple lives on ns so the
+            -- SharedMedia appender, which registers by table identity, gets the same
+            -- tables on every build.
+            if not ns.ttStripTex then
+                local tex, names, order = EllesmereUI.BuildBarTextureTables()
+                ns.ttStripTex = { tex = tex, names = names, order = order }
+            end
+            local st = ns.ttStripTex
+            EllesmereUI.AppendSharedMediaTextures(st.names, st.order, nil, st.tex)
+            local stripTexValues, stripTexOrder = { blizzard = "Blizzard" }, { "blizzard" }
+            for _, key in ipairs(st.order) do
+                if key ~= "---" then
+                    stripTexValues[key] = st.names[key] or key
+                    stripTexOrder[#stripTexOrder + 1] = key
+                end
+            end
+            stripTexValues._menuOpts = {
+                itemHeight = 28,
+                background = function(key)
+                    if key == "blizzard" then return "Interface\\TargetingFrame\\UI-StatusBar" end
+                    return EllesmereUI.ResolveTexturePath(st.tex, key, nil)
+                end,
+            }
+            local function stripHidden()
+                return not (EllesmereUIDB and EllesmereUIDB.tooltipHideHealthStrip == false)
+            end
+            local function applyStripStyle()
+                if EllesmereUI._applyTooltipHealthStripStyle then EllesmereUI._applyTooltipHealthStripStyle() end
+            end
             EllesmereUI.BuildInlineCog(leftRgn, {
                 gap = 9,
                 title = "Tooltip Content",
@@ -502,13 +532,35 @@ initFrame:SetScript("OnEvent", function(self)
                           SetCVar("UberTooltips", v and "1" or "0")
                       end },
                     { type="toggle", label="Hide Unit Health Strip",
-                      get=function()
-                          return not (EllesmereUIDB and EllesmereUIDB.tooltipHideHealthStrip == false)
-                      end,
+                      get=stripHidden,
                       set=function(v)
                           if not EllesmereUIDB then EllesmereUIDB = {} end
                           EllesmereUIDB.tooltipHideHealthStrip = v
                           if EllesmereUI._applyTooltipHealthStrip then EllesmereUI._applyTooltipHealthStrip() end
+                      end },
+                    -- Shown only while the strip is visible; they restyle the reskinned bar.
+                    { type="dropdown", label="Health Strip Texture",
+                      values=stripTexValues, order=stripTexOrder,
+                      hidden=stripHidden,
+                      disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+                      get=function()
+                          return EllesmereUIDB and EllesmereUIDB.tooltipHealthStripTexture or "blizzard"
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.tooltipHealthStripTexture = (v ~= "blizzard") and v or nil
+                          applyStripStyle()
+                      end },
+                    { type="slider", label="Health Strip Height", min=1, max=8, step=1,
+                      hidden=stripHidden,
+                      disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+                      get=function()
+                          return EllesmereUIDB and EllesmereUIDB.tooltipHealthStripHeight or 3
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.tooltipHealthStripHeight = (v ~= 3) and v or nil
+                          applyStripStyle()
                       end },
                 },
             })
@@ -3303,6 +3355,8 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUIDB.uberTooltips = nil
                 EllesmereUIDB.uberTooltipsManual = nil
                 EllesmereUIDB.tooltipHideHealthStrip = nil
+                EllesmereUIDB.tooltipHealthStripTexture = nil
+                EllesmereUIDB.tooltipHealthStripHeight = nil
                 EllesmereUIDB.showItemMaxStacks = nil
                 EllesmereUIDB.itemStackModifier = nil
                 EllesmereUIDB.tooltipShowGuildRank = nil
@@ -3408,6 +3462,7 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUI._applyTooltipCursorAnchor then EllesmereUI._applyTooltipCursorAnchor() end
             if EllesmereUI._applyTooltipFixedAnchor then EllesmereUI._applyTooltipFixedAnchor() end
             if EllesmereUI._applyTooltipHealthStrip then EllesmereUI._applyTooltipHealthStrip() end
+            if EllesmereUI._applyTooltipHealthStripStyle then EllesmereUI._applyTooltipHealthStripStyle() end
             if EllesmereUI._refreshCharSheetSocketPanel then EllesmereUI._refreshCharSheetSocketPanel() end
             if EllesmereUI._refreshCharSheetSlotFlyoutArrows then EllesmereUI._refreshCharSheetSlotFlyoutArrows() end
         end,

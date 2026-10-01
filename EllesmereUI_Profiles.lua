@@ -2034,6 +2034,7 @@ do
         "tooltipShowGuildRank", "tooltipShowTarget", "tooltipShowMode",
         "tooltipShowModifier", "tooltipGrowthDirection",
         "uberTooltips", "uberTooltipsManual", "tooltipHideHealthStrip",
+        "tooltipHealthStripTexture", "tooltipHealthStripHeight",
         "tooltipAnchorCursor", "tooltipCursorPosition",
         "tooltipCursorOffsetX", "tooltipCursorOffsetY",
         "tooltipBgColor", "tooltipBgOpacity", "tooltipBorderSize",
