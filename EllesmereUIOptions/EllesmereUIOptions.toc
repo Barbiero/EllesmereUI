@@ -28,7 +28,8 @@ ActionBars_Options\AnimationsPage_Options.lua
 ActionBars_Options\BarAppearance_Options.lua
 ActionBars_Options\BarVisibilityLayout_Options.lua
 ActionBars_Options\LivePreview_Options.lua
-ActionBars_Options\MenuBagsXPPage_Options.lua
+ActionBars_Options\XPBarPage_Options.lua
+ActionBars_Options\MenuBagsRepPage_Options.lua
 EUI_ActionBars_Options.lua
 EUI_AuraBuffReminders_Options.lua
 EUI_Bags_Options.lua

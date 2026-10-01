@@ -842,7 +842,7 @@ L["|cff888888Click to create|r"] = "|cff888888Clique para criar|r"
 L["|cff888888Created. Right-click to configure.|r"] = "|cff888888Criado. Clique com o botão direito para configurar.|r"
 L["|cff888888Created|r"] = "|cff888888Criado|r"
 L["|cffff4444Delete Macro|r"] = "|cffff4444Excluir macro|r"
-L["|cffff6060[EllesmereUI]|r A preset named \"%1$s\" already exists."] = "|cffff6060[EllesmereUI]|r Já existe uma predefinição chamada \"%1$s\"."
+L["A preset named \"%1$s\" already exists."] = "Já existe uma predefinição chamada \"%1$s\"."
 L["|cffff6060[EllesmereUI]|r A profile named \"%1$s\" already exists."] = "|cffff6060[EllesmereUI]|r Já existe um perfil chamado \"%1$s\"."
 L["|cffff6060[EllesmereUI]|r Cannot rename to \"Default\"."] = "|cffff6060[EllesmereUI]|r Não é possível renomear para \"Padrão\"."
 

@@ -379,7 +379,7 @@ L["Warlock"]                 = "術士"
 L["Warrior"]                 = "戰士"
 L["Windwalker"]              = "御風"
 L["You changed settings while profile sync is active. Please reload your UI for sync changes to take effect."] = "您在設定檔同步啟用時變更了設定。請重新載入介面以套用同步變更。"
-L["|cffff6060[EllesmereUI]|r A preset named \"%1$s\" already exists."] = "|cffff6060[EllesmereUI]|r 名為「%1$s」的預設組合已經存在。"
+L["A preset named \"%1$s\" already exists."] = "名為「%1$s」的預設組合已經存在。"
 
 -- == First Install ========================================================
 L["Coming soon"]            = "即將推出"

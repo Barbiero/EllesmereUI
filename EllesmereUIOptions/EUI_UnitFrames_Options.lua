@@ -15,10 +15,13 @@ local PAGE_AURA_BARS = "Player Aura Bars"
 local PAGE_UNLOCK    = "Unlock Mode"
 
 -- Threat % Position dropdown (WoW Forever only, so nil on retail). On ns: the
--- Main Frames page builder is near its 60-upvalue cap.
+-- Main Frames page builder is near its 60-upvalue cap, and the Forever
+-- Essentials Threat page reads the same lists. Outside = beside the whole
+-- frame, clear of an attached portrait.
 if EllesmereUI.IS_FOREVER then
-    ns._threatPctPositions = { RIGHT = "Inside Right", LEFT = "Inside Left", CENTER = "Inside Center" }
-    ns._threatPctPositionOrder = { "RIGHT", "LEFT", "CENTER" }
+    ns._threatPctPositions = { RIGHT = "Inside Right", LEFT = "Inside Left", CENTER = "Inside Center",
+        OUTRIGHT = "Outside Right", OUTLEFT = "Outside Left" }
+    ns._threatPctPositionOrder = { "RIGHT", "LEFT", "CENTER", "OUTRIGHT", "OUTLEFT" }
 end
 
 -- Settings-cog rows of a text slot that can show a name. WoW Forever puts its
@@ -131,7 +134,8 @@ function ns.UF_Ask3DPortraits(onConfirm)
 end
 
 -- Separate acknowledgement: enabling 3D does not opt into 2D model lookups.
-function ns.UF_Ask2DMirroredPortraits(onConfirm)
+-- onCancel (optional) replaces the plain page refresh on Cancel.
+function ns.UF_Ask2DMirroredPortraits(onConfirm, onCancel)
     if EllesmereUIDB and EllesmereUIDB.dismissed2DMirrorWarning then return false end
     EllesmereUI:ShowConfirmPopup({
         title       = "2D Mirrored Portraits",
@@ -143,11 +147,45 @@ function ns.UF_Ask2DMirroredPortraits(onConfirm)
             EllesmereUIDB.dismissed2DMirrorWarning = true
             onConfirm()
         end,
-        onCancel    = function()
+        onCancel    = onCancel or function()
             EllesmereUI:RefreshPage()
         end,
     })
     return true
+end
+
+-- Frames already set to Mirror Portrait in 2D mode get the same warning once,
+-- the first time Unit Frames options open in a session: Enable keeps them,
+-- Cancel turns Mirror Portrait off on those frames. Class mode is not asked:
+-- there Mirror Portrait also flips the class art, which costs nothing.
+do
+    local asked
+    local UNITS = { "player", "target", "focus", "targettarget", "focustarget", "pet", "boss" }
+    function ns.UF_AskExisting2DMirror()
+        if asked or EllesmereUI._prebuilding then return end
+        asked = true
+        if (EllesmereUIDB and EllesmereUIDB.dismissed2DMirrorWarning) or ns.UF_Blizz() then return end
+        local prof = ns.db and ns.db.profile
+        if not prof then return end
+        local on
+        for _, k in ipairs(UNITS) do
+            local s = prof[k]
+            if type(s) == "table" and s.portraitMirror
+               and (s.portraitMode or prof.portraitMode or "2d") == "2d"
+               and (s.portraitStyle or prof.portraitStyle) ~= "none" then
+                on = on or {}
+                on[#on + 1] = k
+            end
+        end
+        if not on then return end
+        ns.UF_Ask2DMirroredPortraits(function() end, function()
+            for _, k in ipairs(on) do
+                prof[k].portraitMirror = false
+                ns.UF_RefreshPortraitMirror(k)
+            end
+            EllesmereUI:RefreshPage()
+        end)
+    end
 end
 
 -- Dragon Strata dropdown (the PORTRAIT section's dragon cog): Match Frame
@@ -2774,6 +2812,7 @@ initFrame:SetScript("OnEvent", function(self)
             end
             -- Randomize preview creature IDs on every tab switch
             RandomizePreviewCreatures()
+            ns.UF_AskExisting2DMirror()
             if pageName == PAGE_DISPLAY then
                 return BuildFrameDisplayPage(pageName, parent, yOffset)
             elseif pageName == PAGE_BOSS then
@@ -2827,6 +2866,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end)
             end
             RandomizePreviewCreatures()
+            ns.UF_AskExisting2DMirror()
             -- Hide all UIParent-parented disabled overlays before restoring
             -- (they persist across tab switches since they're not children of pf)
             for _, pv in pairs(allPreviews) do

@@ -5937,7 +5937,7 @@ local function HideSlotArt(btn)
 end
 
 -------------------------------------------------------------------------------
---  The action bars' chrome and the data bars' dividers. Every action bar can
+--  The action bars' chrome. Every action bar can
 --  carry end caps, left, right or both (the End Caps checklist), in the
 --  current look's art (the EllesmereUI style: the art the player picks), with
 --  its own size and offsets. WoW Forever: the metal frame round a bar and the
@@ -5945,9 +5945,8 @@ end
 --  Bar 1 only) and the faction end caps (both sides on by default on Action
 --  Bar 1 only), from Blizzard's own atlases (they draw the Forever art on
 --  that client). Built per bar the first time a piece is on (LayoutBar's
---  tail, out of combat, stamp-gated; ApplyDataBarLayout for the data bars);
---  off, nothing is built and a built piece hides. All on ns: the main chunk
---  is at the 200-local cap.
+--  tail, out of combat, stamp-gated); off, nothing is built and a built
+--  piece hides. All on ns: the main chunk is at the 200-local cap.
 -------------------------------------------------------------------------------
 ns.AB_FV_ART = {
     frame = "UI-HUD-ActionBar-Frame",
@@ -6644,207 +6643,6 @@ function ns.AB_CapsSpanApply()
     end
 end
 
--- Show Dividers on our XP / reputation / favor bars (the bar's showDividers):
--- a dashed tick at every 5% and a full line at every 10% across the bar,
--- inside its border (left to right on a horizontal bar, bottom to top on a
--- vertical one), one physical pixel thick on whole pixels, over the fill
--- and under the text. Divider Text labels the 10% lines (10%..90%), each
--- centred on its line, drawn above it and nudged by the offsets (X along the
--- label's reading direction, Y across it); rotateDividerText turns them to
--- run along a vertical bar. A rotated string pivots about the top centre of
--- its unrotated region, so a label's anchor is moved back by that
--- displacement. Pooled on a child host built the first time the option is
--- on; off, a built host hides.
-function ns.AB_DataBarDividers(holder, w, h, orient, s)
-    local host = holder._divHost
-    if not s.showDividers then
-        if host then host:Hide() end
-        return
-    end
-    if not host then
-        host = CreateFrame("Frame", nil, holder)
-        host:SetAllPoints(holder)
-        host._tick = {}
-        host._lbl = {}
-        holder._divHost = host
-    end
-    host:SetFrameLevel(holder:GetFrameLevel() + 2)
-    host:Show()
-    local tick, lbl = host._tick, host._lbl
-    local vertical = (orient == "VERTICAL")
-    -- The border's inner edge across the bar: 1 in, or a thicker solid
-    -- Custom Border's own width, so no line or dash reaches into it.
-    local e = 1
-    if s.customBorder then
-        local bt = s.borderTexture
-        if not bt or bt == "" or bt == "solid" then
-            local sz, px = ResolveBorderThickness(s)
-            e = max(1, floor((px or sz) + 0.5) * PP.mult)
-        end
-    end
-    -- Forever XP-bar frame: inset the ticks so they sit inside the ornate rails
-    -- (natively here, so dash/dot segmentation is preserved -- not resized afterwards).
-    local foreverXP = EllesmereUIDB and EllesmereUIDB.xpBarStyle == "forever"
-        and holder.GetName and holder:GetName() == "EllesmereEAB_XPBar"
-    if foreverXP then
-        e = e + (ns.XPFvGet("tickInset") * PP.mult)
-    end
-    -- Length along the bar (the fill's) and across it, inside the border.
-    local L = (vertical and h or w) - 2
-    local C = (vertical and w or h) - 2 * e
-    local nTick, nLbl = 0, 0
-    if L > 0 and C > 0 then
-        local Snap, one = PP.Snap, PP.mult
-        -- 5% tick line style: "dashed" (default), "dotted" (1px dots), or "solid"
-        -- (a single continuous line, like the 10% lines). dash/gap size the run.
-        local style5 = s.divider5Style or "dashed"
-        local dash, gap
-        if style5 == "dotted" then
-            dash = one; gap = max(one, Snap(2))       -- 1px dots
-        else -- dashed
-            dash = max(one, Snap(2)); gap = max(one, Snap(3))  -- wider gap so it reads dashed
-        end
-        local step = dash + gap
-        local count = max(1, floor((C + gap) / step))
-        local c0 = Snap(e)
-        local dash0 = c0 + Snap(max(0, (C - (count * step - gap)) / 2))
-        local full = Snap(e + C) - c0
-        -- Solid ticks (10% lines + 5% when style5=="solid") extend slightly past the
-        -- inset so they read as proper gridlines; dash/dot lengths are untouched.
-        local solidExt = foreverXP and (ns.XPFvGet("solidExt") * one) or 0
-        local solidFull = full + 2 * solidExt
-        local solidC0 = c0 - solidExt
-        local c = s.tick5Color
-        local r5, g5, b5 = c and c.r or 220 / 255, c and c.g or 167 / 255, c and c.b or 127 / 255
-        c = s.tick10Color
-        local r10, g10, b10 = c and c.r or 1, c and c.g or 1, c and c.b or 1
-        local showLbl = s.showDividerText
-        local lsz, lflag, lr, lg, lb, lrot, lcos, lsin, lox, loy, across
-        if showLbl then
-            local pi = math.pi
-            lsz = s.dividerTextSize or 8
-            lflag = EllesmereUI.GetFontOutlineFlag("actionBars")
-            c = s.dividerTextColor
-            lr, lg, lb = c and c.r or 1, c and c.g or 1, c and c.b or 1
-            lrot = (vertical and s.rotateDividerText) and (s.textReadDown and -pi / 2 or pi / 2) or 0
-            lcos, lsin = math.cos(lrot), math.sin(lrot)
-            local ox, oy = s.dividerTextOffX or 0, s.dividerTextOffY or 0
-            lox, loy = ox * lcos - oy * lsin, ox * lsin + oy * lcos
-            across = e + C / 2
-        end
-        for pct = 5, 95, 5 do
-            local pos = Snap(1 + pct / 100 * L)
-            if pct % 10 == 0 then
-                nTick = nTick + 1
-                local t = tick[nTick]
-                if not t then t = host:CreateTexture(nil, "OVERLAY"); tick[nTick] = t end
-                t:SetColorTexture(r10, g10, b10, 0.9)
-                t:ClearAllPoints()
-                if vertical then
-                    t:SetSize(solidFull, one)
-                    t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", solidC0, pos)
-                else
-                    t:SetSize(one, solidFull)
-                    t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", pos, solidC0)
-                end
-                t._pct = pct
-                t:Show()
-                if showLbl then
-                    -- Slot k is the (10 * k)% line; its text is set once.
-                    nLbl = nLbl + 1
-                    local fs = lbl[nLbl]
-                    if not fs then
-                        fs = host:CreateFontString(nil, "OVERLAY")
-                        -- Sublevel 1: above the lines (OVERLAY 0) it sits on.
-                        fs:SetDrawLayer("OVERLAY", 1)
-                        -- The font first: SetText needs one.
-                        EllesmereUI.ApplyModuleFont(fs, FONT_PATH, lsz, "actionBars", lflag)
-                        fs:SetText(nLbl * 10 .. "%")
-                        lbl[nLbl] = fs
-                    end
-                    EllesmereUI.ApplyModuleFont(fs, FONT_PATH, lsz, "actionBars", lflag)
-                    fs:SetTextColor(lr, lg, lb, 1)
-                    fs:SetRotation(lrot)
-                    local hh = fs:GetStringHeight()
-                    if not hh or hh <= 0 then hh = fs:GetLineHeight() end
-                    if not hh or hh <= 0 then hh = lsz end
-                    hh = hh / 2
-                    -- The line's centre along the bar (it spans pos to pos + one).
-                    local mid = pos + one / 2
-                    local x, y = mid, across
-                    if vertical then x, y = across, mid end
-                    fs:ClearAllPoints()
-                    fs:SetPoint("CENTER", holder, "BOTTOMLEFT",
-                        x + lox - hh * lsin, y + loy - hh * (1 - lcos))
-                    fs._pct = pct
-                    fs:Show()
-                end
-            elseif style5 == "solid" then
-                -- A single continuous line across the bar (like the 10% lines).
-                nTick = nTick + 1
-                local t = tick[nTick]
-                if not t then t = host:CreateTexture(nil, "OVERLAY"); tick[nTick] = t end
-                t:SetColorTexture(r5, g5, b5, 0.9)
-                t:ClearAllPoints()
-                if vertical then
-                    t:SetSize(solidFull, one)
-                    t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", solidC0, pos)
-                else
-                    t:SetSize(one, solidFull)
-                    t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", pos, solidC0)
-                end
-                t._pct = pct
-                t:Show()
-            else
-                -- Dashes/dots across the bar, the run centred.
-                for d = 0, count - 1 do
-                    nTick = nTick + 1
-                    local t = tick[nTick]
-                    if not t then t = host:CreateTexture(nil, "OVERLAY"); tick[nTick] = t end
-                    t:SetColorTexture(r5, g5, b5, 0.9)
-                    t:ClearAllPoints()
-                    if vertical then
-                        t:SetSize(dash, one)
-                        t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", dash0 + d * step, pos)
-                    else
-                        t:SetSize(one, dash)
-                        t:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", pos, dash0 + d * step)
-                    end
-                    t._pct = pct
-                    t:Show()
-                end
-            end
-        end
-    end
-    for i = nTick + 1, #tick do tick[i]:Hide() end
-    for i = nLbl + 1, #lbl do lbl[i]:Hide() end
-    -- Smart Ticks: hide marks already passed by the fill (pct < current). Stored for
-    -- live re-evaluation on value change (ns.ApplyDataBarSmartTicks).
-    host._nTick, host._nLbl, host._smart = nTick, nLbl, s.smartTicks and true or false
-    ns.ApplyDataBarSmartTicks(holder)
-end
-
--- Show/hide divider ticks + labels by the current fill level when Smart Ticks is on:
--- a mark whose percentage is below the current value is hidden (the fill covers it),
--- upcoming marks stay visible. Cheap enough to call on every value change.
-function ns.ApplyDataBarSmartTicks(holder)
-    local host = holder and holder._divHost
-    if not (host and host._nTick) then return end
-    local bar = holder._bar
-    local _, maxv = bar:GetMinMaxValues()
-    local curPct = (maxv and maxv > 0) and (bar:GetValue() / maxv * 100) or 0
-    local smart = host._smart
-    local tick, lbl = host._tick, host._lbl
-    for i = 1, host._nTick do
-        local t = tick[i]
-        if t then t:SetShown(not (smart and t._pct and t._pct < curPct)) end
-    end
-    for i = 1, (host._nLbl or 0) do
-        local fs = lbl[i]
-        if fs then fs:SetShown(not (smart and fs._pct and fs._pct < curPct)) end
-    end
-end
-
 -------------------------------------------------------------------------------
 --  Party Mode: spinning action bars, on the shared spin engine
 --  (EllesmereUI.PartySpin_Create, EllesmereUI_PartyMode.lua). Each bar's
@@ -7493,8 +7291,14 @@ local function HideBorder(button)
         button.NormalTexture:SetAlpha(0)
     end
     if button.Border then
-        button.Border:Hide()
-        button.Border:SetAlpha(0)
+        -- Show Equipped Border (Icon Effects) keeps Blizzard's equipped-item
+        -- border, in our square art; its shown state stays with the updates.
+        if EAB.db.profile.showEquippedBorder then
+            ns.AB_EquippedBorderLook(button.Border)
+        else
+            button.Border:Hide()
+            button.Border:SetAlpha(0)
+        end
     end
     if button.icon and button.IconMask then
         button.icon:RemoveMaskTexture(button.IconMask)
@@ -7514,6 +7318,22 @@ local function SetSquareTexture(texture, texPath)
     texture:SetTexCoord(0, 1, 0, 1)
     texture:ClearAllPoints()
     texture:SetAllPoints(texture:GetParent())
+end
+
+-- Show Equipped Border (Icon Effects, profile.showEquippedBorder): Blizzard's
+-- equipped-item border on a square button, in our square highlight art and
+-- Blizzard's own green at half opacity. The art swap fires the Border's
+-- SetAtlas hook (MakeButtonSquare) again, which `busy` turns away.
+do
+    local busy = false
+    function ns.AB_EquippedBorderLook(bd)
+        if busy then return end
+        busy = true
+        SetSquareTexture(bd, HIGHLIGHT_TEXTURES[1])
+        busy = false
+        bd:SetVertexColor(0, 1, 0, 0.5)
+        bd:SetAlpha(1)
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -7933,17 +7753,20 @@ local function MakeButtonSquare(btn)
             end)
         end
     end
-    -- Suppress Blizzard's item-quality Border overlay: it calls
-    -- Border:SetAtlas()/Show() on refreshes and EAB owns the visible border.
+    -- Blizzard's equipped-item Border: it calls Border:SetAtlas()/Show() on
+    -- refreshes and EAB owns the visible border, so it is suppressed, unless
+    -- Show Equipped Border keeps it (in our square art).
     if btn.Border and not fd.borderHooked then
-        hooksecurefunc(btn.Border, "SetAtlas", function(self)
-            self:SetAlpha(0)
-            EAB_VTABLE.HideRegionDeferred(self)
-        end)
-        hooksecurefunc(btn.Border, "Show", function(self)
-            self:SetAlpha(0)
-            EAB_VTABLE.HideRegionDeferred(self)
-        end)
+        local function BorderRefresh(self)
+            if EAB.db.profile.showEquippedBorder then
+                ns.AB_EquippedBorderLook(self)
+            else
+                self:SetAlpha(0)
+                EAB_VTABLE.HideRegionDeferred(self)
+            end
+        end
+        hooksecurefunc(btn.Border, "SetAtlas", BorderRefresh)
+        hooksecurefunc(btn.Border, "Show", BorderRefresh)
         fd.borderHooked = true
     end
     fd.squared = true
@@ -8960,6 +8783,32 @@ end
 -- Immediate re-apply of the Hide Count at 0 alpha on every button, so the options
 -- toggle applies on click instead of waiting for the next count event. Alpha only --
 -- the count TEXT stays whatever its owners last wrote. Cold path: options clicks only.
+-- Show Equipped Border, live: every square button's Border takes the look
+-- (and shows on an equipped item's button) or hides again. The Blizzard and
+-- Classic styles keep their own equipped border, so EllesmereUI style only.
+function EAB:ApplyEquippedBorder()
+    if ns.AB_Style() ~= "eui" then return end
+    local on = self.db.profile.showEquippedBorder
+    for _, info in ipairs(BAR_CONFIG) do
+        local btns = barButtons[info.key]
+        if btns then
+            for _, btn in ipairs(btns) do
+                local bd = btn.Border
+                if bd and EFD(btn).squared then
+                    if on then
+                        ns.AB_EquippedBorderLook(bd)
+                        local a = btn:GetAttribute("action")
+                        bd:SetShown(a and IsEquippedAction(a) and true or false)
+                    else
+                        bd:Hide()
+                        bd:SetAlpha(0)
+                    end
+                end
+            end
+        end
+    end
+end
+
 function EAB:RefreshAllCounts()
     if not (C_ActionBar and C_ActionBar.GetActionDisplayCount) then return end
     for _, info in ipairs(BAR_CONFIG) do
@@ -16634,16 +16483,16 @@ function EAB:FinishSetup()
 end
 
 -------------------------------------------------------------------------------
---  Data Bars (XP Bar, Reputation Bar)
+--  Data Bars (XP, Reputation and House Favor bars): the frame, layout,
+--  border, text and visibility all three share. The XP bar's own code is
+--  in EUI_ActionBars_XPBar.lua (loaded after this file; called through ns).
 -------------------------------------------------------------------------------
 -- dataBarFrames is forward-declared near barFrames at the top of the file
 ns.dataBarFrames = dataBarFrames
 
--- Data bar colors
+-- Reputation and House Favor bar colors (the XP bar's are in
+-- EUI_ActionBars_XPBar.lua)
 local DATA_BAR_COLORS = {
-    xpRested   = { r = 0.00, g = 0.44, b = 0.87 },  -- shaman blue (XP when rested)
-    xpNoRest   = { r = 0.60, g = 0.40, b = 0.85 },  -- purple (XP when no rested)
-    xpRestedBG = { r = 0.15, g = 0.30, b = 0.60 },  -- dark blue (rested overlay)
     favor = { r = 0.85, g = 0.64, b = 0.22 },   -- warm gold (house favor)
     rep = {
         [1] = { r = 0.80, g = 0.20, b = 0.20 },  -- Hated
@@ -16721,7 +16570,8 @@ ns.ApplyDataBarBorder = function(holder, s)
             holder._cbOn = nil
             EllesmereUI.HideBorderStyle(host)
             host:Hide()
-            if line then line:Show() end
+            -- An XP bar art frame keeps the line hidden.
+            if line and not holder._xpArtOn then line:Show() end
         end
         return
     end
@@ -16876,15 +16726,21 @@ local function ApplyDataBarLayout(barKey)
         frame._restedBar:SetRotatesTexture(orient ~= "HORIZONTAL")
     end
 
+    -- XP bar art style and profession fill (both opt-in; EUI_ActionBars_XPBar.lua).
+    if barKey == "XPBar" then ns.ApplyXPBarStyle(frame, s) end
+
     -- Per-bar Text Size (default 9) and the readout's placement (anchor,
     -- offsets, rotation, background). Re-applied here so the options take
     -- effect live through the existing ApplyDataBarLayout calls.
     if frame._text then
-        frame._text:SetFont(FONT_PATH, s.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
+        -- Read live, not FONT_PATH: that load-time capture misses a standalone's
+        -- saved fonts and a login spec-profile switch.
+        frame._text:SetFont(EllesmereUI.GetFontPath("actionBars"), s.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
         ns.DataBarPlaceText(frame, s)
     end
 
-    -- Dividers: one boolean read while off; a built host is called to hide.
+    -- Dividers (EUI_ActionBars_XPBar.lua): one boolean read while off; a
+    -- built host is called to hide.
     if frame._divHost or s.showDividers then
         ns.AB_DataBarDividers(frame, w, h, orient, s)
     end
@@ -16898,452 +16754,6 @@ local function ApplyDataBarLayout(barKey)
     if frame._updateFunc then frame._updateFunc() end
 end
 ns.ApplyDataBarLayout = ApplyDataBarLayout
-
--- XP bar style override for the Blizz UI Enhanced "XP Bar" dropdown (Forever only,
--- shown only when this addon is loaded). EllesmereUIDB.xpBarStyle:
---   "eui"     -> the house look (configured texture + resolved colours); default.
---   "default" -> a plain Blizzard status-bar texture + the stock XP colour, no tint.
---   "forever" -> the new Forever client art (Legacy reward-track fill / trough / frame).
--- Runs at the END of UpdateXPBar so it wins over the per-tick colour, and re-applies
--- every XP update. XP bar only for now (Rep/Favor can adopt it later).
--- Per-variant Forever fit settings. The Legacy (1st pass, nine-slice) and Professions
--- (flat 3-slice) frames fit differently, so cap/offset/inset/square etc. are stored per
--- frame in EllesmereUIDB.xpFvByFrame[prof|legacy]. ns.XPFvGet/Set read/write the slot for
--- the currently-selected frame; a one-time migration moves the old flat xpFv* (which was
--- the Professions tuning) into prof and seeds legacy from it (+ the user's top/bot baseline).
-local XPFV_DEFAULTS = {
-    capFrac = 0.2, offX = -2, offY = -2, top = 0, bot = -3,
-    tickInset = 4, solidExt = 2, endInset = 0, bgInset = 2, fillV = 1, square = 0,
-}
-local function XPFvTbl()
-    EllesmereUIDB = EllesmereUIDB or {}
-    if not EllesmereUIDB.xpFvByFrame then
-        local flat = {
-            capFrac = EllesmereUIDB.xpFvCapFrac, offX = EllesmereUIDB.xpFvOffX, offY = EllesmereUIDB.xpFvOffY,
-            top = EllesmereUIDB.xpFvTop, bot = EllesmereUIDB.xpFvBot, tickInset = EllesmereUIDB.xpFvTickInset,
-            solidExt = EllesmereUIDB.xpFvSolidExt, endInset = EllesmereUIDB.xpFvEndInset,
-            bgInset = EllesmereUIDB.xpFvBgInset, fillV = EllesmereUIDB.xpFvFillV, square = EllesmereUIDB.xpFvSquare,
-        }
-        local prof, legacy = {}, {}
-        for k, v in pairs(flat) do if v ~= nil then prof[k] = v; legacy[k] = v end end
-        -- Legacy baseline: top +1, bot +3 (down) relative to the Professions fit.
-        legacy.top = (legacy.top ~= nil and legacy.top or XPFV_DEFAULTS.top) + 1
-        legacy.bot = (legacy.bot ~= nil and legacy.bot or XPFV_DEFAULTS.bot) + 3
-        EllesmereUIDB.xpFvByFrame = { prof = prof, legacy = legacy }
-    end
-    local k = (EllesmereUIDB.xpForeverFrameAtlas == "Professions-skillbar-frame") and "prof" or "legacy"
-    EllesmereUIDB.xpFvByFrame[k] = EllesmereUIDB.xpFvByFrame[k] or {}
-    return EllesmereUIDB.xpFvByFrame[k], k
-end
-function ns.XPFvGet(var)
-    local t = XPFvTbl()
-    local v = t[var]
-    if v == nil then v = XPFV_DEFAULTS[var] end
-    return v
-end
-function ns.XPFvSet(var, v) local t = XPFvTbl(); t[var] = v end
-function ns.XPFvVariant() local _, k = XPFvTbl(); return k end
-
--- Render a bar-frame atlas onto `overlay` at any width. Two cases:
---   1. The atlas carries sliceData (e.g. Legacy-Progressbar-Frame): apply its own
---      slice margins via SetTextureSliceMargins so only the middle stretches.
---   2. A flat atlas with no sliceData (e.g. Professions-skillbar-frame): build a manual
---      horizontal 3-slice -- a fixed left cap, a stretched middle, a fixed right cap,
---      sampled by texcoord. Cap art is drawn undistorted (aspect preserved to the
---      overlay height). EllesmereUIDB.xpFvCapFrac (0.02..0.48) tunes where the cap ends
---      in the atlas; live-tune with:  /run EllesmereUI._SetXPBarStyle("forever")
-local function ApplyBarFrameNineSlice(overlay, atlas)
-    local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
-    local sd = info and info.sliceData
-    overlay._frameTex = overlay._frameTex or overlay:CreateTexture(nil, "OVERLAY")
-    local tx = overlay._frameTex
-
-    if sd and tx.SetTextureSliceMargins then
-        if overlay._flat then for _, t in pairs(overlay._flat) do t:Hide() end end
-        tx:ClearAllPoints(); tx:SetAllPoints(overlay)
-        tx:SetAtlas(atlas)
-        tx:SetTextureSliceMargins(sd.marginLeft or 0, sd.marginTop or 0, sd.marginRight or 0, sd.marginBottom or 0)
-        if tx.SetTextureSliceMode then tx:SetTextureSliceMode(sd.sliceMode or 0) end
-        tx:Show()
-        -- Record the rendered left-cap width so tick clamping can avoid the ends.
-        local oh = overlay:GetHeight()
-        local scale = (info and info.height and info.height > 0 and oh and oh > 0) and (oh / info.height) or 1
-        overlay._capW = (sd.marginLeft or 0) * scale
-        return
-    end
-
-    -- Flat atlas: manual horizontal 3-slice.
-    tx:Hide()
-    if not overlay._flat then
-        overlay._flat = {}
-        for _, k in ipairs({ "TL", "TM", "TR", "BL", "BM", "BR" }) do
-            local t = overlay:CreateTexture(nil, "OVERLAY")
-            if t.SetSnapToPixelGrid then t:SetSnapToPixelGrid(false); t:SetTexelSnappingBias(0) end
-            overlay._flat[k] = t
-        end
-    end
-    local s = overlay._flat
-    if not (info and info.file) then
-        s.TM:SetAtlas(atlas); s.TM:ClearAllPoints(); s.TM:SetAllPoints(overlay); s.TM:Show()
-        for _, k in ipairs({ "TL", "TR", "BL", "BM", "BR" }) do s[k]:Hide() end
-        return
-    end
-    local lc, rc, tc, bc = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
-    local du = rc - lc
-    local capFrac = ns.XPFvGet("capFrac")
-    capFrac = math.max(0.02, math.min(0.48, capFrac))
-    local lMid, rMid = lc + du * capFrac, rc - du * capFrac
-    local midU = (lc + rc) / 2
-    local band = du * 0.004
-    local vMid = (tc + bc) / 2   -- atlas vertical midpoint
-    -- Draw caps undistorted: scale the cap's native px width by (overlayH / atlasH).
-    local oh = overlay:GetHeight(); if not oh or oh <= 0 then oh = info.height or 20 end
-    local scale = (info.height and info.height > 0) and (oh / info.height) or 1
-    local capW = capFrac * (info.width or 0) * scale
-    if capW <= 0 then capW = oh end
-    for _, t in pairs(s) do t:SetTexture(info.file); t:ClearAllPoints() end
-    -- Six slices. Each column samples the atlas's TOP half (tc..vMid); the BOTTOM row
-    -- samples the same top rail FLIPPED vertically (v args reversed), so the bottom edge
-    -- is a mirror of the top -> guaranteed symmetric, regardless of the atlas's own
-    -- (inconsistent) bottom rail. Middle uses a ~2px column so the rails stay uniform.
-    local uL1, uL2 = lc, lMid
-    local uM1, uM2 = midU - band, midU + band
-    local uR1, uR2 = rMid, rc
-    -- Left caps (top + mirrored bottom)
-    s.TL:SetTexCoord(uL1, uL2, tc, vMid)
-    s.TL:SetPoint("TOPLEFT", overlay, "TOPLEFT"); s.TL:SetPoint("BOTTOMLEFT", overlay, "LEFT"); s.TL:SetWidth(capW)
-    s.BL:SetTexCoord(uL1, uL2, vMid, tc)
-    s.BL:SetPoint("TOPLEFT", overlay, "LEFT"); s.BL:SetPoint("BOTTOMLEFT", overlay, "BOTTOMLEFT"); s.BL:SetWidth(capW)
-    -- Right caps
-    s.TR:SetTexCoord(uR1, uR2, tc, vMid)
-    s.TR:SetPoint("TOPRIGHT", overlay, "TOPRIGHT"); s.TR:SetPoint("BOTTOMRIGHT", overlay, "RIGHT"); s.TR:SetWidth(capW)
-    s.BR:SetTexCoord(uR1, uR2, vMid, tc)
-    s.BR:SetPoint("TOPRIGHT", overlay, "RIGHT"); s.BR:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT"); s.BR:SetWidth(capW)
-    -- Middle (stretched between caps), top + mirrored bottom
-    s.TM:SetTexCoord(uM1, uM2, tc, vMid)
-    s.TM:SetPoint("TOPLEFT", s.TL, "TOPRIGHT"); s.TM:SetPoint("BOTTOMRIGHT", s.TR, "BOTTOMLEFT")
-    s.BM:SetTexCoord(uM1, uM2, vMid, tc)
-    s.BM:SetPoint("TOPLEFT", s.BL, "TOPRIGHT"); s.BM:SetPoint("BOTTOMRIGHT", s.BR, "BOTTOMLEFT")
-    for _, t in pairs(s) do t:Show() end
-    overlay._capW = capW   -- for tick clamping (avoid drawing ticks under the caps)
-end
-
--- Show the flipbook's idle frame (frame 0: row 0, col 0 of 2 cols x 30 rows).
-local function FlipStaticFrame(flip, flipAtlas, flipInfo)
-    flip:SetAtlas(flipAtlas)
-    local l, r, t, b = flipInfo.leftTexCoord, flipInfo.rightTexCoord, flipInfo.topTexCoord, flipInfo.bottomTexCoord
-    flip:SetTexCoord(l, l + (r - l) / 2, t, t + (b - t) / 30)
-end
-
--- Optional professions-style flipbook fill. EllesmereUIDB.xpFvFillAtlas selects a
--- per-profession flipbook atlas (e.g. Skillbar_Fill_Flipbook_Blacksmithing); when set,
--- an overlay texture tracks the filled width and shows the flipbook art. Animation modes:
---   xpFvFillSmart == 1 -> "smart": play once on XP gain (set by UpdateXPBar), else idle.
---   else xpFvFillAnim == 1 -> loop continuously.
---   else -> static idle frame.
--- Mirrors the client's skill bar (60 frames / 30 rows x 2 cols / 2s). Smart overrides loop.
-function ns.ApplyXPFlipFill(frame, bar, tex)
-    local flipAtlas = EllesmereUIDB and EllesmereUIDB.xpFvFillAtlas
-    local flipInfo = flipAtlas and flipAtlas ~= "" and flipAtlas ~= "default"
-        and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(flipAtlas) or nil
-    if not flipInfo then
-        if frame._fvFlip then frame._fvFlip:Hide() end
-        if frame._fvFlipAG then frame._fvFlipAG:Stop() end
-        if tex then tex:SetAlpha(1) end
-        return
-    end
-    if not frame._fvFlip then
-        frame._fvFlip = bar:CreateTexture(nil, "OVERLAY")
-    end
-    local flip = frame._fvFlip
-    flip:ClearAllPoints(); flip:SetAllPoints(tex)   -- track the filled width
-    flip:Show()
-    if tex then tex:SetAlpha(0) end                 -- flipbook is the visible fill
-    frame._fvFlipAtlas, frame._fvFlipInfo = flipAtlas, flipInfo
-    if not frame._fvFlipAG then
-        local ag = bar:CreateAnimationGroup()
-        local fb = ag:CreateAnimation("FlipBook")
-        if fb.SetTarget then fb:SetTarget(flip) end
-        fb:SetDuration(2)
-        fb:SetFlipBookRows(30); fb:SetFlipBookColumns(2); fb:SetFlipBookFrames(60)
-        if fb.SetFlipBookFrameWidth then fb:SetFlipBookFrameWidth(0); fb:SetFlipBookFrameHeight(0) end
-        -- After a non-looping (smart) play, settle back to the idle frame.
-        ag:SetScript("OnFinished", function()
-            if frame._fvFlipAtlas and frame._fvFlipInfo then
-                FlipStaticFrame(flip, frame._fvFlipAtlas, frame._fvFlipInfo)
-            end
-        end)
-        frame._fvFlipAG = ag
-    end
-    local ag = frame._fvFlipAG
-    local smart = EllesmereUIDB.xpFvFillSmart == 1
-    local loop = EllesmereUIDB.xpFvFillAnim == 1
-    if smart then
-        if ag.GetLooping and ag:GetLooping() ~= "NONE" then ag:SetLooping("NONE") end
-        if frame._fvFlipFlash then
-            frame._fvFlipFlash = false
-            flip:SetAtlas(flipAtlas)   -- full region as the flipbook base
-            ag:Stop(); ag:Play()
-        elseif not ag:IsPlaying() then
-            FlipStaticFrame(flip, flipAtlas, flipInfo)
-        end
-    elseif loop then
-        if ag.GetLooping and ag:GetLooping() ~= "REPEAT" then ag:SetLooping("REPEAT") end
-        if not ag:IsPlaying() then flip:SetAtlas(flipAtlas); ag:Play() end
-    else
-        ag:Stop()
-        FlipStaticFrame(flip, flipAtlas, flipInfo)
-    end
-end
-
-local function ApplyXPBarStyle(frame)
-    if not frame or not frame._bar then return end
-    local style = (EllesmereUIDB and EllesmereUIDB.xpBarStyle) or "eui"
-    local bar, bg = frame._bar, frame._bg
-    local tex = bar:GetStatusBarTexture()
-    if style == "forever" then
-        -- Match the Forever client's OWN native XP bar art (MainStatusTrackingBarContainer):
-        -- fill = UI-HUD-ExperienceBar-Fill-Experience, trough = UI-HUD-ExperienceBar-Background.
-        -- (Not the Legacy reward-track art, which rendered as a flat black trough here.)
-        -- Fill: a flat (square-ended) texture so the fill isn't rounded, and left tinted
-        -- by the Experience Bar -> Color selection. UpdateXPBar already applied the
-        -- resolved colour (reactive/custom/etc.) before this runs, so we must NOT
-        -- override it here -- the earlier atlas+white forced purple and ignored the pick.
-        if tex then tex:SetTexture("Interface\\BUTTONS\\WHITE8X8"); tex:SetDrawLayer("ARTWORK", 4) end
-        ns.ApplyXPFlipFill(frame, bar, tex)
-        -- Rested bar: kept visible (UpdateXPBar shows it only when there's rested XP) and
-        -- aligned to the fill below; its colour is the rested-XP background shade.
-        -- Trough: the client's native XP-bar background. Apply its own slice margins
-        -- (L10/R10) so the rounded ends render at the true radius and match the fill
-        -- mask's rounding -- without slicing they're stretched and read slightly off.
-        if bg then
-            -- Trough corner: xpFvSquare is 0 (native rounded) .. 1 (fully square).
-            -- 1 samples a flat central column (no corners); anything less uses the
-            -- nine-slice with a proportionally smaller corner margin (10px .. 0).
-            local square = ns.XPFvGet("square")
-            local bgi = (square >= 1) and C_Texture and C_Texture.GetAtlasInfo
-                and C_Texture.GetAtlasInfo("UI-HUD-ExperienceBar-Background")
-            if square >= 1 and bgi and bgi.file then
-                if bg.SetTextureSliceMargins then bg:SetTextureSliceMargins(0, 0, 0, 0) end
-                bg:SetTexture(bgi.file)
-                local mu = (bgi.leftTexCoord + bgi.rightTexCoord) / 2
-                local bu = (bgi.rightTexCoord - bgi.leftTexCoord) * 0.01
-                bg:SetTexCoord(mu - bu, mu + bu, bgi.topTexCoord, bgi.bottomTexCoord)
-            else
-                bg:SetAtlas("UI-HUD-ExperienceBar-Background")
-                if bg.SetTextureSliceMargins then
-                    local m = floor(10 * (1 - max(0, min(1, square))) + 0.5)
-                    bg:SetTextureSliceMargins(m, 0, m, 0)
-                    if bg.SetTextureSliceMode then bg:SetTextureSliceMode(0) end
-                end
-            end
-        end
-        -- Hide the EllesmereUI 1px border (MakeBorder returns a table whose ._frame
-        -- holds the edge textures); the Forever bar frame art replaces it.
-        if frame._border and frame._border._frame then frame._border._frame:Hide() end
-        -- Forever bar frame: the client's own Legacy progress-bar frame, on its OWN
-        -- overlay so draw order is explicit and it sits over everything:
-        -- fill (_bar, holder+1) < ticks (_divHost, holder+2) < frame (holder+3).
-        if not frame._fvOverlay then
-            local ovf = CreateFrame("Frame", nil, frame)
-            ovf:EnableMouse(false)
-            frame._fvOverlay = ovf
-        end
-        -- Overlay sits 2px outside the bar (tunable via xpFvOffX/xpFvOffY: negative X =
-        -- shift left, negative Y = shift down) so the frame rim frames the trough.
-        local ox = ns.XPFvGet("offX")
-        local oy = ns.XPFvGet("offY")
-        -- Per-edge vertical extents so the top/bottom rails can be positioned (and the
-        -- frame height trimmed) independently: top+ raises the top rail, bot+ lowers the
-        -- bottom rail; negatives pull each edge inward to shrink the frame.
-        local topExt = ns.XPFvGet("top")
-        local botExt = ns.XPFvGet("bot")
-        frame._fvOverlay:ClearAllPoints()
-        frame._fvOverlay:SetPoint("TOPLEFT", frame, "TOPLEFT", -2 + ox, 2 + oy + topExt)
-        frame._fvOverlay:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 2 + ox, -2 + oy - botExt)
-        frame._fvOverlay:SetFrameLevel(frame:GetFrameLevel() + 3)
-        frame._fvOverlay:Show()
-        -- Frame art: Legacy-Progressbar-Frame is a nine-slice atlas; applied via its own
-        -- slice margins the 66px ornate ends stay fixed and only the middle rail stretches.
-        -- Flat atlases (Professions-skillbar-frame) get a manual 3-slice instead.
-        -- EllesmereUIDB.xpForeverFrameAtlas can override for tuning.
-        local frameAtlas = (EllesmereUIDB and EllesmereUIDB.xpForeverFrameAtlas)
-            or "Legacy-Progressbar-Frame"
-        ApplyBarFrameNineSlice(frame._fvOverlay, frameAtlas)
-
-        -- Geometric end-rounding: tuck the trough + fill ends in horizontally by
-        -- xpFvEndInset so their square corners hide behind the frame's rounded caps
-        -- (the corner radius is small, so a few px clears it; tick alignment drift at
-        -- this scale is negligible, no remap needed). Restored to 1px inset for eui.
-        local endInset = ns.XPFvGet("endInset")
-        -- The trough tucks in a couple px further than the fill (xpFvBgInset) so its
-        -- rounded corner doesn't leave a dark sliver past the cap. The extra sits under
-        -- the cap, so the fill overhang there is hidden.
-        local bgInset = endInset + ns.XPFvGet("bgInset")
-        -- The trough atlas has transparent top/bottom padding, so its visible art is
-        -- shorter than a flat fill. Inset the fill vertically by xpFvFillV to match the
-        -- trough's visible height so fill and backdrop read as the same height.
-        local fillV = ns.XPFvGet("fillV")
-        bar:ClearAllPoints()
-        bar:SetPoint("TOPLEFT", frame, "TOPLEFT", endInset, -1 - fillV)
-        bar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -endInset, 1 + fillV)
-        bg:ClearAllPoints()
-        bg:SetPoint("TOPLEFT", frame, "TOPLEFT", bgInset, -1)
-        bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -bgInset, 1)
-        -- Rested bar aligned to the fill (flat, square) so the rested-XP shade reads the
-        -- same height; it sits behind the fill (ARTWORK:2) so only the rested tail shows.
-        local rb = frame._restedBar
-        if rb then
-            local rtex = rb.GetStatusBarTexture and rb:GetStatusBarTexture()
-            if rtex then rtex:SetTexture("Interface\\BUTTONS\\WHITE8X8") end
-            rb:ClearAllPoints()
-            rb:SetPoint("TOPLEFT", frame, "TOPLEFT", endInset, -1 - fillV)
-            rb:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -endInset, 1 + fillV)
-        end
-
-        -- (Tick vertical inset for the Forever frame is applied natively inside
-        -- AB_DataBarDividers via the border inset `e`, so dash/dot segmentation is
-        -- preserved -- post-resizing every tick here flattened them into solid lines.)
-
-        -- Round the FILL's start end with UI-HUD-ExperienceBar-Fill-MASK. OPT-IN
-        -- (default off): this mask can hide the fill entirely on some sizes. The caps
-        -- already tuck the square fill end under them, so the mask is optional polish.
-        -- Toggle: /xpframe fillmask 1 to try it, 0 to disable.
-        if EllesmereUIDB and EllesmereUIDB.xpFvFillMask == 1 then
-            if not frame._fvFillMask then frame._fvFillMask = frame:CreateMaskTexture() end
-            frame._fvFillMask:ClearAllPoints()
-            frame._fvFillMask:SetAllPoints(bar)
-            frame._fvFillMask:SetAtlas("UI-HUD-ExperienceBar-Fill-MASK", false)
-            frame._fvFillMask:Show()
-            if not frame._fvFillMaskOn and tex and tex.AddMaskTexture then
-                tex:AddMaskTexture(frame._fvFillMask); frame._fvFillMaskOn = true
-            end
-        elseif frame._fvFillMask and frame._fvFillMaskOn then
-            if tex and tex.RemoveMaskTexture then tex:RemoveMaskTexture(frame._fvFillMask) end
-            frame._fvFillMask:Hide(); frame._fvFillMaskOn = false
-        end
-
-        -- End-rounding mask: round the fill + trough to the frame's rounded caps.
-        -- OPT-IN (default off) -- this mask has twice hidden the whole bar; enable to
-        -- experiment with /xpframe mask 1, disable with /xpframe mask 0.
-        local wantMask = (frameAtlas == "Professions-skillbar-frame")
-            and (EllesmereUIDB and EllesmereUIDB.xpFvMask == 1)
-        if wantMask then
-            if not frame._fvMask then frame._fvMask = frame:CreateMaskTexture() end
-            frame._fvMask:ClearAllPoints()
-            frame._fvMask:SetAllPoints(bar)
-            frame._fvMask:SetAtlas("Professions-skillbar-mask", false)
-            frame._fvMask:Show()
-            if not frame._fvMaskOn then
-                if tex and tex.AddMaskTexture then tex:AddMaskTexture(frame._fvMask) end
-                if bg and bg.AddMaskTexture then bg:AddMaskTexture(frame._fvMask) end
-                frame._fvMaskOn = true
-            end
-        elseif frame._fvMask and frame._fvMaskOn then
-            if tex and tex.RemoveMaskTexture then tex:RemoveMaskTexture(frame._fvMask) end
-            if bg and bg.RemoveMaskTexture then bg:RemoveMaskTexture(frame._fvMask) end
-            frame._fvMask:Hide(); frame._fvMaskOn = false
-        end
-    else -- "eui" (the "default" style hides the EUI bar via useBlizzardDataBars, so
-         -- this path is never reached for it): texture + colour come from the normal path.
-        if frame._fvOverlay then frame._fvOverlay:Hide() end
-        -- Restore the standard 1px trough/fill inset (undo the forever end-tuck).
-        local PP = EllesmereUI and EllesmereUI.PP
-        local rb = frame._restedBar
-        if PP then
-            PP.SetInside(bar, frame, 1, 1); PP.SetInside(bg, frame, 1, 1)
-            if rb then PP.SetInside(rb, frame, 1, 1) end
-        else
-            bar:ClearAllPoints(); bar:SetPoint("TOPLEFT", 1, -1); bar:SetPoint("BOTTOMRIGHT", -1, 1)
-            bg:ClearAllPoints();  bg:SetPoint("TOPLEFT", 1, -1);  bg:SetPoint("BOTTOMRIGHT", -1, 1)
-            if rb then rb:ClearAllPoints(); rb:SetPoint("TOPLEFT", 1, -1); rb:SetPoint("BOTTOMRIGHT", -1, 1) end
-        end
-        if frame._fvMask and frame._fvMaskOn then
-            if tex and tex.RemoveMaskTexture then tex:RemoveMaskTexture(frame._fvMask) end
-            if bg and bg.RemoveMaskTexture then bg:RemoveMaskTexture(frame._fvMask) end
-            frame._fvMask:Hide(); frame._fvMaskOn = false
-        end
-        if frame._fvFillMask and frame._fvFillMaskOn then
-            if tex and tex.RemoveMaskTexture then tex:RemoveMaskTexture(frame._fvFillMask) end
-            frame._fvFillMask:Hide(); frame._fvFillMaskOn = false
-        end
-        if frame._fvFlip then frame._fvFlip:Hide() end
-        if frame._fvFlipAG then frame._fvFlipAG:Stop() end
-        if tex then tex:SetAlpha(1) end
-        if bg then
-            if bg.SetTextureSliceMargins then bg:SetTextureSliceMargins(0, 0, 0, 0) end
-            bg:SetColorTexture(0.06, 0.06, 0.08, 0.85)
-        end
-        if frame._border and frame._border._frame then frame._border._frame:Show() end
-    end
-end
-ns.ApplyXPBarStyle = ApplyXPBarStyle
-
--- Live tuning for the Forever XP-bar frame (testing aid). Values are PER FRAME VARIANT
--- (Legacy 1st-pass vs Professions) -- tuning while one is selected doesn't touch the
--- other. Usage:  /xpframe            show the current variant's values
---                /xpframe top +      nudge; /xpframe bot -2  set absolutely.
-SLASH_XPFRAME1 = "/xpframe"
-SlashCmdList["XPFRAME"] = function(msg)
-    EllesmereUIDB = EllesmereUIDB or {}
-    -- Accept "x -1", "x=-1", "x = -1" alike.
-    local norm = (msg or ""):lower():gsub("=", " ")
-    local key, val = norm:match("^%s*(%a+)%s*([%-%+%d%.]*)%s*$")
-    -- Per-variant fit keys (stored via ns.XPFvGet/Set) + a couple of global toggles.
-    local map = {
-        cap   = { fv = "capFrac",   step = 0.01 },
-        x     = { fv = "offX",      step = 1 },
-        y     = { fv = "offY",      step = 1 },
-        top   = { fv = "top",       step = 1 },
-        bot   = { fv = "bot",       step = 1 },
-        tick  = { fv = "tickInset", step = 1 },
-        solid = { fv = "solidExt",  step = 1 },
-        ["end"] = { fv = "endInset", step = 1 },
-        bg    = { fv = "bgInset",   step = 1 },
-        square = { fv = "square",   step = 0.1 },
-        fillv = { fv = "fillV",     step = 1 },
-        mask     = { gvar = "xpFvMask",     step = 1, def = 0 },  -- global
-        fillmask = { gvar = "xpFvFillMask", step = 1, def = 0 },  -- global
-    }
-    local function show()
-        print(string.format("|cff33ccff[xpframe:%s]|r cap=%.3f x=%d y=%d top=%d bot=%d tick=%d solid=%d end=%d bg=%d fillv=%d square=%.2f fillmask=%d mask=%d",
-            ns.XPFvVariant(), ns.XPFvGet("capFrac"), ns.XPFvGet("offX"), ns.XPFvGet("offY"),
-            ns.XPFvGet("top"), ns.XPFvGet("bot"), ns.XPFvGet("tickInset"), ns.XPFvGet("solidExt"),
-            ns.XPFvGet("endInset"), ns.XPFvGet("bgInset"), ns.XPFvGet("fillV"), ns.XPFvGet("square"),
-            EllesmereUIDB.xpFvFillMask or 0, EllesmereUIDB.xpFvMask or 0))
-    end
-    local m = key and map[key]
-    if not m then show(); return end
-    local cur = m.fv and ns.XPFvGet(m.fv) or (EllesmereUIDB[m.gvar] or m.def)
-    if val == "+" or val == "" then cur = cur + m.step
-    elseif val == "-" then cur = cur - m.step
-    else local n = tonumber(val); if n then cur = n end end
-    if m.fv then ns.XPFvSet(m.fv, cur) else EllesmereUIDB[m.gvar] = cur end
-    if EllesmereUI._SetXPBarStyle then EllesmereUI._SetXPBarStyle(EllesmereUIDB.xpBarStyle or "forever") end
-    show()
-end
-
--- Global entry for the Blizz UI Enhanced "XP Bar" dropdown (a separate addon).
--- "default" shows Blizzard's own data bars (useBlizzardDataBars); "eui"/"forever"
--- use the EllesmereUI bar and differ only in art. Returns true when the Blizzard
--- vs EllesmereUI swap changed (a /reload is needed); false when applied live.
-function EllesmereUI._SetXPBarStyle(style)
-    EllesmereUIDB = EllesmereUIDB or {}
-    EllesmereUIDB.xpBarStyle = style
-    local wantBlizz = (style == "default")
-    local changed = false
-    if EAB and EAB.db and EAB.db.profile then
-        local cur = EAB.db.profile.useBlizzardDataBars and true or false
-        if cur ~= wantBlizz then
-            EAB.db.profile.useBlizzardDataBars = wantBlizz
-            changed = true
-        end
-    end
-    if not changed and dataBarFrames and dataBarFrames["XPBar"] then
-        ApplyDataBarLayout("XPBar")   -- eui <-> forever: re-apply the art live
-    end
-    return changed
-end
 
 local function CreateDataBarFrame(barKey, updateFunc)
     local holder = CreateFrame("Frame", "EllesmereEAB_" .. barKey, UIParent)
@@ -17396,7 +16806,7 @@ local function CreateDataBarFrame(barKey, updateFunc)
     EllesmereUI.PrimeFontShadow(text, EllesmereUI.GetFontUseShadow("actionBars"))
     local sInit = EAB.db and EAB.db.profile and EAB.db.profile.bars
         and EAB.db.profile.bars[barKey]
-    text:SetFont(FONT_PATH, sInit and sInit.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
+    text:SetFont(EllesmereUI.GetFontPath("actionBars"), sInit and sInit.textSize or 9, EllesmereUI.GetFontOutlineFlag("actionBars"))
     text:SetPoint("CENTER", sInit and sInit.textOffsetX or 0, sInit and sInit.textOffsetY or 0)
     text:SetTextColor(1, 1, 1, 1)
 
@@ -17407,6 +16817,8 @@ local function CreateDataBarFrame(barKey, updateFunc)
     dataBarFrames[barKey] = holder
     return holder
 end
+-- The XP bar (EUI_ActionBars_XPBar.lua) builds its frame through this too.
+ns.CreateDataBarFrame = CreateDataBarFrame
 
 -- Data bars own their content updates, but visibility is shared with the
 -- generic non-secure visibility system above. Guard each update callback so a
@@ -17449,170 +16861,6 @@ function EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate(barKey, frame, s)
         frame:Show()
     end
 end
-
--------------------------------------------------------------------------------
---  XP Bar
--------------------------------------------------------------------------------
--- Max-level check with layered fallbacks. The Is* helpers are nil-guarded, so client
--- API churn can silently disable them -- a plain numeric compare against the expansion
--- max level backstops the check so the bar can never show for a max-level character.
-function ns.XPBarAtMaxLevel()
-    local level = UnitLevel("player") or 0
-    if IsPlayerAtEffectiveMaxLevel and IsPlayerAtEffectiveMaxLevel() then return true end
-    if IsLevelAtEffectiveMaxLevel and IsLevelAtEffectiveMaxLevel(level) then return true end
-    local maxLevel = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion())
-        or (GetMaxPlayerLevel and GetMaxPlayerLevel())
-    return (maxLevel and level >= maxLevel) or false
-end
-
--- WoW Forever: raw XP under 10,000 is not abbreviated (EllesmereUI_NumberFormat.lua).
--- On ns, not a local: this chunk is at its 200-local cap.
-ns.AbbreviateLargeNumbers = (EllesmereUI.IS_FOREVER and EllesmereUI.ForeverAbbreviateLargeNumbers) or AbbreviateLargeNumbers
-local function UpdateXPBar()
-    local frame, s = EAB_VTABLE.ExtraBars.BeginManagedDataBarUpdate("XPBar")
-    if not frame then return end
-
-    local bar = frame._bar
-    local text = frame._text
-
-    -- Hide at max level (or XP disabled)
-    if ns.XPBarAtMaxLevel() or (IsXPUserDisabled and IsXPUserDisabled()) then
-        EAB_VTABLE.ExtraBars.ApplyManagedNonSecurePresentation(BAR_LOOKUP["XPBar"], frame, s, false, true)
-        return
-    end
-
-    local currentXP = UnitXP("player")
-    local maxXP = UnitXPMax("player")
-    if maxXP <= 0 then maxXP = 1 end
-    local restedXP = GetXPExhaustion() or 0
-    local level = UnitLevel("player")
-
-    -- Detect an XP gain (kill / quest reward / level-up) to trigger the smart flipbook
-    -- flash. A level-up resets XP low but is still a gain.
-    if frame._lastXPLevel ~= nil then
-        if level > frame._lastXPLevel or (level == frame._lastXPLevel and currentXP > frame._lastXP) then
-            frame._fvFlipFlash = true
-        end
-    end
-    frame._lastXP, frame._lastXPLevel = currentXP, level
-
-    bar:SetMinMaxValues(0, maxXP)
-    bar:SetValue(currentXP)
-    if ns.ApplyDataBarSmartTicks then ns.ApplyDataBarSmartTicks(frame) end
-
-    -- Rested XP overlay
-    local restedBar = frame._restedBar
-    if restedXP > 0 then
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpRested.r, DATA_BAR_COLORS.xpRested.g, DATA_BAR_COLORS.xpRested.b))
-        restedBar:SetMinMaxValues(0, maxXP)
-        restedBar:SetValue(min(currentXP + restedXP, maxXP))
-        restedBar:SetStatusBarColor(DATA_BAR_COLORS.xpRestedBG.r, DATA_BAR_COLORS.xpRestedBG.g, DATA_BAR_COLORS.xpRestedBG.b, 0.5)
-        restedBar:Show()
-    else
-        bar:SetStatusBarColor(ns.ResolveDataBarColor(s, DATA_BAR_COLORS.xpNoRest.r, DATA_BAR_COLORS.xpNoRest.g, DATA_BAR_COLORS.xpNoRest.b))
-        restedBar:Hide()
-    end
-
-    local config = (EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"]) or {}
-    local showLevel = config.showLevel
-    local showRawValues = config.showRawValues
-
-    local strLevel = ""
-    local strXP = ""
-    local strRested = ""
-
-    if showLevel then
-        strLevel = format("%s %d - ", LEVEL, level)
-    end
-
-    if showRawValues then
-        strXP = format("%s / %s", ns.AbbreviateLargeNumbers(currentXP), ns.AbbreviateLargeNumbers(maxXP))
-    else
-        local pct = (currentXP / maxXP) * 100
-        strXP = format("%.1f%%", pct)
-    end
-
-    if restedXP > 0 then
-        if showRawValues then
-            strRested = format(EllesmereUI.L(" (Rested: %s)"), ns.AbbreviateLargeNumbers(restedXP))
-        else
-            local restedPct = (restedXP / maxXP) * 100
-            strRested = format(EllesmereUI.L(" (Rested: %.1f%%)"), restedPct)
-        end
-    end
-
-    -- Show %: append the XP percentage after raw values, e.g. "1234 / 5678 (21.7%)".
-    -- Only when raw values are shown (otherwise strXP is already the percentage).
-    local strPct = ""
-    if config.showPercent and showRawValues then
-        strPct = format(" (%.1f%%)", (currentXP / maxXP) * 100)
-    end
-
-    text:SetText(strLevel .. strXP .. strPct .. strRested)
-    if frame._textPost then ns.DataBarPlaceText(frame, s) end
-
-    ns.ApplyXPBarStyle(frame)
-    EAB_VTABLE.ExtraBars.FinishManagedDataBarUpdate("XPBar", frame, s)
-end
-
-local function CreateXPBar()
-    local holder = CreateDataBarFrame("XPBar", UpdateXPBar)
-    holder:SetPoint("TOP", UIParent, "TOP", 0, -100)
-
-    -- Rested XP overlay bar (behind main bar)
-    local restedBar = CreateFrame("StatusBar", "EllesmereEAB_XPBar_Rested", holder)
-    restedBar:SetStatusBarTexture("Interface\\BUTTONS\\WHITE8X8")
-    local PP = EllesmereUI and EllesmereUI.PP
-    if PP then
-        PP.SetInside(restedBar, holder, 1, 1)
-    else
-        restedBar:SetPoint("TOPLEFT", 1, -1)
-        restedBar:SetPoint("BOTTOMRIGHT", -1, 1)
-    end
-    restedBar:SetMinMaxValues(0, 1)
-    restedBar:SetValue(0)
-    restedBar:GetStatusBarTexture():SetDrawLayer("ARTWORK", 2)
-    restedBar:Hide()
-    holder._restedBar = restedBar
-
-    -- Tooltip. Click Through suppresses it: on a mouseover bar the holder keeps mouse
-    -- motion only so the hover fade can see the cursor.
-    holder:EnableMouse(true)
-    holder:SetScript("OnEnter", function(self)
-        local cfg = EAB and EAB.db and EAB.db.profile and EAB.db.profile.bars and EAB.db.profile.bars["XPBar"]
-        if cfg and cfg.clickThrough then return end
-        if ns.XPBarAtMaxLevel() or (IsXPUserDisabled and IsXPUserDisabled()) then return end
-        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
-        GameTooltip:ClearLines()
-        local currentXP = UnitXP("player")
-        local maxXP = UnitXPMax("player")
-        if maxXP <= 0 then maxXP = 1 end
-        local restedXP = GetXPExhaustion() or 0
-        local pct = (currentXP / maxXP) * 100
-        local remain = maxXP - currentXP
-        GameTooltip:AddLine(EllesmereUI.L("Experience"), 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("Level"), tostring(UnitLevel("player")), 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("XP"), format("%s / %s (%.1f%%)", BreakUpLargeNumbers(currentXP), BreakUpLargeNumbers(maxXP), pct), 1, 1, 1, 1, 1, 1)
-        GameTooltip:AddDoubleLine(EllesmereUI.L("Remaining"), BreakUpLargeNumbers(remain), 1, 1, 1, 1, 1, 1)
-        if restedXP > 0 then
-            GameTooltip:AddDoubleLine(EllesmereUI.L("Rested"), format("+%s (%.1f%%)", BreakUpLargeNumbers(restedXP), (restedXP / maxXP) * 100), 1, 1, 1, 1, 1, 1)
-        end
-        GameTooltip:Show()
-    end)
-    holder:SetScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
-
-    -- Events
-    local evFrame = ns.TakeShell()
-    evFrame:RegisterEvent("PLAYER_XP_UPDATE")
-    evFrame:RegisterEvent("PLAYER_LEVEL_UP")
-    evFrame:RegisterEvent("UPDATE_EXHAUSTION")
-    evFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    evFrame:SetScript("OnEvent", UpdateXPBar)
-
-    ApplyDataBarLayout("XPBar")
-    UpdateXPBar()
-end
-
 
 -------------------------------------------------------------------------------
 --  Reputation Bar
@@ -18038,7 +17286,7 @@ local function RegisterDataBarsWithUnlockMode()
 end
 
 function EAB_VTABLE.ExtraBars.CreateManagedDataBarFrames()
-    CreateXPBar()
+    ns.CreateXPBar()
     CreateRepBar()
     if ns._CreateFavorBar then ns._CreateFavorBar() end
 end
@@ -18121,6 +17369,50 @@ local function SetupDataBars()
 
     -- Phase 5: apply the current runtime visibility state and keep it in sync.
     EAB_VTABLE.ExtraBars.EnsureManagedDataBarRuntimeState()
+end
+
+-- The profile's one Blizzard data bar switch (useBlizzardDataBars: the XP,
+-- reputation and House Favor bars together), applied live. The XP Bar tab's
+-- Blizz Default style and the Use Blizzard's Rep Bars toggle both set it
+-- here. On: our built data bars hide (each update then runs its hidden
+-- path, so the Favor bar disarms its events) and Blizzard's status tracking
+-- bars return. Off: our built bars show unless set to Never and repaint, and
+-- Blizzard's hide. Returns true when a bar this client builds does not exist
+-- yet (they are built at login only while the switch is off), so the caller
+-- can offer a reload. On ns: the chunk is at the local cap.
+function ns.SetUseBlizzardDataBars(v)
+    local p = EAB.db.profile
+    p.useBlizzardDataBars = v
+    local anyMissing = false
+    for _, info in ipairs(EXTRA_BARS) do
+        local k = info.key
+        -- WoW Forever builds no House Favor bar: never a reload for it there.
+        if info.isDataBar and not (k == "FavorBar" and EllesmereUI.IS_FOREVER) then
+            local frame = dataBarFrames[k]
+            if not frame then
+                if not v then anyMissing = true end
+            elseif v then
+                frame:Hide()
+                if frame._updateFunc then frame._updateFunc() end
+            else
+                local s = p.bars[k]
+                if not s or not s.alwaysHidden then
+                    frame:Show()
+                    if frame._updateFunc then frame._updateFunc() end
+                end
+            end
+        end
+    end
+    if StatusTrackingBarManager then
+        if v then
+            StatusTrackingBarManager:Show()
+            StatusTrackingBarManager:RegisterAllEvents()
+        else
+            StatusTrackingBarManager:UnregisterAllEvents()
+            StatusTrackingBarManager:Hide()
+        end
+    end
+    return anyMissing
 end
 
 -------------------------------------------------------------------------------

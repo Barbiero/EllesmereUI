@@ -3694,15 +3694,16 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
             ns.UpdatePortraitSeparator(pf, portraitFrame, s, effectiveSide,
                 sp and isAttached, EllesmereUI.BlizzStyle.Get("unitframes"), true)
         end
-        -- After the separators have their final layout, mirror the live
-        -- Magic dispel copies, including their above/below and left/right art.
-        local dispelBorderOn = pf._pvDispelBorder and pf._pvDispelBorder:IsShown()
-        if dispelBorderOn or pf._pvDispelPowerSeam or pf._pvDispelPortraitSeam then
+        -- Color Custom Borders: while the Magic border copy shows, both
+        -- separators are tinted Magic at full opacity in place, as the live
+        -- copies draw them (the two passes above reset the border colour
+        -- first), so the preview does not depend on copy-frame draw order
+        -- inside the options panel.
+        if pf._pvDispelBorder and pf._pvDispelBorder:IsShown() then
             local mc = db.profile.dispelColorMagic or { r = 0.349, g = 0.475, b = 1.0 }
-            ns.UF_ApplyDispelSeparatorCopy(pf, pf, "_pvDispelPowerSeam",
-                dispelBorderOn and power and power._pbSeam, mc)
-            ns.UF_ApplyDispelSeparatorCopy(pf, pf, "_pvDispelPortraitSeam",
-                dispelBorderOn and pf._portraitSeparator, mc)
+            local pSeam, vSeam = power and power._pbSeam, pf._portraitSeparator
+            if pSeam and pSeam:IsShown() then pSeam._tex:SetVertexColor(mc.r, mc.g, mc.b, 1) end
+            if vSeam and vSeam:IsShown() then vSeam._tex:SetVertexColor(mc.r, mc.g, mc.b, 1) end
         end
 
         -- Re-snap BTB

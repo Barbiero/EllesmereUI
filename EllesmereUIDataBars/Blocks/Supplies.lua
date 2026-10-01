@@ -144,7 +144,7 @@ ns.BlockFactories.supplies = function(blockCfg, slot, content, barCtx)
             resource.available = not resource.learn
             if resource.learn then
                 for _, pair in ipairs(resource.learn) do
-                    if IsPlayerSpell(pair[2]) or IsSpellKnown(pair[2]) then
+                    if C_SpellBook.IsSpellKnown(pair[2]) then
                         resource.available, resource.zeroID = true, pair[1]
                     end
                 end
@@ -294,7 +294,7 @@ ns.BlockFactories.supplies = function(blockCfg, slot, content, barCtx)
         row.text:Show()
         local id = resource.id or resource.firstID
         row.icon:SetTexture(resource.icon or (id and C_Item.GetItemIconByID(id)) or resource.fallback or QUESTION_ICON)
-        row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)   -- stock item icon border
+        K.CropStockIcon(row.icon)
         row.icon:SetVertexColor(ir, ig, ib, 1)
         row.icon:ClearAllPoints()
         local iconShown = iconSize > 0 and not isEmpty

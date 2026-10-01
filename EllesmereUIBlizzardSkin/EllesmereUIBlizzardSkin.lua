@@ -29,7 +29,6 @@ local WINDOW_ENABLE_KEYS = {
     charsheet       = "themedCharacterSheet",
     inspect         = "themedInspectSheet",
     lfg             = "reskinLFGMenu",
-    legacysystem    = "reskinLegacySystem",
     greatvault      = "reskinGreatVault",
     collections     = "reskinCollections",
     playerspells    = "reskinPlayerSpells",
@@ -50,7 +49,6 @@ local WINDOW_ENABLE_KEYS = {
     groupinvite     = "reskinGroupInvite",
     readycheck      = "reskinReadyCheck",
     micromenu       = "reskinMicroMenu",
-    bagbar          = "reskinBagBar",
     housing         = "reskinHousing",
     professions     = "reskinProfessions",
     worldmap        = "reskinWorldMap",
@@ -75,6 +73,11 @@ local WINDOW_ENABLE_KEYS = {
     playerchoice    = "reskinPlayerChoice",
     trade           = "reskinTrade",
 }
+-- WoW Forever's own windows: the bag bar and Progress Legacy skins exist only there.
+if EllesmereUI.IS_FOREVER then
+    WINDOW_ENABLE_KEYS.bagbar       = "reskinBagBar"
+    WINDOW_ENABLE_KEYS.legacysystem = "reskinLegacySystem"
+end
 --- Master PER-PROFILE kill switch for ALL Blizzard window skinning: window engine
 --- + every pack, plus CharacterSheet/Inspect, SocketPanel, LFG skins. Lives at
 --- profiles[name].disableWindowSkins, resolved live (follows profile switches,
@@ -110,6 +113,14 @@ do
     -- friends skin since that file shipped, so those accounts stay as set.
     if not EllesmereUI.IS_FOREVER then
         BATCHES[#BATCHES + 1] = { marker = "socialLegacySkinSeeded", keys = { "socialui" } }
+    else
+        -- WoW Forever: the shipment where the LFG Menu card began skinning
+        -- that client's Looking For Group window.
+        BATCHES[#BATCHES + 1] = { marker = "foreverLfgSkinSeeded", keys = { "lfg" } }
+        -- WoW Forever: the micro menu and the bag bar began skinning there.
+        BATCHES[#BATCHES + 1] = { marker = "foreverMicroBagSkinSeeded", keys = { "micromenu", "bagbar" } }
+        -- WoW Forever: the Progress Legacy window began skinning there.
+        BATCHES[#BATCHES + 1] = { marker = "foreverLegacySkinSeeded", keys = { "legacysystem" } }
     end
     local function SeedBatch(marker, newKeys)
         if EllesmereUIDB[marker] then return end
@@ -540,6 +551,9 @@ end
         local _, _, _, _, legacySize = EllesmereUI.GetTooltipBorder()
         _applyConfiguredBorder(tt, "tooltip", legacySize)
     end
+    -- The same look for Blizzard's tooltip-like frames that are not GameTooltips
+    -- (their window packs call it on show).
+    EllesmereUI._skinBlizzardTooltipFrame = _ttSkin
 
     local function _ttFonts(tt, startFrom)
         if not tt or tt:IsForbidden() or not _enabled() then return end
@@ -1183,7 +1197,7 @@ end
             GameTooltipStatusBar:ClearAllPoints()
             GameTooltipStatusBar:SetPoint("BOTTOMLEFT", _GameTooltip, "BOTTOMLEFT", 1, 1)
             GameTooltipStatusBar:SetPoint("BOTTOMRIGHT", _GameTooltip, "BOTTOMRIGHT", -1, 1)
-            -- Texture + height (Health Strip Texture/Height options); unset keeps UI-StatusBar at 3px.
+            -- Texture + height (the Show Health Strip cog); unset keeps UI-StatusBar at 3px.
             EllesmereUI._applyTooltipHealthStripStyle(true)
         end
     end
@@ -2938,17 +2952,11 @@ do
                 end,
                 getSize  = function() return FIXED_W, FIXED_H end,
                 savePos = function(_, _point, _relPoint, x, y)
+                    -- Unlock mode hands over CENTER/CENTER coords; on Cancel the frame
+                    -- still sits at the dragged spot, so never read the live position.
                     local prof = ActiveProfile()
                     if not prof then return end
-                    local af = EnsureFixedFrame()
-                    if af:GetLeft() then
-                        local fw, fh = af:GetSize()
-                        local cx = af:GetLeft() + fw / 2 - UIParent:GetWidth() / 2
-                        local cy = af:GetBottom() + fh / 2 - UIParent:GetHeight() / 2
-                        prof.tooltipFixedPos = { centerX = cx, centerY = cy }
-                    else
-                        prof.tooltipFixedPos = { centerX = x, centerY = y }
-                    end
+                    prof.tooltipFixedPos = { centerX = x, centerY = y }
                 end,
                 loadPos = function()
                     EnsureSeeded()

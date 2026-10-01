@@ -40,9 +40,6 @@ local ParkSecureFrame      = K.ParkSecureFrame
 --    3. Blizzard micro menu hider via SecureHandlerStateTemplate _onstate-vis (never :Hide() on MicroMenuContainer from insecure code)
 -------------------------------------------------------------------------------
 local MM_SPACING = 2
--- Blizzard icon style only: counters sit left of their icon and widen the button.
-local COUNTER_PAD = 2   -- button edge to counter text
-local COUNTER_GAP = 1   -- counter text to its icon
 local MM_MEDIA = ns.MICROMENU_MEDIA
 
 -- Button key -> icon file in EllesmereUI\media\micromenu\ (one PNG per button).
@@ -112,20 +109,32 @@ local MM_BLIZZARD_ATLAS = {
     talent = "SpecTalents", ach = "Achievements", quest = "Questlog",
     lfg = "Groupfinder", housing = "Housing", journal = "AdventureGuide",
     pet = "Collections", shop = "Shop", help = "GameMenu",
+    profession = "Professions", legacy = "Legacy",
 }
-local function FitBlizzardMicroIcon(icon)
+-- WoW Forever's group finder emblem is a round eye, held small by the art's
+-- narrow width: it gets a square crop (this fraction of the art's width)
+-- instead of the shared trim, so it fills the slot's full height.
+local MM_SQUARE_CROP = EllesmereUI.IS_FOREVER and { lfg = 0.66 } or {}
+
+local function FitBlizzardMicroIcon(icon, key)
     -- Native micro art has padding around its emblem. Trim that padding to
     -- match the portrait's visual weight without enlarging the slot or counters.
-    -- Work inside the current UV rectangle so packed atlases stay intact.
+    -- Work inside the current sheet UV rectangle so packed sheets stay intact.
     local ulx, uly, llx, lly, urx, ury, lrx, lry = icon:GetTexCoord()
     local cx = (ulx + llx + urx + lrx) / 4
     local cy = (uly + lly + ury + lry) / 4
-    local span = 2 / 3
+    local sx, sy = 2 / 3, 2 / 3
+    local square, aspect = MM_SQUARE_CROP[key], icon._edbAspect
+    if square and aspect then
+        -- Equal pixels both ways: the height share shrinks by the art's aspect.
+        sx, sy = square, square * aspect
+        icon._edbAspect = nil
+    end
     icon:SetTexCoord(
-        cx + (ulx - cx) * span, cy + (uly - cy) * span,
-        cx + (llx - cx) * span, cy + (lly - cy) * span,
-        cx + (urx - cx) * span, cy + (ury - cy) * span,
-        cx + (lrx - cx) * span, cy + (lry - cy) * span)
+        cx + (ulx - cx) * sx, cy + (uly - cy) * sy,
+        cx + (llx - cx) * sx, cy + (lly - cy) * sy,
+        cx + (urx - cx) * sx, cy + (ury - cy) * sy,
+        cx + (lrx - cx) * sx, cy + (lry - cy) * sy)
 end
 -- Art-only sources: these keys click a different Blizzard button than they copy art from.
 local MM_ART_BUTTON = { menu = "MainMenuMicroButton", pvp = "PVPMicroButton", social = "SocialsMicroButton" }
@@ -138,63 +147,111 @@ local function FindMicroButton(names)
     end
 end
 
+-- Draws an atlas from its sheet file with the sheet coords. An atlas-mode
+-- texture does not take sheet coords in SetTexCoord, so the trim above only
+-- works on art painted this way.
+local function SetAtlasArt(icon, atlas)
+    local info = C_Texture.GetAtlasInfo(atlas)
+    local file = info and (info.file or info.filename)
+    if not file then return false end
+    icon:SetTexture(file)
+    icon:SetTexCoord(info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord)
+    -- Native shape (retail micro art is 32x40); PaintIcon fits it in the slot.
+    if info.width > 0 and info.height > 0 then icon._edbAspect = info.width / info.height end
+    return true
+end
+
+-- Blizzard's guild button: in a guild with a tabard, the banner tinted with the
+-- tabard's background colour (the block draws the emblem over it); otherwise
+-- the plain guild icon. The tint rides icon._edbTint for IconColor.
+local function SetGuildArt(icon)
+    local tabard = select(10, GetGuildLogoInfo()) and C_GuildInfo.GetGuildTabardInfo("player")
+    if tabard and tabard.backgroundColor
+        and SetAtlasArt(icon, "UI-HUD-MicroMenu-GuildCommunities-GuildColor-Up") then
+        icon._edbTint = tabard.backgroundColor
+        return "micro"
+    end
+    return SetAtlasArt(icon, "UI-HUD-MicroMenu-GuildCommunities-Up") and "micro" or false
+end
+
 -- Copies Blizzard's art for key onto icon: "micro" for padded art (micro
--- buttons, the friend toast icon) that gets trimmed, "plain" for the PvP
--- faction emblem (drawn off-center; a trim would clip it), false when none exists.
+-- buttons) that gets trimmed, "plain" for art that fills its texture (the PvP
+-- faction crest, the Battle.net portrait), false when none exists.
 local function SetBlizzardArt(icon, key)
+    if key == "guild" then return SetGuildArt(icon) end
     local source = FindMicroButton(MM_ART_BUTTON[key] or MM_MICRO_BUTTON_NAMES[key])
     local normal = source and source.GetNormalTexture and source:GetNormalTexture()
     local atlas = normal and normal:GetAtlas()
-    if atlas then icon:SetAtlas(atlas); return "micro" end
-    local texture = normal and normal:GetTexture()
-    if texture then
-        icon:SetTexture(texture)
-        icon:SetTexCoord(normal:GetTexCoord())
-        return "micro"
+    if atlas then
+        if SetAtlasArt(icon, atlas) then return "micro" end
+    else
+        local texture = normal and normal:GetTexture()
+        if texture then
+            icon:SetTexture(texture)
+            icon:SetTexCoord(normal:GetTexCoord())
+            -- The shape Blizzard draws it at; an unresolved size stays square.
+            local w, h = normal:GetSize()
+            if not (issecretvalue(w) or issecretvalue(h)) and w > 0 and h > 0 then
+                icon._edbAspect = w / h
+            end
+            return "micro"
+        end
     end
     local stem = MM_BLIZZARD_ATLAS[key]
-    atlas = stem and ("UI-HUD-MicroMenu-" .. stem .. "-Up")
-    if atlas and C_Texture.GetAtlasInfo(atlas) then icon:SetAtlas(atlas); return "micro" end
+    if stem and SetAtlasArt(icon, "UI-HUD-MicroMenu-" .. stem .. "-Up") then return "micro" end
     if key == "social" then
-        icon:SetTexture("Interface\\FriendsFrame\\UI-Toast-FriendOnlineIcon")
-        return "micro"
+        -- No friends micro button exists: the Friends window's own portrait.
+        icon:SetTexture("Interface\\FriendsFrame\\Battlenet-Portrait")
+        icon:SetTexCoord(0, 1, 0, 1)
+        return "plain"
     elseif key == "pvp" then
+        -- No PvP micro button exists: the faction crest the player frame shows
+        -- while flagged (the UI-PVP file keeps its emblem in one corner).
         local faction = UnitFactionGroup("player") == "Horde" and "Horde" or "Alliance"
+        if SetAtlasArt(icon, "UI-HUD-UnitFrame-Player-PVP-" .. faction .. "Icon")
+            or SetAtlasArt(icon, "UI-HUD-UnitFrame-SmallCircle-" .. faction) then
+            return "plain"
+        end
         icon:SetTexture("Interface\\TargetingFrame\\UI-PVP-" .. faction)
+        icon:SetTexCoord(0, 1, 0, 1)
         return "plain"
     end
     return false
 end
 
 -- Skips the repaint while the icon already shows this style; force repaints
--- (portrait changes, and PLAYER_ENTERING_WORLD for Blizzard art that was missing).
+-- (portrait and guild changes, and PLAYER_ENTERING_WORLD for Blizzard art that
+-- was missing). Returns true when it painted.
 local function ApplyMicroIcon(icon, key, blizzard, force)
     if not force and icon._edbWow == blizzard then return end
     icon._edbWow = blizzard
-    local def = mmButtonDefsByKey[key]
-    if blizzard and def.wowIcon then
-        -- A stock icon fileID stands in for the Blizzard art; crop its baked-in border.
-        icon:SetTexture(def.wowIcon)
-        K.CropStockIcon(icon)
-        return
-    end
-    icon:SetTexCoord(0, 1, 0, 1)
+    icon._edbAspect = nil   -- square unless the Blizzard art below sets its own
+    icon._edbTint = nil
     if blizzard and key == "char" then
+        icon:SetTexCoord(0, 1, 0, 1)
         SetPortraitTexture(icon, "player")
-        return
+        return true
     end
     local art = blizzard and SetBlizzardArt(icon, key)
     if art == "micro" then
-        FitBlizzardMicroIcon(icon)
+        FitBlizzardMicroIcon(icon, key)
     elseif not art then
+        local def = mmButtonDefsByKey[key]
         icon:SetTexture(def.icon or (MM_MEDIA .. (MM_ICON_FILE[key] or key) .. ".png"))
+        icon:SetTexCoord(0, 1, 0, 1)
     end
+    return true
 end
 
--- Blizzard art keeps its own colors; custom art takes the block color.
-local function IconColor(block)
+-- Blizzard art keeps its own colors (the guild banner its tabard tint); custom
+-- art takes the block color.
+local function IconColor(block, icon)
     local s = block.settings
-    if s and s.iconStyle == "wow" then return 1, 1, 1 end
+    if s and s.iconStyle == "wow" then
+        local tint = icon and icon._edbTint
+        if tint then return tint.r, tint.g, tint.b end
+        return 1, 1, 1
+    end
     return BlockColorOf(block)
 end
 
@@ -227,15 +284,15 @@ if EllesmereUI.IS_FOREVER then
     end
     -- Forever-only micro buttons, placed after the Talents entry. Default
     -- off (opt-in via Menu Elements). Professions uses the shared
-    -- menu-professions art; its Blizzard icon style shows the Professions
-    -- frame's overview tab icon (wowIcon).
+    -- menu-professions art; in the Blizzard icon style both copy their own
+    -- micro button's art like every other button.
     MM_MICRO_BUTTON_NAMES.profession = "ProfessionMicroButton"
     MM_MICRO_BUTTON_NAMES.legacy     = "LegacyMicroButton"
     MM_ICON_FILE.legacy = "menu-legacy"
     local extras = {
         { key = 'profession', binding = 'TOGGLEPROFESSIONBOOK', label = PROFESSIONS_BUTTON or 'Professions',
-          icon = MM_MEDIA .. "menu-professions.png", wowIcon = 8197101 },
-        { key = 'legacy', binding = false, label = 'Legacy' },
+          icon = MM_MEDIA .. "menu-professions.png" },
+        { key = 'legacy', binding = 'TOGGLELEGACYSYSTEM', label = LEGACY_BUTTON or 'Legacy' },
     }
     for i, def in ipairs(mmButtonDefs) do
         if def.key == 'talent' then
@@ -744,14 +801,11 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
     local frames = {}
     local icons = {}
     local textFS = {}
-    local counterWidths, reservedCounterWidths = {}, {}
-    local rawSetPoint = {}   -- counter SetPoint without the Text Position offset
-    local active, portraitEvents = false, false
+    local active, portraitEvents, guildEvents = false, false, false
+    local guildEmblem
     local lastRosterRequest = 0
 
     local function D() return blockCfg.settings or {} end
-    -- Custom style keeps the counters centered on the button, moved by Text Position.
-    local function BesideIcons() return D().iconStyle == "wow" end
     local function BC() return barCtx.cfg end
 
     local function GetIconSize()
@@ -764,61 +818,92 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         return max(7, floor(CONTENT_BASE * 0.3667 + 0.5))
     end
 
+    -- The guild emblem over the tinted tabard banner (Blizzard style in a guild),
+    -- placed as Blizzard's guild button places it: 12x14, 2px up, on 32x40 art,
+    -- here trimmed to its middle 2/3. Re-textured only when the banner repainted.
+    local function PaintGuildEmblem(icon, frame, painted, w, h)
+        if not icon._edbTint then
+            if guildEmblem then guildEmblem:Hide() end
+            return
+        end
+        if not guildEmblem then
+            guildEmblem = frame:CreateTexture(nil, "OVERLAY", nil, 1)
+            painted = true
+        end
+        if painted then SetSmallGuildTabardTextures("player", guildEmblem) end
+        guildEmblem:SetSize(w * 0.5625, h * 0.525)
+        guildEmblem:ClearAllPoints()
+        guildEmblem:SetPoint("CENTER", icon, "CENTER", 0, h * 0.075)
+        guildEmblem:Show()
+    end
+
+    -- Blizzard style: a shown counter sits above its icon (new blocks seed the
+    -- Text Position 8px up), so the guild banner and the friends emblem drop
+    -- to clear it.
+    local function PlaceIcon(key)
+        local icon, fs = icons[key], textFS[key]
+        local drop = 0
+        if fs and fs:IsShown() and D().iconStyle == "wow" then
+            drop = floor(SocialFontSize() * 0.45 + 0.5)
+        end
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", 0, -drop)
+    end
+
     local function PaintIcon(key, force)
         local icon, frame = icons[key], frames[key]
         if not icon or not frame then return end
-        ApplyMicroIcon(icon, key, D().iconStyle == "wow", force)
+        local painted = ApplyMicroIcon(icon, key, D().iconStyle == "wow", force)
         -- SetPortraitTexture can reset anchors; restore our slot after each paint.
-        icon:ClearAllPoints()
-        if BesideIcons() then icon:SetPoint("RIGHT", frame, "RIGHT", -3, 0)
-        else icon:SetPoint("CENTER") end
+        PlaceIcon(key)
         local size = max(8, GetIconSize() - 6)
-        icon:SetSize(size, size)
+        -- Non-square Blizzard art keeps its shape, fitted inside the square.
+        local w, h = size, size
+        local aspect = icon._edbAspect
+        if aspect and aspect < 1 then w = floor(size * aspect + 0.5)
+        elseif aspect and aspect > 1 then h = floor(size / aspect + 0.5) end
+        icon:SetSize(w, h)
         if frame:IsMouseOver() then icon:SetVertexColor(ns.GetAccent())
-        else icon:SetVertexColor(IconColor(blockCfg)) end
+        else icon:SetVertexColor(IconColor(blockCfg, icon)) end
+        if key == "guild" then PaintGuildEmblem(icon, frame, painted, w, h) end
     end
 
-    local function SyncPortraitEvents()
+    -- Blizzard style only: the portrait and the guild tabard repaint from their
+    -- own events, registered while the style and that button are on.
+    local function SyncStyleEvents()
         local mm = D()
-        local want = active and mm.iconStyle == "wow" and MMButtonOn(mm, "char") and icons.char ~= nil
-        if portraitEvents == want then return end
-        portraitEvents = want
-        if want then
-            inst.eventFrame:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
-            inst.eventFrame:RegisterEvent("PORTRAITS_UPDATED")
-        else
-            inst.eventFrame:UnregisterEvent("UNIT_PORTRAIT_UPDATE")
-            inst.eventFrame:UnregisterEvent("PORTRAITS_UPDATED")
+        local wow = active and mm.iconStyle == "wow"
+        local want = wow and MMButtonOn(mm, "char") and icons.char ~= nil
+        if portraitEvents ~= want then
+            portraitEvents = want
+            if want then
+                inst.eventFrame:RegisterUnitEvent("UNIT_PORTRAIT_UPDATE", "player")
+                inst.eventFrame:RegisterEvent("PORTRAITS_UPDATED")
+            else
+                inst.eventFrame:UnregisterEvent("UNIT_PORTRAIT_UPDATE")
+                inst.eventFrame:UnregisterEvent("PORTRAITS_UPDATED")
+            end
+        end
+        want = wow and MMButtonOn(mm, "guild") and icons.guild ~= nil
+        if guildEvents ~= want then
+            guildEvents = want
+            if want then inst.eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
+            else inst.eventFrame:UnregisterEvent("PLAYER_GUILD_UPDATE") end
         end
     end
 
+    -- Counters sit on their button (the Text Position offsets move them; new
+    -- blocks seed them 8px above the icon) in both icon styles.
     local function SetCounterText(key, value)
         local fs = textFS[key]
         ns.SetFont(fs, SocialFontSize(), BC())
-        fs:SetWidth(0)
         fs:SetText(value)
-        -- Size to the displayed count; reserving extra digits leaves a visible
-        -- gap between the preceding icon and this right-aligned number.
-        local width = max(1, math.ceil(fs:GetStringWidth()))
-        counterWidths[key] = width
-        if BesideIcons() then
-            -- Text may change in combat; secure button geometry waits for regen.
-            local available = InCombatLockdown() and (reservedCounterWidths[key] or 0) or width
-            fs:SetWidth(available)
-            fs:SetShown(available > 0)
-        else
-            fs:SetWidth(0)
+        if not fs:IsShown() then
             fs:Show()
+            if icons[key] then PlaceIcon(key) end
         end
         if frames[key]:IsMouseOver() then fs:SetTextColor(ns.GetAccent())
         else fs:SetTextColor(BlockColorOf(blockCfg)) end
-    end
-
-    local function ButtonWidth(key)
-        if BesideIcons() and not D().hideSocialText and textFS[key] and textFS[key]:IsShown() then
-            return GetIconSize() + COUNTER_GAP + COUNTER_PAD + (counterWidths[key] or 0)
-        end
-        return GetIconSize()
     end
 
     local function ShowButtonTooltip(name)
@@ -936,7 +1021,7 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
             ShowButtonTooltip(name)
         end)
         frame:SetScript("OnLeave", function()
-            if icons[name] then icons[name]:SetVertexColor(IconColor(blockCfg)) end
+            if icons[name] then icons[name]:SetVertexColor(IconColor(blockCfg, icons[name])) end
             if textFS[name] then textFS[name]:SetTextColor(BlockColorOf(blockCfg)) end
             ns.Tip_HideUnlessInteractive(frame)
         end)
@@ -995,9 +1080,6 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         frames[key] = frame
         if def.info then
             textFS[key]    = frame:CreateFontString(nil, "OVERLAY")
-            textFS[key]:SetJustifyH("RIGHT")
-            textFS[key]:SetWordWrap(false)
-            rawSetPoint[key] = textFS[key].SetPoint
             AttachTextOffset(inst, textFS[key])
         end
         icons[key] = frame:CreateTexture(nil, "OVERLAY")
@@ -1032,8 +1114,10 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         local mm = D()
         if not textFS.guild or not mm.guild or mm.hideSocialText then return end
         if not IsInGuild() then
-            textFS.guild:Hide()
-            counterWidths.guild = nil
+            if textFS.guild:IsShown() then
+                textFS.guild:Hide()
+                if icons.guild then PlaceIcon("guild") end
+            end
             return
         end
         -- Throttled: GuildRoster() itself fires GUILD_ROSTER_UPDATE, which re-enters this function; unthrottled that is a request loop.
@@ -1051,27 +1135,18 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         SetCounterText("social", OnlineCount("social"))
     end
 
-    -- Updates one counter; true when the button must be re-laid out (only
-    -- beside-icon counters size their button).
-    local function CounterResized(key, update)
-        local fs = textFS[key]
-        local width, shown = counterWidths[key], fs and fs:IsShown()
-        update()
-        return BesideIcons() and (counterWidths[key] ~= width or (fs and fs:IsShown()) ~= shown)
-    end
-
     function inst:Refresh()
         ns.RefreshMicroMenuHider()
         ApplyCombatState()
         if not content:IsShown() or InCombatLockdown() then
-            SyncPortraitEvents()
+            SyncStyleEvents()
             return
         end
 
         local mm = D()
         -- Materialise any buttons enabled after creation (options toggle).
         CreateFramesInner()
-        SyncPortraitEvents()
+        SyncStyleEvents()
         if not next(frames) then return end
         if mm.hideSocialText then
             for _, fs in pairs(textFS) do fs:Hide() end
@@ -1090,17 +1165,12 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
             end
             if frame then
                 frame:Show()
-                local buttonWidth = ButtonWidth(key)
-                frame:SetSize(buttonWidth, ICON_SIZE)
+                frame:SetSize(ICON_SIZE, ICON_SIZE)
                 PaintIcon(key)
                 if textFS[key] then
-                    reservedCounterWidths[key] = buttonWidth > ICON_SIZE and counterWidths[key] or 0
+                    -- Plain button-center anchor: the block's Text Position offsets are the ONE positioning input (the wrapper injects them here).
                     textFS[key]:ClearAllPoints()
-                    if BesideIcons() then
-                        rawSetPoint[key](textFS[key], "RIGHT", icons[key], "LEFT", -COUNTER_GAP, 0)
-                    else
-                        textFS[key]:SetPoint("CENTER", frame, "CENTER", 0, 0)
-                    end
+                    textFS[key]:SetPoint("CENTER", frame, "CENTER", 0, 0)
                 end
                 frame:ClearAllPoints()
                 local spacing = mm.iconSpacing or MM_SPACING
@@ -1116,9 +1186,9 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
                 if prev then prevSpacing = spacing end
                 if isVertical then
                     totalHeight = totalHeight + ICON_SIZE + prevSpacing
-                    totalWidth  = max(totalWidth, buttonWidth)
+                    totalWidth  = max(totalWidth, ICON_SIZE)
                 else
-                    totalWidth  = totalWidth + buttonWidth + prevSpacing
+                    totalWidth  = totalWidth + ICON_SIZE + prevSpacing
                     totalHeight = max(totalHeight, ICON_SIZE)
                 end
                 prev = frame
@@ -1133,12 +1203,19 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
     inst.eventFrame = MakeEventFrame(inst, function(self, event, unit)
         if event == "PORTRAITS_UPDATED" or event == "UNIT_PORTRAIT_UPDATE" then
             if portraitEvents and (event == "PORTRAITS_UPDATED" or unit == "player") then PaintIcon("char", true) end
+        elseif event == "PLAYER_GUILD_UPDATE" then
+            -- Joined, left or changed tabard: repaint the guild art. In combat the
+            -- cleared memo lets the regen refresh repaint it instead.
+            if guildEvents and icons.guild then
+                icons.guild._edbWow = nil
+                if not InCombatLockdown() then PaintIcon("guild") end
+            end
         elseif event == 'GUILD_ROSTER_UPDATE' then
-            if CounterResized("guild", UpdateGuildText) and not InCombatLockdown() then self:Refresh() end
+            UpdateGuildText()
         elseif event == 'BN_FRIEND_ACCOUNT_ONLINE'
             or event == 'BN_FRIEND_ACCOUNT_OFFLINE'
             or event == 'FRIENDLIST_UPDATE' then
-            if CounterResized("social", UpdateFriendText) and not InCombatLockdown() then self:Refresh() end
+            UpdateFriendText()
         elseif event == 'PET_BATTLE_OVER' or event == 'PET_BATTLE_CLOSE' then
             -- A pet battle hides two things, neither self-restoring: this block's
             -- buttons (rebuilt by the same ApplyCombatState+Refresh pair REGEN uses),
@@ -1165,13 +1242,13 @@ ns.BlockFactories.micromenu = function(blockCfg, slot, content, barCtx)
         active = true
         content:Show()
         RegisterInstEvents(self)
-        SyncPortraitEvents()
+        SyncStyleEvents()
         ns.RefreshMicroMenuHider()
         ApplyCombatState()
     end
 
     function inst:Disable()
-        active, portraitEvents = false, false
+        active, portraitEvents, guildEvents = false, false, false
         UnregisterInstEvents(self)
         content:Hide()
     end

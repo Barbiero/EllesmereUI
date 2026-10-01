@@ -2027,8 +2027,11 @@ local function SkinCharacterSheet()
     local function GetCategoryColor(title)
         local blizz = ns.CharSheetBlizzColor()
         if blizz then return blizz end
-        local custom = EllesmereUIDB and EllesmereUIDB.statCategoryColors and EllesmereUIDB.statCategoryColors[title]
-        if custom then return custom end
+        local useCustom = EllesmereUIDB and EllesmereUIDB.statCategoryUseColor and EllesmereUIDB.statCategoryUseColor[title]
+        if useCustom then
+            local custom = EllesmereUIDB and EllesmereUIDB.statCategoryColors and EllesmereUIDB.statCategoryColors[title]
+            if custom then return custom end
+        end
         return DEFAULT_CATEGORY_COLORS[title] or { r = 1, g = 1, b = 1 }
     end
 

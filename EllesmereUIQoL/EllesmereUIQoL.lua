@@ -1825,8 +1825,13 @@ qolFrame:SetScript("OnEvent", function(self)
 
             if not inInstanceGroup then return end
 
+            -- A reset cannot fail in a party: there a "players still inside" line
+            -- still means the instance reset, so it announces success.
+            local success = MatchesAny(msg, RESET_PATTERNS)
+                or (not IsInRaid() and MatchesAny(msg, FAIL_PATTERNS))
+
             -- Small delay so Blizzard's own system message renders first.
-            if MatchesAny(msg, RESET_PATTERNS) then
+            if success then
                 if resetAnnouncePending then return end
                 resetAnnouncePending = true
                 C_Timer.After(0.3, function()

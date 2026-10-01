@@ -616,12 +616,13 @@ EllesmereUI._ELEMENT_SETTINGS_MAP = {
     ["Bar10"]     = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("Bar10"),     highlightText = "Icon Size" },
     ["StanceBar"] = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("StanceBar"), highlightText = "Icon Size" },
     ["PetBar"]    = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("PetBar"),    highlightText = "Icon Size" },
-    ["XPBar"]     = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("XPBar"),     highlightText = "Icon Size" },
-    ["RepBar"]    = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("RepBar"),    highlightText = "Icon Size" },
 
-    -- Action Bars -- visibility-only (dropdown pre-selected, scroll to top)
-    ["MicroBar"] = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "GENERAL", preSelectFn = SelectActionBar("MicroBagBars") },
-    ["BagBar"]   = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "GENERAL", preSelectFn = SelectActionBar("MicroBagBars") },
+    -- Action Bars -- data bars, micro menu and bags (their own tabs, no bar dropdown)
+    ["XPBar"]    = { module = "EllesmereUIActionBars",          page = "XP Bar",                       sectionName = "CORE",              highlightText = "Width" },
+    ["RepBar"]   = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "REPUTATION BAR",    highlightText = "Width" },
+    ["FavorBar"] = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "HOUSE FAVOR BAR",   highlightText = "Width" },
+    ["MicroBar"] = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "MICRO MENU & BAGS" },
+    ["BagBar"]   = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "MICRO MENU & BAGS" },
 
     -- Aura Buff Reminders
     ["EABR_Reminders"] = { module = "EllesmereUIAuraBuffReminders", page = "Auras, Buffs & Consumables", sectionName = "DISPLAY" },

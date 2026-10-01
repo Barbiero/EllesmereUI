@@ -126,11 +126,16 @@ local REZ_BY_CLASS = {
     WARLOCK     = { battle = 20707 },
 }
 
+-- Combat rez items, best first: a class with no battle rez falls back to the
+-- first one carried (Dynamic Rez and Smart Rez). Emergency Soul Link, both
+-- crafted ranks (the higher one casts faster).
+local REZ_ITEMS = { 269586, 248486 }
+
 -- WoW Forever: the vanilla spells. An entry's alts are its higher ranks and a
 -- rez slot lists every rank ID, rank 1 first; /cast by name casts the highest
 -- rank the character knows. Each class's dispels run in priority order (the
 -- first known line fires), Paladin is the only class with an external, and
--- there is no group rez and no Warlock entry.
+-- there is no group rez, no Warlock entry and no combat rez item.
 if EllesmereUI.IS_FOREVER then
     DISPEL_SPELLS = {
         { id = 527,   name = "Dispel Magic",        class = "PRIEST", alts = { 988 } },
@@ -156,6 +161,7 @@ if EllesmereUI.IS_FOREVER then
         SHAMAN  = { single = { 2008, 20609, 20610, 20776, 20777 } },
         DRUID   = { battle = { 20484, 20739, 20742, 20747, 20748 } },
     }
+    REZ_ITEMS = {}
 end
 
 -- Every rez spell ID across all classes; exempt from the exists/nodead corpse
@@ -849,15 +855,32 @@ local function BuildReactionMacroText(binding, guard)
     return table.concat(lines, "\n")
 end
 
+-- The combat rez item a class with no battle rez falls back to: the first one
+-- carried, or nil.
+local function CarriedRezItem()
+    local _, pClass = UnitClass("player")
+    local kit = REZ_BY_CLASS[pClass]
+    if kit and kit.battle then return nil end
+    for i = 1, #REZ_ITEMS do
+        if C_Item.GetItemCount(REZ_ITEMS[i]) > 0 then return REZ_ITEMS[i] end
+    end
+    return nil
+end
+
+-- The item the rez lines use, read once per CC_ApplyBindings (only while a
+-- rez binding could use it); the bag listener re-applies when it changes.
+local rezItemID = nil
+
 -- Builds dynamic-rez /cast lines (used by the dynamicrez binding type + Smart
--- Rez). Returns a list of macro lines (possibly empty) or nil if the class has
--- no rez kit. Never includes /stopmacro -- caller adds that for oocOnly.
+-- Rez). Returns a list of macro lines (possibly empty) or nil when the class
+-- has no rez kit and carries no combat rez item. Never includes /stopmacro --
+-- caller adds that for oocOnly.
 -- standalone marks the dedicated rez binding, where these lines are the whole
 -- macro rather than a [dead] prefix in front of somebody else's action.
 local function BuildRezLines(binding, guard, standalone)
     local _, pClass = UnitClass("player")
     local kit = REZ_BY_CLASS[pClass]
-    if not kit then return nil end
+    if not kit and not rezItemID then return nil end
     local bank = Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player
     -- A slot is one spell ID or a list of rank IDs. The first rank found in the
     -- book answers: every rank shares the name, and /cast by name casts the
@@ -876,9 +899,9 @@ local function BuildRezLines(binding, guard, standalone)
         end
         return C_Spell.GetSpellName and C_Spell.GetSpellName(sid)
     end
-    local battleName = Known(kit.battle)
-    local groupName  = Known(kit.group)
-    local singleName = Known(kit.single)
+    local battleName = kit and Known(kit.battle)
+    local groupName  = kit and Known(kit.group)
+    local singleName = kit and Known(kit.single)
     local lines = {}
     -- [combat] only when there is an out-of-combat rez after it to be the answer
     -- instead. A death knight or a warlock, whose only rez IS the battle one,
@@ -895,6 +918,9 @@ local function BuildRezLines(binding, guard, standalone)
             combatCond = ",nocombat"
         end
         lines[#lines + 1] = "/cast [@mouseover,help,dead" .. combatCond .. guard .. "] " .. battleName
+    elseif rezItemID and not binding.oocOnly then
+        -- No battle rez in the class: the carried combat rez item instead.
+        lines[#lines + 1] = "/use [@mouseover,help,dead,combat" .. guard .. "] item:" .. rezItemID
     end
     if groupName then
         lines[#lines + 1] = "/cast [@mouseover,help,dead,nocombat" .. guard .. "] " .. groupName
@@ -1970,6 +1996,25 @@ function ns.CC_ApplyBindings()
         ccEventFrame:UnregisterEvent("SPELLS_CHANGED")
     end
 
+    -- Combat rez item: bags are watched only for a class with no battle rez
+    -- that has a Dynamic Rez or Smart Rez binding.
+    local wantRezItem = false
+    if REZ_ITEMS[1] then
+        local _, pClass = UnitClass("player")
+        local kit = REZ_BY_CLASS[pClass]
+        if not (kit and kit.battle) then
+            for _, b in ipairs(bindings) do
+                if b.type == "dynamicrez" or b.smartRez then wantRezItem = true; break end
+            end
+        end
+    end
+    rezItemID = wantRezItem and CarriedRezItem() or nil
+    if wantRezItem then
+        ccEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    else
+        ccEventFrame:UnregisterEvent("BAG_UPDATE_DELAYED")
+    end
+
     local frameBindings = {}
     local hoverBindings = {}
     -- A "both" binding lands in BOTH lists: frame attributes for clicks on the
@@ -2406,6 +2451,11 @@ local function OnCCEvent(self, event)
         -- A talent or loadout swap that moved a bound spell in or out of the
         -- book; the apply re-resolves which binding owns each key.
         if ComputeKnownSignature() ~= knownSig then
+            if not InCombatLockdown() then ns.CC_ApplyBindings() else pendingApply = true end
+        end
+    elseif event == "BAG_UPDATE_DELAYED" then
+        -- Re-applies only when the carried combat rez item changed.
+        if CarriedRezItem() ~= rezItemID then
             if not InCombatLockdown() then ns.CC_ApplyBindings() else pendingApply = true end
         end
     elseif event == "GROUP_ROSTER_UPDATE" then

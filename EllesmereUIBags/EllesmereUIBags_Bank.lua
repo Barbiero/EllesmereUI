@@ -543,6 +543,8 @@ do
     SetBankFont(warbandGold, 11)
     warbandGold:SetPoint("RIGHT", footer, "RIGHT", -10, 0)
     warbandGold:SetTextColor(1, 1, 1)
+    -- The resize grip's inset moves it clear of the grip (_bankGripCfg)
+    EUI_Bank._warbandGoldText = warbandGold
 
     local warbandHitbox = CreateFrame("Frame", nil, footer)
     warbandHitbox:SetPoint("TOPLEFT", warbandGold, "TOPLEFT", -4, 4)
@@ -1483,17 +1485,30 @@ local _bankRows = {}
 local _bankListMode
 function EUI_Bank.IsListMode()
     if _bankListMode == nil then
-        local Lite = EUI.Lite
-        if Lite and Lite.IsDBReady and not Lite.IsDBReady() then return nil end
+        if not EUI.Lite.IsDBReady() then return nil end
         _bankListMode = BP().bankListView == true
     end
     return _bankListMode
 end
 
+-- A row skipped in combat is filled by one refresh at combat end (the event is
+-- registered only after a skip).
+local _bankRowRetry
+local function QueueBankRowRetry()
+    if not _bankRowRetry then
+        _bankRowRetry = CreateFrame("Frame")
+        _bankRowRetry:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+            if EUI_Bank:IsVisible() then EUI_Bank:RefreshBank() end
+        end)
+    end
+    _bankRowRetry:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
 -- Never created in combat (tainted secure button); the row is skipped instead.
 local function GetOrCreateBankRow(idx)
     if _bankRows[idx] then return _bankRows[idx] end
-    if InCombatLockdown() then return nil end
+    if InCombatLockdown() then QueueBankRowRetry(); return nil end
     local btn = ns.CreateListRow(EUI_Bank)
     btn:HookScript("PostClick", function(self)
         EUI_Bags.ShowStackSplitter(self, EUI_Bank:GetSplitTargetBags(self:GetParent():GetID()), EUI_Bank)
@@ -1961,6 +1976,18 @@ local _bankGripCfg = {
     finish = function() EUI_Bank:RefreshBank() end,
     savePos = function(left, top)
         BP().bankPosition = { point = "TOPLEFT", relativePoint = "BOTTOMLEFT", x = left, y = top }
+    end,
+    reset = function()
+        local p = BP()
+        p.bankColumns, p.bankHeight, p.bankListWidth = nil, nil, nil
+        EUI_Bank:RefreshBank()
+    end,
+    -- The warband gold text sits at the footer's right edge
+    inset = function(shown)
+        local wg = EUI_Bank._warbandGoldText
+        if not wg then return end
+        wg:ClearAllPoints()
+        wg:SetPoint("RIGHT", wg:GetParent(), "RIGHT", shown and -26 or -10, 0)
     end,
 }
 

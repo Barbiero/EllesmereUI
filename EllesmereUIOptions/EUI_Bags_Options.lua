@@ -70,6 +70,8 @@ initFrame:SetScript("OnEvent", function(self)
                           db.profile.bankListView = v
                           -- Bags page rows depend on this; rebuild it on next visit
                           EllesmereUI:InvalidateModulePageCache("EllesmereUIBags")
+                          -- Hide Empty Slots When Grouped greys in List View
+                          EllesmereUI:RefreshPage()
                           EllesmereUI:ShowConfirmPopup({
                               title       = "Reload Required",
                               message     = "Bank display changed. A UI reload is needed to apply.",
@@ -78,7 +80,7 @@ initFrame:SetScript("OnEvent", function(self)
                               reload      = true,
                           })
                       end },
-                    { type="label", text="" }
+                    EllesmereUI.BlankRowCfg()
                 ); y = y - h
 
                 _, h = W:SectionHeader(parent, "GROUPING", y); y = y - h
@@ -129,15 +131,22 @@ initFrame:SetScript("OnEvent", function(self)
                     { type="toggle", text="Hide Empty Slots When Grouped",
                       tooltip="While either grouping toggle is on, drop the trailing block of empty slots so the view only shows items. Turn this off to keep the free slots visible for depositing.",
                       disabled = function()
-                          return not (db.profile.bankNestByExpansion or db.profile.bankGroupByCategory)
+                          return db.profile.bankListView == true
+                              or not (db.profile.bankNestByExpansion or db.profile.bankGroupByCategory)
                       end,
-                      disabledTooltip = "Turn on Nest by Expansion or Group by Category first; the flat view has nowhere to move empty slots to.",
+                      disabledTooltip = function()
+                          if db.profile.bankListView == true then
+                              return "The List View never shows empty slots."
+                          end
+                          return "Turn on Nest by Expansion or Group by Category first; the flat view has nowhere to move empty slots to."
+                      end,
+                      rawTooltip = true,
                       getValue=function() return db.profile.bankHideEmptyWhenNested == true end,
                       setValue=function(v)
                           db.profile.bankHideEmptyWhenNested = v and true or false
                           RefreshBank()
                       end },
-                    { type="label", text="" }
+                    EllesmereUI.BlankRowCfg()
                 ); y = y - h
 
                 _, h = W:Spacer(parent, y, 20); y = y - h
@@ -686,7 +695,7 @@ initFrame:SetScript("OnEvent", function(self)
                               db.profile.bagHideRandomize = v
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
-                        { type="label", text="" }
+                        EllesmereUI.BlankRowCfg()
                     ); y = y - h
                 end
             end
@@ -719,7 +728,7 @@ initFrame:SetScript("OnEvent", function(self)
                       end }
                 ); y = y - h
 
-                -- Round Icons | Split Armor by Type (bag list only)
+                -- Round Icons | List Text Size (also on the Fonts page)
                 _, h = W:DualRow(parent, y,
                     { type="toggle", text="Round Icons",
                       tooltip="Show the item icons in the bag and bank lists as circles instead of squares.",
@@ -730,32 +739,46 @@ initFrame:SetScript("OnEvent", function(self)
                           local bank = _G.EUI_BankFrame
                           if bank and bank.RefreshBank then bank:RefreshBank() end
                       end },
-                    bagList and { type="toggle", text="Split Armor by Type",
-                      tooltip="In the list, group armor under sub-headers by armor type (Cloth, Leather, Mail, Plate, ...).",
-                      getValue=function() return db.profile.bagListSplitArmor == true end,
+                    { type="slider", text="List Text Size", min=8, max=16, step=1,
+                      tooltip="Text size of the bag and bank lists.",
+                      getValue=function() return db.profile.bagListFontSize or 11 end,
                       setValue=function(v)
-                          db.profile.bagListSplitArmor = v and true or false
+                          db.profile.bagListFontSize = v
                           if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
-                      end } or { type="label", text="" }
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end }
                 ); y = y - h
 
                 if bagList then
-                    -- Split Weapons by Type | Split Professions by Type
+                    -- Split Armor by Type | Split Weapons by Type
                     _, h = W:DualRow(parent, y,
+                        { type="toggle", text="Split Armor by Type",
+                          tooltip="In the list, group armor under sub-headers by armor type (Cloth, Leather, Mail, Plate, ...).",
+                          getValue=function() return db.profile.bagListSplitArmor == true end,
+                          setValue=function(v)
+                              db.profile.bagListSplitArmor = v and true or false
+                              if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          end },
                         { type="toggle", text="Split Weapons by Type",
                           tooltip="In the list, group weapons under sub-headers by weapon type (Swords, Staves, Bows, ...).",
                           getValue=function() return db.profile.bagListSplitWeapons == true end,
                           setValue=function(v)
                               db.profile.bagListSplitWeapons = v and true or false
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
-                          end },
+                          end }
+                    ); y = y - h
+
+                    -- Split Professions by Type | (empty)
+                    _, h = W:DualRow(parent, y,
                         { type="toggle", text="Split Professions by Type",
                           tooltip="In the list, group profession items, recipes and trade goods under sub-headers by profession or material (Tailoring, Enchanting, Herb, Cloth, ...).",
                           getValue=function() return db.profile.bagListSplitProfessions == true end,
                           setValue=function(v)
                               db.profile.bagListSplitProfessions = v and true or false
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
-                          end }
+                          end },
+                        EllesmereUI.BlankRowCfg()
                     ); y = y - h
                 end
             end

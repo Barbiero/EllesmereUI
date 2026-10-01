@@ -227,7 +227,7 @@ EllesmereUI._WHATSNEW_PATCHES = {
                 module = "Action Bars",
                 title  = "Micro Menu and Bag Bar End Caps",
                 desc   = "The micro menu and bag bar can show end caps like the action bars, and a fresh install moves Action Bar 1's end caps to the outer ends of any bars placed directly beside it",
-                nav    = { module = "EllesmereUIActionBars", page = "Menu, Bags & XP Bars",
+                nav    = { module = "EllesmereUIActionBars", page = "Menu, Bags & Rep Bars",
                            section = "MICRO MENU & BAGS", highlight = "Micro Menu End Caps" },
             },
             {

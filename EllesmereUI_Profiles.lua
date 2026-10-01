@@ -2077,7 +2077,7 @@ do
         "reskinBNetToast",
         "reskinLootRoll", "reskinLootHistory", "reskinGroupInvite",
         "reskinReadyCheck",
-        "reskinMicroMenu", "reskinHousing", "reskinDressUp", "reskinTransmog",
+        "reskinMicroMenu", "reskinBagBar", "reskinLegacySystem", "reskinHousing", "reskinDressUp", "reskinTransmog",
         "reskinMerchant", "reskinAuctionHouse", "reskinMacros",
         "reskinSettings", "reskinAddonList", "reskinCraftOrders",
         "reskinTrainer", "reskinGossip", "reskinQuest", "reskinInspectRecipe",

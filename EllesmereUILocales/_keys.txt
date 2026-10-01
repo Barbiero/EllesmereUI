@@ -73,6 +73,7 @@
 , %1$d not shown in this layout
 1H
 2H
+A preset named \
 A profile named \
 A quick view of every font setting in one place.
 A quick view of every texture setting in one place.
@@ -85,7 +86,6 @@ Activate Custom Buff Manager
 Activate Custom Debuff Manager
 Activate Movement Preview
 Activate Party Mode
-Active
 Active Profile
 Active State Duration
 Active spec uses Advanced settings
@@ -210,7 +210,6 @@ Choose which addons to include in your exported profile. Check everything for a 
 Choose which addons you want enabled. You can change any of these later in the EllesmereUI settings panel.
 Choose which specs sync with %1$s, including your alts' specs (the source is always included)
 Choose which transforms are removed
-Class / Reaction Color
 Class Resources
 Clear
 Clear All
@@ -333,6 +332,7 @@ Drag to Reorder
 Drag to Reorder Bars
 Drag to Reorder Groups
 Drag to Reorder Roles
+Drag to resize. Double-click to reset.
 Draw tick lines across the bar at positions you choose.
 Duplicate
 Duration (seconds)
@@ -546,7 +546,6 @@ Matches template
 Maximum of 5 thresholds.
 Maximum width the text can fill before it truncates, as a percentage of the bar.
 Middle Click a reminder to hide it until the next load screen
-Missing
 Missing Buffs?
 Missing Spells?
 Missing Spells? Add as
@@ -565,6 +564,7 @@ My Profile
 Mythic+
 NAMEPLATE AURA FILTERS
 NEW IN ELLESMEREUI
+NPC Target Color
 Name Taken
 Name the new filter.
 Nature Res
@@ -577,7 +577,6 @@ New Profile
 Next sockets
 No
 No Bars - Click to Add
-No Cooldown Manager buffs to choose from.
 No Items
 No Saved Presets
 No active glows
@@ -693,6 +692,7 @@ Raise Strata
 Ranged
 Re-sync %1$s?
 Ready
+Reagent Bag
 Reagent Bag (%d / %d)
 Recent Colors
 Recent Items
@@ -855,6 +855,7 @@ Talent Conditions: %1$s
 Talent data is not available right now.
 Talent gating is only available while playing this spec's class
 Tank
+Tapped Color
 Target
 Target Unit
 Targeting:
@@ -947,7 +948,7 @@ Warning Sound
 Weapon
 Welcome to EllesmereUI
 What's new in EllesmereUI.
-When
+When %1$s Is
 Whistle
 Width
 Width %
@@ -1004,6 +1005,5 @@ this spec
 |cff888888Created. Right-click to configure.|r
 |cff888888Created|r
 |cffff4444Delete Macro|r
-|cffff6060[EllesmereUI]|r A preset named \
 |cffff6060[EllesmereUI]|r A profile named \
 |cffff6060[EllesmereUI]|r Cannot rename to \

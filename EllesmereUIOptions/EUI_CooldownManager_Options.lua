@@ -633,8 +633,6 @@ initFrame:SetScript("OnEvent", function(self)
     end)
 
     local function ShowBarGlowSpellPicker(anchorFrame, barIdx, btnIdx, onChanged, overrideAssignKey)
-        if _bgSpellPickerMenu then _bgSpellPickerMenu:Hide() end
-
         local bg = ns.GetBarGlows()
         local assignKey = overrideAssignKey or (barIdx .. "_" .. btnIdx)
         local buffList = bg.assignments[assignKey] or {}
@@ -644,18 +642,14 @@ initFrame:SetScript("OnEvent", function(self)
             if entry.spellID then assignedSet[entry.spellID] = true end
         end
 
-        -- Track whether any change was made so we can fire onChanged when menu closes
-        local dirty = false
         -- Immediate update: save picker position, rebuild, re-anchor
         local function ImmediateUpdate()
-            dirty = false  -- already handled
             if not onChanged then return end
             local menuRef = _bgSpellPickerMenu
             if not menuRef then onChanged(); return end
             -- Save absolute screen position before rebuild
             local cx, cy = menuRef:GetCenter()
             local mScale = menuRef:GetEffectiveScale()
-            local mW, mH = menuRef:GetSize()
             onChanged()
             -- Re-anchor to saved absolute position so page rebuild doesn't shift us
             menuRef = _bgSpellPickerMenu
@@ -666,105 +660,11 @@ initFrame:SetScript("OnEvent", function(self)
             end
         end
 
-        local tracked, untracked = ns.GetAllCDMBuffSpells()
-        -- Tracked Bar spells are added later but checked here too, so the menu
-        -- doesn't bail when only Tracked Bars exist.
-        local hasTrackedBars = ns.GetTrackedBarSpells and #ns.GetTrackedBarSpells() > 0 or false
-        if #tracked == 0 and #untracked == 0 and not hasTrackedBars then return end
-
-        -- Standard dropdown colors
-        local mBgR  = EllesmereUI.DD_BG_R  or 0.075
-        local mBgG  = EllesmereUI.DD_BG_G  or 0.113
-        local mBgB  = EllesmereUI.DD_BG_B  or 0.141
-        local mBgA  = EllesmereUI.DD_BG_HA or 0.98
-        local mBrdA = EllesmereUI.DD_BRD_A or 0.20
-        local hlA   = EllesmereUI.DD_ITEM_HL_A or 0.08
-        local tDimR = EllesmereUI.TEXT_DIM_R or 0.7
-        local tDimG = EllesmereUI.TEXT_DIM_G or 0.7
-        local tDimB = EllesmereUI.TEXT_DIM_B or 0.7
-        local tDimA = EllesmereUI.TEXT_DIM_A or 0.85
-        local ACCENT = EllesmereUI.ELLESMERE_GREEN or { r = 0.05, g = 0.82, b = 0.62 }
-
-        local menuW = 240
-        local ITEM_H = 26
-        local MAX_H = 300
-
-        local menu = CreateFrame("Frame", nil, UIParent)
-        menu:SetFrameStrata("FULLSCREEN_DIALOG")
-        menu:SetFrameLevel(300)
-        menu:SetClampedToScreen(true)
-        menu:SetSize(menuW, 10)
-
-        local mbg = menu:CreateTexture(nil, "BACKGROUND")
-        mbg:SetAllPoints(); mbg:SetColorTexture(mBgR, mBgG, mBgB, mBgA)
-        EllesmereUI.MakeBorder(menu, 1, 1, 1, mBrdA, EllesmereUI.PP)
-
-        local inner = CreateFrame("Frame", nil, menu)
-        inner:SetWidth(menuW)
-        inner:SetPoint("TOPLEFT")
-
-        local mH = 4
-
-        local function MakeCheckItem(sp)
-            local item = CreateFrame("Button", nil, inner)
-            item:SetHeight(ITEM_H)
-            item:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH)
-            item:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH)
-            item:SetFrameLevel(menu:GetFrameLevel() + 2)
-
-            -- Checkbox (AuraBuff style: Frame box + MakeBorder + inner fill)
-            local cbSize = 14
-            local cb = CreateFrame("Frame", nil, item)
-            cb:SetSize(cbSize, cbSize)
-            cb:SetPoint("LEFT", item, "LEFT", 8, 0)
-            cb:SetFrameLevel(item:GetFrameLevel() + 1)
-            local cbBg = cb:CreateTexture(nil, "BACKGROUND")
-            cbBg:SetAllPoints(); cbBg:SetColorTexture(0.12, 0.12, 0.14, 1)
-            local cbBrd = EllesmereUI.MakeBorder(cb, 0.25, 0.25, 0.28, 0.6, EllesmereUI.PanelPP)
-            local cbFill = cb:CreateTexture(nil, "ARTWORK")
-            if cbFill.SetSnapToPixelGrid then cbFill:SetSnapToPixelGrid(false); cbFill:SetTexelSnappingBias(0) end
-            cbFill:SetPoint("TOPLEFT", cb, "TOPLEFT", 3, -3)
-            cbFill:SetPoint("BOTTOMRIGHT", cb, "BOTTOMRIGHT", -3, 3)
-            cbFill:SetColorTexture(ACCENT.r, ACCENT.g, ACCENT.b, 1)
-            local function UpdateCB()
-                if assignedSet[sp.spellID] then
-                    cbFill:Show()
-                    cbBrd:SetColor(ACCENT.r, ACCENT.g, ACCENT.b, 0.8)
-                else
-                    cbFill:Hide()
-                    cbBrd:SetColor(0.25, 0.25, 0.28, 0.6)
-                end
-            end
-            UpdateCB()
-
-            local ico = item:CreateTexture(nil, "ARTWORK")
-            local icoSz = ITEM_H - 4
-            ico:SetSize(icoSz, icoSz)
-            ico:SetPoint("RIGHT", item, "RIGHT", -6, 0)
-            if sp.icon then ico:SetTexture(sp.icon) end
-            ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
-            local lbl = item:CreateFontString(nil, "OVERLAY")
-            lbl:SetFont(FONT_PATH, 11, GetCDMOptOutline())
-            lbl:SetPoint("LEFT", cb, "RIGHT", 6, 0)
-            lbl:SetPoint("RIGHT", ico, "LEFT", -4, 0)
-            lbl:SetJustifyH("LEFT")
-            lbl:SetWordWrap(false); lbl:SetMaxLines(1)
-            lbl:SetText(EllesmereUI.L(sp.name))
-            lbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
-
-            local hl = item:CreateTexture(nil, "ARTWORK", nil, -1)
-            hl:SetAllPoints(); hl:SetColorTexture(1, 1, 1, 0)
-
-            item:SetScript("OnEnter", function()
-                lbl:SetTextColor(1, 1, 1, 1)
-                hl:SetColorTexture(1, 1, 1, hlA)
-            end)
-            item:SetScript("OnLeave", function()
-                lbl:SetTextColor(tDimR, tDimG, tDimB, tDimA)
-                hl:SetColorTexture(1, 1, 1, 0)
-            end)
-            item:SetScript("OnClick", function()
+        -- The shared Bar Glows buff menu (EUI_CooldownManager_BarGlowConditions.lua):
+        -- one reused frame, the boxes repainted after each toggle.
+        local menu = ns.ShowBarGlowBuffMenu(anchorFrame, {
+            isChecked = function(sid) return assignedSet[sid] end,
+            onClick = function(sp, refreshChecks)
                 if assignedSet[sp.spellID] then
                     assignedSet[sp.spellID] = nil
                     for idx = #buffList, 1, -1 do
@@ -773,10 +673,6 @@ initFrame:SetScript("OnEvent", function(self)
                             break
                         end
                     end
-                    UpdateCB()
-                    bg.assignments[assignKey] = buffList
-                    Refresh()
-                    ImmediateUpdate()
                 else
                     -- Add with defaults
                     assignedSet[sp.spellID] = true
@@ -795,83 +691,14 @@ initFrame:SetScript("OnEvent", function(self)
                         end
                     end
                     buffList[#buffList + 1] = newEntry
-                    UpdateCB()
-                    bg.assignments[assignKey] = buffList
-                    Refresh()
-                    ImmediateUpdate()
                 end
-            end)
-
-            mH = mH + ITEM_H
-        end
-
-        -- Tracked buffs
-        for _, sp in ipairs(tracked) do MakeCheckItem(sp) end
-
-        -- Divider
-        if #tracked > 0 and #untracked > 0 then
-            local div = inner:CreateTexture(nil, "ARTWORK")
-            div:SetHeight(1); div:SetColorTexture(1, 1, 1, 0.10)
-            div:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH - 4)
-            div:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH - 4)
-            mH = mH + 9
-        end
-
-        -- Untracked buffs
-        for _, sp in ipairs(untracked) do MakeCheckItem(sp) end
-
-        -- Blizzard CDM "Tracked Bars" (BuffBarCooldownViewer). Blizzard CDM
-        -- drag-and-drop puts a spell in either the Tracked Buffs icon strip OR
-        -- Tracked Bars, never both -- no dedup needed.
-        local trackedBars = ns.GetTrackedBarSpells and ns.GetTrackedBarSpells() or {}
-        if #trackedBars > 0 then
-            if #tracked > 0 or #untracked > 0 then
-                local div = inner:CreateTexture(nil, "ARTWORK")
-                div:SetHeight(1); div:SetColorTexture(1, 1, 1, 0.10)
-                div:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH - 4)
-                div:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH - 4)
-                mH = mH + 9
-            end
-            for _, sp in ipairs(trackedBars) do MakeCheckItem(sp) end
-        end
-
-        local totalH = mH + 4
-        inner:SetHeight(totalH)
-
-        if totalH > MAX_H then
-            menu:SetHeight(MAX_H)
-            local sf = CreateFrame("ScrollFrame", nil, menu)
-            sf:SetPoint("TOPLEFT"); sf:SetPoint("BOTTOMRIGHT")
-            sf:SetFrameLevel(menu:GetFrameLevel() + 1)
-            sf:EnableMouseWheel(true)
-            sf:SetScrollChild(inner)
-            inner:SetWidth(menuW)
-            local scrollPos = 0
-            local maxScroll = totalH - MAX_H
-            sf:SetScript("OnMouseWheel", function(_, delta)
-                scrollPos = math.max(0, math.min(maxScroll, scrollPos - delta * 30))
-                sf:SetVerticalScroll(scrollPos)
-            end)
-        else
-            menu:SetHeight(totalH)
-            inner:SetParent(menu)
-            inner:SetPoint("TOPLEFT")
-        end
-
-        menu:ClearAllPoints()
-        menu:SetPoint("TOP", anchorFrame, "BOTTOM", 0, -2)
-
-        menu:SetScript("OnUpdate", function(m)
-            if not m:IsMouseOver() and not anchorFrame:IsMouseOver() and IsMouseButtonDown("LeftButton") then
-                m:Hide()
-            end
-        end)
-        menu:HookScript("OnHide", function(m)
-            m:SetScript("OnUpdate", nil)
-            if dirty and onChanged then onChanged() end
-        end)
-
-        menu:Show()
+                refreshChecks()
+                bg.assignments[assignKey] = buffList
+                Refresh()
+                ImmediateUpdate()
+            end,
+        })
+        if not menu then return end
         menu._btnIdx = btnIdx
         _bgSpellPickerMenu = menu
     end
@@ -1685,28 +1512,37 @@ initFrame:SetScript("OnEvent", function(self)
                             end
                         end
 
-                        -- Row: Only In Combat | Hero Talent
-                        y = ns.BuildBarGlowCombatRow(W, parent, y, entry, Refresh)
+                        -- Retail: Only In Combat | Hero Talent, then Glow Color (swatches) |
+                        -- (icon) [Duplicate] [Remove]. WoW Forever has no Hero Talent half,
+                        -- so the slots re-pair there: Only In Combat | Glow Color, then the
+                        -- buttons in the left half of the last row.
+                        local glowColorCfg = { type = "label", text = "Glow Color" }
+                        local removeCfg = { type = "labeledButton", text = "", buttonText = "Remove", width = 150,
+                            onClick = function()
+                                table.remove(buffList, removeAIdx)
+                                if #buffList == 0 then
+                                    bg.assignments[assignKey] = nil
+                                end
+                                Refresh()
+                                EllesmereUI:RefreshPage(true)
+                            end,
+                        }
+                        local colorRow, colorRgn, removeRgn
+                        if EllesmereUI.IS_FOREVER then
+                            colorRow, h = W:DualRow(parent, y, ns.BarGlowCombatCfg(entry, Refresh), glowColorCfg);  y = y - h
+                            colorRgn = colorRow._rightRegion
+                            local removeRow
+                            removeRow, h = W:DualRow(parent, y, removeCfg, EllesmereUI.BlankRowCfg());  y = y - h
+                            removeRgn = removeRow._leftRegion
+                        else
+                            y = ns.BuildBarGlowCombatRow(W, parent, y, entry, Refresh)
+                            colorRow, h = W:DualRow(parent, y, glowColorCfg, removeCfg);  y = y - h
+                            colorRgn, removeRgn = colorRow._leftRegion, colorRow._rightRegion
+                        end
 
-                        -- Row: Glow Color (swatches) | (icon) [Duplicate] [Remove]
-                        local colorRow
-                        colorRow, h = W:DualRow(parent, y,
-                            { type = "label", text = "Glow Color" },
-                            { type = "labeledButton", text = "", buttonText = "Remove", width = 150,
-                              onClick = function()
-                                  table.remove(buffList, removeAIdx)
-                                  if #buffList == 0 then
-                                      bg.assignments[assignKey] = nil
-                                  end
-                                  Refresh()
-                                  EllesmereUI:RefreshPage(true)
-                              end,
-                            }
-                        );  y = y - h
-
-                        -- Inline color swatch for glow color (on left region)
+                        -- Inline color swatch for glow color
                         if not EllesmereUI._prebuilding then
-                            local leftRgn = colorRow._leftRegion
+                            local leftRgn = colorRgn
                             if leftRgn and EllesmereUI.BuildTrioColorSwatch then
                                 local glowSwatch, defaultSwatch, classSwatch = EllesmereUI.BuildTrioColorSwatch(
                                     leftRgn, colorRow:GetFrameLevel() + 3,
@@ -1732,7 +1568,7 @@ initFrame:SetScript("OnEvent", function(self)
 
                         -- Duplicate, then the buff icon (spell tooltip on hover), LEFT of Remove
                         if not EllesmereUI._prebuilding then
-                            local rightRgn = colorRow._rightRegion
+                            local rightRgn = removeRgn
                             if rightRgn and rightRgn._control then
                                 local btn = rightRgn._control
                                 local dupBtn = ns.BarGlowDuplicateButton(rightRgn, btn, buffList, aIdx, function()

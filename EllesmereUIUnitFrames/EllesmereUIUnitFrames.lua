@@ -4156,16 +4156,78 @@ do
         return mirrorAngles[id]
     end
 
-    -- 2D textures have no model ID. Reuse their hidden, lazy 3D frame for the
-    -- lookup, then release the model. Missing IDs retry on portrait art events.
-    function ns.UF_CanMirrorPortrait2D(model, unit)
+    -- 2D textures have no model ID: the portrait's hidden, lazy 3D frame loads
+    -- the unit once per GUID and the answer is cached (ns.UF_ForgetPortraitMirror
+    -- drops it on UNIT_MODEL_CHANGED, so forms and transforms check again). A
+    -- model whose file is not resolved yet stays loaded until OnModelLoaded, then
+    -- onReady(guid) lets the portrait repaint its flip. Secret GUIDs are not
+    -- cached. The model is our own frame, so its fields are ours to use.
+    local verdict, verdictCount = {}, 0
+    local function Release(model)
+        model._mirPending, model._mirReady = nil, nil
+        -- Shown = a 3D portrait now owns the model: leave it loaded.
+        if not model:IsShown() then model:ClearModel() end
+        model:SetKeepModelOnHide(false)
+    end
+    local function Store(key, v)
+        if verdict[key] == nil then
+            if verdictCount >= 500 then wipe(verdict); verdictCount = 0 end
+            verdictCount = verdictCount + 1
+        end
+        verdict[key] = v
+    end
+    local function Resolve(model, key)
+        local v = GetMirrorAngle(model:GetModelFileID()) ~= nil
+        local ready = model._mirReady
+        Release(model)
+        Store(key, v)
+        if ready then ready(key) end
+        return v
+    end
+    local function OnModelLoaded(model)
+        local key = model._mirPending
+        if not key then return end
+        if model:IsShown() then Release(model); return end
+        Resolve(model, key)
+    end
+    function ns.UF_CanMirrorPortrait2D(model, unit, onReady)
+        -- IDs may be secret: only type() and issecretvalue() ever test them.
+        local guid = UnitGUID(unit)
+        local key = (not issecretvalue(guid)) and guid or nil
+        if key then
+            local v = verdict[key]
+            if v ~= nil then return v end
+            -- This unit's load is still in flight: take the answer if it is in.
+            if model._mirPending == key then
+                if type(model:GetModelFileID()) == "nil" then return false end
+                model._mirReady = nil
+                return Resolve(model, key)
+            end
+        end
+        if model._mirPending then Release(model) end
         model:SetKeepModelOnHide(true)
         model:ClearModel()
         model:SetUnit(unit)
-        local angle = GetMirrorAngle(model:GetModelFileID())
-        model:ClearModel()
-        model:SetKeepModelOnHide(false)
-        return angle ~= nil
+        local id = model:GetModelFileID()
+        if type(id) == "nil" and key and onReady then
+            model._mirPending, model._mirReady = key, onReady
+            if not model._mirHooked then
+                model._mirHooked = true
+                model:HookScript("OnModelLoaded", OnModelLoaded)
+            end
+            return false
+        end
+        local v = GetMirrorAngle(id) ~= nil
+        Release(model)
+        if key and type(id) ~= "nil" then Store(key, v) end
+        return v
+    end
+    function ns.UF_ForgetPortraitMirror(unit)
+        local guid = UnitGUID(unit)
+        if not issecretvalue(guid) and guid and verdict[guid] ~= nil then
+            verdict[guid] = nil
+            verdictCount = verdictCount - 1
+        end
     end
 
     function ns.UF_ApplyPortraitRotation(model, mirror)
@@ -4249,11 +4311,14 @@ function PortraitOverride(self, event, evtUnit, fallback)
         -- Models only: 2D textures survive Hide/Show.
         or (event == "Show" and isModel)
     -- A changed model can also change 2D mirror eligibility, including class
-    -- mode's NPC fallback. Reuse the existing appearance event only when opted in.
-    if not hasStateChanged and event == "UNIT_MODEL_CHANGED" then
+    -- mode's NPC fallback: drop the cached answer and repaint, only when opted in.
+    if event == "UNIT_MODEL_CHANGED" and not isModel then
         local uk = UnitToSettingsKey(self._euiBaseUnit or u)
         local us = uk and db.profile[uk]
-        hasStateChanged = us and us.portraitMirror and not ns.UF_Blizz()
+        if us and us.portraitMirror and not ns.UF_Blizz() then
+            ns.UF_ForgetPortraitMirror(u)
+            hasStateChanged = true
+        end
     end
     -- Blank-model recovery is only needed when no other change requires a paint.
     -- Show can run before assets stream in; PORTRAITS_UPDATED retries a still-
@@ -7986,6 +8051,15 @@ local function CreatePortrait(frame, side, frameHeight, unit)
     PP.Point(tex2D, "BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", 0, 0)
     tex2D:SetTexCoord(0.15, 0.85, 0.15, 0.85)
     tex2D:Hide()
+    -- A 2D mirror lookup that finished loading after the paint: repaint the flip
+    -- when the frame still shows that unit.
+    local function MirrorReady(guid)
+        local u = frame._euiUnit
+        if not (u and UnitIsConnected(u) and UnitIsVisible(u)) then return end
+        local g = UnitGUID(u)
+        if issecretvalue(g) or g ~= guid then return end
+        tex2D:PostUpdate(u)
+    end
 
     -- Class theme icon: painted by the engine portrait painter's class lane
     -- (element.isClass); this creation-time paint only seeds art before the
@@ -8075,7 +8149,7 @@ local function CreatePortrait(frame, side, frameHeight, unit)
         -- stand), and the unavailable question mark always reads unflipped.
         local mir = (uS2 and uS2.portraitMirror and not ns.UF_Blizz()
             and not (hasStateChanged and self.state == false)
-            and ns.UF_CanMirrorPortrait2D(EnsureModel3D(), u)) and true or false
+            and ns.UF_CanMirrorPortrait2D(EnsureModel3D(), u, MirrorReady)) and true or false
         if mir ~= (self._mirrored or false) then
             self._mirrored = mir
             if mir then
@@ -9294,10 +9368,14 @@ end
 --  SetThreatPctEnabled(true).
 -------------------------------------------------------------------------------
 if EllesmereUI.IS_FOREVER then
+    -- Inside spots sit on the health bar; outside spots sit beside the whole
+    -- frame (past an attached portrait), centred on its height.
     local POS = {
         RIGHT  = { point = "RIGHT",  x = -4 },
         LEFT   = { point = "LEFT",   x = 4 },
         CENTER = { point = "CENTER", x = 0 },
+        OUTRIGHT = { point = "LEFT",  rel = "RIGHT", x = 4,  outside = true },
+        OUTLEFT  = { point = "RIGHT", rel = "LEFT",  x = -4, outside = true },
     }
     local watcher = CreateFrame("Frame")
 
@@ -9317,7 +9395,7 @@ if EllesmereUI.IS_FOREVER then
         local pos = POS[posKey]
         SetFSFont(fs, size)
         fs:ClearAllPoints()
-        PP.Point(fs, pos.point, frame.Health, pos.point, pos.x + x, y)
+        PP.Point(fs, pos.point, pos.outside and frame or frame.Health, pos.rel or pos.point, pos.x + x, y)
         fs:SetJustifyH(pos.point)
     end
 
@@ -17299,10 +17377,13 @@ function InitializeFrames()
                 -- that used to leave the player frame unspawned and the bar with it,
                 -- and the other hiding modes have always kept their own bar visible.
                 -- Written only when it moves: this pass runs on every target change,
-                -- and for the "blizzard" style the bar is Blizzard's own frame.
+                -- and for the "blizzard" style the bar is Blizzard's own frame. A bar
+                -- locked to the frame is its child, so the Show When Health Missing
+                -- reveal makes its alpha read secret: it is written blind then.
                 if unitKey == "player" and frames._classPowerBar then
                     local cpWant = visNever and 0 or 1
-                    if frames._classPowerBar:GetAlpha() ~= cpWant then
+                    local cpHave = frames._classPowerBar:GetAlpha()
+                    if issecretvalue(cpHave) or cpHave ~= cpWant then
                         frames._classPowerBar:SetAlpha(cpWant)
                     end
                 end
