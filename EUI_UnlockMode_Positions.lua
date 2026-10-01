@@ -15,7 +15,7 @@ local GetAnchorInfo, MatchH, ScheduleAnchorBatch, ApplyAllWidthHeightMatches = U
 local HookFrameSizeChanged, FadeOverlayForSelectElement, CancelPickMode = UM.HookFrameSizeChanged, UM.FadeOverlayForSelectElement, UM.CancelPickMode
 
 -------------------------------------------------------------------------------
---  Ghost overlay set (unlock mode only), shared by fallback and override
+--  Ghost overlay set (unlock mode only), shared by fallback and override  -- eui-style: allow comment-budget
 --  anchors: draggable 1:1 mover-overlay copies at 75% opacity sitting where
 --  the element lands while the link is engaged; dragging writes the link's
 --  X/Y offsets (relative to the side-snap point). opts: getLink(g) -> stored

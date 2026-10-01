@@ -12,7 +12,7 @@ local ns, floor, PP, registeredElements = UM.ns, UM.floor, UM.PP, UM.registeredE
 local movers, pendingPositions, SELECT_ELEMENT_ALPHA, SELECT_ELEMENT_FADE = UM.movers, UM.pendingPositions, UM.SELECT_ELEMENT_ALPHA, UM.SELECT_ELEMENT_FADE
 
 -------------------------------------------------------------------------------
---  Anchor / Match DB helpers
+--  Anchor / Match DB helpers  -- eui-style: allow comment-budget
 --  EllesmereUIDB.unlockAnchors = { [childKey] = { target=key, side="LEFT"|"RIGHT"|"TOP"|"BOTTOM" } }
 --  Width/height matches apply immediately into the element's own settings.
 -------------------------------------------------------------------------------
