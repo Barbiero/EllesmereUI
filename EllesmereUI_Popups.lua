@@ -762,13 +762,8 @@ function EllesmereUI:ShowConfirmPopup(opts)
         end)
     end
 
-    -- Counter-scale the popup to the options panel when the pixel-perfect system has rescaled UIParent; the dimmer stays at 1 so it still covers the full screen.
-    local mf = EllesmereUI._mainFrame
-    if mf and mf:GetScale() ~= 1 then
-        popup:SetScale(mf:GetScale())
-    else
-        popup:SetScale(1)
-    end
+    -- Counter-scale the popup to the options panel (same formula as its root frame, which may not exist yet); the dimmer stays at 1 so it still covers the full screen.
+    popup:SetScale(GetPopupScale())
 
 
     popup._dimmer:Show()
