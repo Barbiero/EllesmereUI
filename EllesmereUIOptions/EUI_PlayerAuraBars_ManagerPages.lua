@@ -185,6 +185,9 @@ end
 -- BigDefensive/UnitFrameDebuff/ExpirationOnly/NameOnly/ AuraInstanceIDOnly read as
 -- narrower, other-UI-specific variants and are deliberately left out of this dropdown
 -- (their exact behavior isn't documented anywhere in this repo either way).
+-- "Expiration"/"Name" are saved under these keys but resolve to the native
+-- ExpirationOnly/NameOnly at apply time (ResolveSortMethod in the PAB module): the
+-- plain variants rank player-cast/canApplyAura ahead of the named criterion.
 --
 -- "Important" (native key ImportantOnly) sorts by `C_Spell.IsSpellImportant` (verified
 -- against Blizzard's PTR source, AuraUtil.lua's ImportantOnlyAuraCompare) -- a native
