@@ -2238,6 +2238,7 @@ initFrame:SetScript("OnEvent", function(self)
         y, sharedBuffDebuffHeader, sharedAddRow2, sharedAddRow3 = ns.UFO_BuildBuffsDebuffsSection(parent, y, ctx)
         local sharedAbsorbsHeader, absorbRow, healAbsorbRow
         y, sharedAbsorbsHeader, absorbRow, healAbsorbRow = ns.UFO_BuildAbsorbsHealsSection(parent, y, ctx)
+        y = ns.UFO_BuildSelfCombatTextSection(parent, y, ctx)
         local sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5
         y, sharedAddHeader, sharedAddRow1, sharedAddRow4, sharedAddRow5 = ns.UFO_BuildExtrasSection(parent, y, ctx)
 
