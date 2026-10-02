@@ -11285,6 +11285,8 @@ ns._internals = {
     FONT_PATH = FONT_PATH, LayoutBar = LayoutBar, buttonToBar = buttonToBar, _gridState = _gridState,
     ApplyButtonBorders = ApplyButtonBorders, ApplyShapeToButton = ApplyShapeToButton,
     NUM_ACTIONBAR_BUTTONS = NUM_ACTIONBAR_BUTTONS,
+    barBaseSize = barBaseSize, SHAPE_EDGE_SCALES = SHAPE_EDGE_SCALES,
+    GetButtonActionSlot = GetButtonActionSlot, MaskFrameTextures = MaskFrameTextures,
 }
 -- A re-import of a name this table lacks fails where the part file loads,
 -- not later as a nil upvalue inside one of its functions.

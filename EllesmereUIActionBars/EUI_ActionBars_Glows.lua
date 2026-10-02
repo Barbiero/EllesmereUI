@@ -1,3 +1,30 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Glows.lua
+--
+--  Proc glows, the glue to the shared glow engines, the assisted combat
+--  highlight, the cooldown edge and countdown font hooks, and the misc and
+--  checked button textures. Loads after the main file and reads it through
+--  ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local ipairs, pairs, pcall = ipairs, pairs, pcall
+local floor, min = math.floor, math.min
+local wipe = wipe
+local InCombatLockdown = InCombatLockdown
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+local PP = EllesmereUI.PP
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE, barButtons = ns.EAB, ns.EAB_VTABLE, ns.barButtons
+local SHAPE_MASKS, SHAPE_BORDERS, SHAPE_BTN_EXPAND = ns.SHAPE_MASKS, ns.SHAPE_BORDERS, ns.SHAPE_BTN_EXPAND
+local I = ns._internals
+local BAR_CONFIG, buttonToBar, barBaseSize = I.BAR_CONFIG, I.buttonToBar, I.barBaseSize
+local SHAPE_EDGE_SCALES = I.SHAPE_EDGE_SCALES
+local GetButtonActionSlot, MaskFrameTextures = I.GetButtonActionSlot, I.MaskFrameTextures
+
 -------------------------------------------------------------------------------
 --  Custom Proc Glow (FlipBook-based, no LibCustomGlow)
 --  Hooks Blizzard's SpellActivationAlert to reconfigure the FlipBook
