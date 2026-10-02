@@ -7,6 +7,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 local EllesmereUI = _G.EllesmereUI
 -- Private namespace shared with EllesmereUI.lua (sidebar buttons).
 local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
 
 -------------------------------------------------------------------------------
 --  Profile Sync System (mirror groups)

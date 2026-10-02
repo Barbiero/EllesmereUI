@@ -13,6 +13,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -- The module registry is the core's private one (EllesmereUI.lua), shared
 -- through this addon's namespace. It holds suite modules and plugin modules.
 local _, ns = ...
+ns = ns.__euiCoreNS or ns  -- standalone builds: the core's own table (EllesmereUI.lua)
 
 -- Breadcrumb separator: the house right-arrow glyph rendered inline in the
 -- sub text (module -> page), sized to sit with the 10pt breadcrumb font.

@@ -11,6 +11,15 @@ local EUI_HOST_ADDON, EUI_NS = ...
 -- Build renames "EllesmereUI" -> "EUICoreStandalone<Module>" but never the word
 -- "Standalone", so host name contains it iff standalone; false in the suite (branches inert).
 local IS_STANDALONE = type(EUI_HOST_ADDON) == "string" and EUI_HOST_ADDON:find("Standalone") ~= nil
+-- A standalone build is ONE addon: its module files share this vararg table
+-- and publish it through _ModuleNS. So there the core's private state lives in
+-- a table of its own, handed to the later core files through __euiCoreNS until
+-- the first module publish removes that slot (see _ModuleNS).
+if IS_STANDALONE then
+    local shared = EUI_NS
+    EUI_NS = {}
+    shared.__euiCoreNS = EUI_NS
+end
 -------------------------------------------------------------------------------
 --  Constants & Colours (BURNE STAY AWAY FROM THIS SECTION)
 -------------------------------------------------------------------------------
@@ -901,6 +910,7 @@ do
     -- Errors are reported through the error handler (keeping their traceback)
     -- rather than rethrown, so a failing callee can never leave the window open.
     local function ReportError(err) return geterrorhandler()(err) end
+    EUI_NS.ReportError = ReportError  -- shared with the plugin registry (EllesmereUI_Panel.lua)
     function EUI_NS.RunCoreRegistration(fn, ...)
         regDepth = regDepth + 1
         local ok, a, b = xpcall(fn, ReportError, ...)
@@ -923,7 +933,19 @@ do
             elseif not EUI_NS.optionsLoadRequested then
                 -- Loaded after login by something other than the core: its files
                 -- ran outside the registration window and their pages were refused.
-                EllesmereUI.PrintError("EllesmereUI Options was loaded by another addon, so its settings pages could not register. Type /reload to fix this.")
+                -- The loader is on the stack (LoadAddOn fires this before returning).
+                -- (Skips the suite's own folders and Blizzard's, which a load
+                -- can pass through on its way here.)
+                local loader
+                for folder in (debugstack(2, 30, 0) or ""):gmatch("AddOns/([^/]+)/") do
+                    if not (folder:find("^EllesmereUI") or folder:find("^Blizzard_")) then loader = folder; break end
+                end
+                if loader then
+                    EUI_NS.RecordLegacyOffender(loader, "loader")
+                    EllesmereUI.PrintError(EllesmereUI.Lf("%1$s loaded EllesmereUI Options too early, so its settings pages could not register. Type /reload; if this keeps happening, update or disable %1$s.", loader))
+                else
+                    EllesmereUI.PrintError("EllesmereUI Options was loaded by another addon, so its settings pages could not register. Type /reload to fix this.")
+                end
             end
         end
     end)
@@ -2772,6 +2794,16 @@ EllesmereUI._deferredLoaded = false
 -- module is absent/disabled -- reproducing the old "disabled child = no options
 -- page" behavior exactly.
 EllesmereUI._ModuleNS = {}
+if IS_STANDALONE then
+    -- Every core file has loaded by the first module publish: remove the
+    -- hand-off slot before the shared table is published (see the top).
+    local shared = select(2, ...)
+    setmetatable(EllesmereUI._ModuleNS, { __newindex = function(t, k, v)
+        shared.__euiCoreNS = nil
+        setmetatable(t, nil)
+        rawset(t, k, v)
+    end })
+end
 
 -- Login-critical deferred body: UnlockMode's position/anchor engine
 -- (_applySavedPositions, width/height matches, anchor propagation). It must run
