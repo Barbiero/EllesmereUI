@@ -25,6 +25,7 @@ local BAGS_DEFAULTS = {
         bagShowSetGearName    = false,
         bagSetNameFontSize    = 9,
         bagMergeDuplicates    = true,
+        bagListMergeDuplicates = false,
         bagSidebarCollapsed   = false,
         bankSidebarCollapsed  = false,
         bagShowPinnedItems    = true,

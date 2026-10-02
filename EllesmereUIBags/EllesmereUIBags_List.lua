@@ -114,7 +114,7 @@ local _bindLoc = ItemLocation:CreateEmpty()
 -------------------------------------------------------------------------------
 local function StampItem(d)
     local info = d.info
-    local count = info.stackCount or 1
+    local count = d._mergedCount or info.stackCount or 1
     local _, _, _, baseIlvl, reqLevel, _, _, _, _, _, sellPrice, _, _, bindType = GetItemInfo(d.itemLink)
     local _, _, subType, _, _, classID = GetItemInfoInstant(d.itemLink)
     d._lvName = info.itemName or ""
@@ -852,6 +852,9 @@ function ns.RenderListView(items, opts)
         return bag
     end
     local pinnedSet, recentSet = opts.pinned, opts.recent
+    if not slotView and BP().bagListMergeDuplicates == true then
+        items = ns.MergeDuplicates(items, true)
+    end
     for _, d in ipairs(items) do
         local ci = d.categoryIndex
         local cat = ci and cats[ci]

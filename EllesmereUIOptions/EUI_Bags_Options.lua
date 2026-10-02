@@ -769,7 +769,7 @@ initFrame:SetScript("OnEvent", function(self)
                           end }
                     ); y = y - h
 
-                    -- Split Professions by Type | (empty)
+                    -- Split Professions by Type | Merge Duplicate Items
                     _, h = W:DualRow(parent, y,
                         { type="toggle", text="Split Professions by Type",
                           tooltip="In the list, group profession items, recipes and trade goods under sub-headers by profession or material (Tailoring, Enchanting, Herb, Cloth, ...).",
@@ -778,7 +778,13 @@ initFrame:SetScript("OnEvent", function(self)
                               db.profile.bagListSplitProfessions = v and true or false
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
-                        EllesmereUI.BlankRowCfg()
+                        { type="toggle", text="Merge Duplicate Items",
+                          tooltip="In the list, show copies of the same item that sit in separate bag slots, including unstackable items, as one row with their counts added together. Gear is never merged, and OneBag and MultiBag always show every slot. Merging is paused while the mail, trade, auction house, bank or guild bank window is open.",
+                          getValue=function() return db.profile.bagListMergeDuplicates == true end,
+                          setValue=function(v)
+                              db.profile.bagListMergeDuplicates = v and true or false
+                              if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          end }
                     ); y = y - h
                 end
             end

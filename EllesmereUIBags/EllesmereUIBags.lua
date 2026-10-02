@@ -761,6 +761,7 @@ end
 
 -- Merge duplicate non-gear items by itemLink within an already-ordered list.
 -- itemLink encodes stats/bonuses, so items with different stats stay separate.
+-- force: skip the bagMergeDuplicates check (list view has its own setting).
 -- Must run AFTER ApplySavedOrder so the first occurrence in visual order wins.
 -- Returns a new list; the caller's tables are NEVER modified. A merged winner is
 -- replaced in the returned list by a pooled, display-only shallow copy carrying
@@ -769,11 +770,11 @@ end
 -- writes _mergedCount back onto a canonical slot table, both break.
 -- The result must not outlive the render pass that produced it: the copies come
 -- from the slot pool and are recycled by ReleaseAllSlotTables on the next refresh.
-local function MergeDuplicates(items)
+local function MergeDuplicates(items, force)
     -- Record what this paint was built with, so the bags OnShow can tell that
     -- the state changed while they were hidden and repaint (see OnShow).
     _paintedPanelOpen = _anyItemPanelOpen
-    if _anyItemPanelOpen or BP().bagMergeDuplicates == false then return items end
+    if _anyItemPanelOpen or (not force and BP().bagMergeDuplicates == false) then return items end
     -- Session-only unmerge marks (EUI_Bags._unmergedLinks: set by the split
     -- dialog, wiped when the bags close, never persisted): a marked item keeps
     -- its real stacks apart so a split's pieces are visible in these views.
