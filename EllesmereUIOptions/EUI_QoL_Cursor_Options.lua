@@ -301,6 +301,33 @@ initFrame:SetScript("OnEvent", function(self)
         );  y = y - h
         end   -- close Cursor Circle hidden-while-disabled gate
 
+        -- Environment Ping: not part of the circle, so outside its gate.
+        -- Keybind button in the label's slot, the Toggle Raid Tools
+        -- arrangement. Account-wide, like the FPS toggle key.
+        local pingRow
+        pingRow, h = W:DualRow(parent, y,
+            { type="label", text="Environment Ping" },
+            { type="label", text="" }
+        );  y = y - h
+        if not EllesmereUI._prebuilding then
+            local rgn = pingRow._leftRegion
+            local kbBtn, refresh = EllesmereUI.BuildKeybindButton(rgn, {
+                w = 126, h = 29, level = 4, mouse = true,
+                get = function() return EllesmereUIDB and EllesmereUIDB.envPingKey end,
+                set = function(v)
+                    -- The hold key cannot be the button it claims.
+                    local base = v and v:match("[^%-]+$")
+                    if base == "BUTTON1" or base == "BUTTON2" then return end
+                    if not EllesmereUIDB then EllesmereUIDB = {} end
+                    EllesmereUIDB.envPingKey = v
+                    if EllesmereUI._applyEnvPing then EllesmereUI._applyEnvPing() end
+                end,
+                tooltip = "While held, left-clicking the world sends a ping that ignores units and only targets the environment.\n\nLeft-click to set a keybind.\nRight-click to unbind.",
+            })
+            EllesmereUI.PanelPP.Point(kbBtn, "RIGHT", rgn, "RIGHT", -20, 0)
+            EllesmereUI.RegisterWidgetRefresh(refresh)
+        end
+
         _, h = W:Spacer(parent, y, 20);  y = y - h
 
         -----------------------------------------------------------------------

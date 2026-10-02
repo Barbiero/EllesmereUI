@@ -6,9 +6,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  helpers, Blizzard-owned info overlays.
 --  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
 -------------------------------------------------------------------------------
-EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
-EllesmereUI._unlockParts.Tools = function(UM)
-local ns, EAB, floor, abs = UM.ns, UM.EAB, UM.floor, UM.abs
+local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
+EUI_NS.unlockParts = EUI_NS.unlockParts or {}
+EUI_NS.unlockParts.Tools = function(UM)
+local ns, EAB, floor, abs = EUI_NS, UM.EAB, UM.floor, UM.abs
 local min, max, sqrt, sin = UM.min, UM.max, UM.sqrt, UM.sin
 local PP, FONT_PATH, GRID_SPACING, SNAP_THRESH = UM.PP, UM.FONT_PATH, UM.GRID_SPACING, UM.SNAP_THRESH
 local MOVER_ALPHA, MOVER_HOVER, BAR_LOOKUP, registeredElements = UM.MOVER_ALPHA, UM.MOVER_HOVER, UM.BAR_LOOKUP, UM.registeredElements

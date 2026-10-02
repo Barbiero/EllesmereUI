@@ -52,6 +52,170 @@ qolFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
 
     ---------------------------------------------------------------------------
+    -- Bonus roll confirmation. Addon-owned overlays intercept Roll/Pass clicks;
+    -- the journal link and other children retain their original behavior.
+    -- (Not on WoW Forever: no bonus rolls there, so the block and its options
+    -- row do not exist.)
+    ---------------------------------------------------------------------------
+    if not EllesmereUI.IS_FOREVER then
+        local active, lifecycleHooked, eventFrame
+        local rollButton, passButton, rollOverlay, passOverlay
+        local pending
+
+        local function Enabled()
+            return EllesmereUIDB and EllesmereUIDB.bonusRollConfirmation == true
+                and not C_AddOns.IsAddOnLoaded("BonusRollConfirm")
+        end
+
+        local function Invalidate()
+            local old = pending
+            pending = nil
+            -- The house popup is shared: the handle closes it only while it
+            -- still shows this request, never another feature's dialog.
+            if old then EllesmereUI:CloseConfirmPopup(old.handle) end
+        end
+
+        local function LootSpec()
+            local id = GetLootSpecialization()
+            if id == 0 then
+                local index = C_SpecializationInfo.GetSpecialization()
+                if index then id = C_SpecializationInfo.GetSpecializationInfo(index) end
+            end
+            local name = id and select(2, GetSpecializationInfoByID(id))
+            return id, name or UNKNOWN
+        end
+
+        local function IsCurrent(request)
+            local frame = BonusRollFrame
+            return active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
+                and frame.spellID == request.spellID and frame.endTime == request.endTime
+                and (frame.remaining or 0) > 0
+                and request.button:IsShown() and request.button:IsEnabled()
+                and not request.button:IsProtected()
+                and request.button:GetScript("OnClick") == request.handler
+                and (not request.isRoll or request.specID == LootSpec())
+        end
+
+        local function Click(isRoll, button, mouseButton, down)
+            if not active or not Enabled() then return end
+            Invalidate()
+            local frame = BonusRollFrame
+            if not frame then return end
+            local specID, specName = LootSpec()
+            local request = {
+                spellID = frame.spellID, endTime = frame.endTime,
+                specID = specID, isRoll = isRoll, button = button,
+                handler = button:GetScript("OnClick"),
+            }
+            if not IsCurrent(request) then return end
+            request.cancel = function()
+                if pending == request then pending = nil end
+            end
+            pending = request
+            request.handle = EllesmereUI:ShowConfirmPopup({
+                title = EllesmereUI.L("Bonus Roll Confirmation"),
+                message = isRoll and EllesmereUI.L("Use a bonus roll?")
+                    or EllesmereUI.L("Pass on this bonus roll?"),
+                disclaimer = isRoll and EllesmereUI.Lf("Loot specialization: %s", specName) or nil,
+                confirmText = isRoll and ROLL or PASS,
+                cancelText = CANCEL,
+                onCancel = request.cancel,
+                onConfirm = function()
+                    if pending ~= request then return end
+                    local valid = IsCurrent(request)
+                    Invalidate()
+                    if valid then button:Click(mouseButton, down) end
+                end,
+            })
+        end
+
+        local function SyncOverlays()
+            if not rollOverlay then return end
+            local frame = BonusRollFrame
+            local show = active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
+            rollOverlay:SetShown(show and true or false)
+            passOverlay:SetShown(show and EllesmereUIDB.bonusRollOnly == false or false)
+        end
+
+        local function MakeOverlay(button, isRoll)
+            local overlay = CreateFrame("Button", nil, button)
+            overlay:SetAllPoints(button)
+            overlay:SetFrameLevel(button:GetFrameLevel() + 1)
+            overlay:RegisterForClicks("LeftButtonUp")
+            overlay:SetScript("OnClick", function(_, mouseButton, down)
+                Click(isRoll, button, mouseButton, down)
+            end)
+            overlay:SetScript("OnEnter", function(self)
+                EllesmereUI.ShowWidgetTooltip(self, isRoll and ROLL or PASS)
+            end)
+            overlay:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            overlay:Hide()
+            return overlay
+        end
+
+        local function Install()
+            if rollButton then
+                SyncOverlays()
+                return
+            end
+            local frame = BonusRollFrame
+            local prompt = frame and frame.PromptFrame
+            local roll, pass = prompt and prompt.RollButton, prompt and prompt.PassButton
+            if not roll or not pass or roll:IsProtected() or pass:IsProtected() then return end
+            if not roll:GetScript("OnClick") or not pass:GetScript("OnClick") then return end
+            rollButton, passButton = roll, pass
+            rollOverlay = MakeOverlay(roll, true)
+            passOverlay = MakeOverlay(pass, false)
+            if not lifecycleHooked then
+                lifecycleHooked = true
+                local function Changed()
+                    if active then Invalidate(); SyncOverlays() end
+                end
+                -- Secure post-hooks only: every prompt opens and closes through
+                -- these two (plus the events below). A script hook on the frame
+                -- would leave the rest of Blizzard's loot-container layout, which
+                -- hides it, running under our taint.
+                hooksecurefunc("BonusRollFrame_StartBonusRoll", Changed)
+                hooksecurefunc("BonusRollFrame_CloseBonusRoll", Changed)
+            end
+            SyncOverlays()
+        end
+
+        local function Apply()
+            Invalidate()
+            active = Enabled()
+            if not active then
+                SyncOverlays()
+                if eventFrame then eventFrame:UnregisterAllEvents() end
+                return
+            end
+            if not eventFrame then
+                eventFrame = CreateFrame("Frame")
+                eventFrame:SetScript("OnEvent", function(_, event, addonName)
+                    if event == "ADDON_LOADED" then
+                        if addonName == "BonusRollConfirm" or not rollButton then
+                            EllesmereUI._applyBonusRollConfirmation()
+                        end
+                    else
+                        Invalidate()
+                        SyncOverlays()
+                    end
+                end)
+            end
+            eventFrame:RegisterEvent("ADDON_LOADED")
+            eventFrame:RegisterEvent("BONUS_ROLL_STARTED")
+            eventFrame:RegisterEvent("BONUS_ROLL_FAILED")
+            eventFrame:RegisterEvent("BONUS_ROLL_RESULT")
+            eventFrame:RegisterEvent("BONUS_ROLL_DEACTIVATE")
+            eventFrame:RegisterEvent("PLAYER_LOOT_SPEC_UPDATED")
+            eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+            Install()
+        end
+        EllesmereUI._applyBonusRollConfirmation = Apply
+        Apply()
+    end
+
+    ---------------------------------------------------------------------------
     --  Auto Unwrap Collections (Mounts / Pets / Toys)
     ---------------------------------------------------------------------------
     do
@@ -2850,6 +3014,108 @@ do
             ApplyFPSBind()
         end
     end)
+end
+
+-------------------------------------------------------------------------------
+--  Environment-only Ping
+--  While the bound key is held, left-clicking the world sends a ping that
+--  ignores units and UI. "/ping [@cursor]" takes SendMacroPing's point-ping
+--  branch, which targets the environment only and ignores the Ping Target
+--  setting, so no CVar is touched.
+--
+--  Nothing is built until a key is set. The hold key is an override binding
+--  on holdBtn; its secure snippet claims BUTTON1 for pingBtn on the key's down
+--  edge and releases it on the up edge, so the claim works in combat. The two
+--  buttons must stay separate frames: a mouse click routed to the frame the
+--  held key is bound to swallows that key's up edge, and the claim would then
+--  never be released.
+-------------------------------------------------------------------------------
+do
+    local holdBtn, pingBtn, claimer, bindOwner
+
+    local function BuildEnvPing()
+        if holdBtn then return end
+        local header = CreateFrame("Frame", "EUI_EnvPingHeader", UIParent, "SecureHandlerBaseTemplate")
+        -- Owns the BUTTON1 claim, so one ClearBindings hands it back.
+        claimer = CreateFrame("Frame", "EUI_EnvPingClaimer", UIParent, "SecureHandlerBaseTemplate")
+        claimer:Hide()
+        bindOwner = CreateFrame("Frame", "EUI_EnvPingBindOwner", UIParent)
+
+        pingBtn = CreateFrame("Button", "EUI_EnvPingButton", UIParent, "SecureActionButtonTemplate")
+        pingBtn:RegisterForClicks("AnyDown")
+        pingBtn:SetAttribute("useOnKeyDown", true)
+        pingBtn:EnableMouse(false)
+        pingBtn:SetSize(1, 1)
+        pingBtn:SetAlpha(0)
+        pingBtn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -120, -120)
+        pingBtn:Show()
+        pingBtn:SetAttribute("type", "macro")
+        pingBtn:SetAttribute("macrotext", (SLASH_PING1 or "/ping") .. " [@cursor]")
+        -- Backstop for a hold key whose up edge never arrived (alt-tab, a
+        -- loading screen): the claim would keep every left click pinging.
+        -- Checked right after a ping, so it costs nothing between pings.
+        pingBtn:SetScript("PostClick", function()
+            local key = EllesmereUIDB and EllesmereUIDB.envPingKey
+            local base = key and key:match("[^%-]+$")
+            if base and IsKeyDown(base) then return end
+            if InCombatLockdown() then
+                ns.CombatQueue.Defer("EnvPingRelease", function() ClearOverrideBindings(claimer) end)
+            else
+                ClearOverrideBindings(claimer)
+            end
+        end)
+
+        holdBtn = CreateFrame("Button", "EUI_EnvPingHoldButton", UIParent, "SecureActionButtonTemplate")
+        holdBtn:RegisterForClicks("AnyDown", "AnyUp")
+        holdBtn:SetAttribute("useOnKeyDown", false)
+        holdBtn:EnableMouse(false)
+        holdBtn:SetSize(1, 1)
+        holdBtn:SetAlpha(0)
+        holdBtn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -120, -120)
+        holdBtn:Show()
+        SecureHandlerSetFrameRef(holdBtn, "claimer", claimer)
+        SecureHandlerSetFrameRef(holdBtn, "ping", pingBtn)
+        SecureHandlerWrapScript(holdBtn, "OnClick", header, [[
+            local claim = self:GetFrameRef("claimer")
+            local ping = self:GetFrameRef("ping")
+            if not (claim and ping) then return end
+            if down then
+                claim:SetBindingClick(true, "BUTTON1", ping)
+            else
+                claim:ClearBindings()
+            end
+        ]])
+    end
+
+    local function ApplyEnvPing()
+        if InCombatLockdown() then
+            ns.CombatQueue.Defer("EnvPing", ApplyEnvPing)
+            return
+        end
+        local key = EllesmereUIDB and EllesmereUIDB.envPingKey
+        if not key then
+            -- Never enabled: nothing was built, nothing to undo.
+            if bindOwner then
+                ClearOverrideBindings(bindOwner)
+                ClearOverrideBindings(claimer)
+            end
+            return
+        end
+        BuildEnvPing()
+        ClearOverrideBindings(bindOwner)
+        ClearOverrideBindings(claimer)
+        SetOverrideBindingClick(bindOwner, true, key, "EUI_EnvPingHoldButton")
+    end
+    EllesmereUI._applyEnvPing = ApplyEnvPing
+
+    if EllesmereUIDB and EllesmereUIDB.envPingKey then
+        local loginFrame = CreateFrame("Frame")
+        loginFrame:RegisterEvent("PLAYER_LOGIN")
+        loginFrame:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_LOGIN")
+            ApplyEnvPing()
+        end)
+    end
 end
 
 -------------------------------------------------------------------------------

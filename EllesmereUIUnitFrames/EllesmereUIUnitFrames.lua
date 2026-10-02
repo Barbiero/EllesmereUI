@@ -1448,7 +1448,7 @@ end
 
 -- Resolve a unit's effective health bar texture KEY. Main frames use their own key
 -- (falling back to the global default); mini frames (pet, ToT, focus target, boss)
--- inherit the donor frame's texture (focus > target > player) unless their own key is
+-- inherit their donor frame's texture (ns.GetMiniDonorSettings) unless their own key is
 -- non-nil/non-"inherit". Shared by the live frames and the options preview to match.
 ns.ResolveHealthBarTextureKey = function(ownSettings, donorSettings)
     local own = ownSettings and ownSettings.healthBarTexture
@@ -3855,17 +3855,28 @@ function ns.UF_CastIconPortrait(castbar, frame, s, unit)
     return bd
 end
 
--- Donor settings table for mini frames (focus > target > player); source of
--- inherited border, texture and font settings. A frame that is disabled, or that
--- Visibility keeps off screen entirely, is not a donor -- before Visibility and
--- enabledFrames were split, "never" cleared that flag and fell out here for free.
-function ns.GetMiniDonorSettings()
-    local ef = db.profile.enabledFrames
-    local focus = db.profile.focus
+-- Donor settings table for a mini frame, the source of its inherited border,
+-- bar texture and hover highlight: the main frame its Copy Look From picks
+-- (lookSource "target" / "focus" / "player"), else Automatic (focus > target >
+-- player; boss frames always). A frame that is disabled, or that Visibility
+-- keeps off screen entirely, is not a donor (a pick of one falls back to
+-- Automatic) -- before Visibility and enabledFrames were split, "never"
+-- cleared that flag and fell out here for free.
+function ns.GetMiniDonorSettings(unitKey)
+    local p = db.profile
+    local ef = p.enabledFrames
+    local own = unitKey and p[unitKey]
+    local pick = own and own.lookSource
+    if pick == "player" then return p.player end
+    if pick == "target" or pick == "focus" then
+        local s = p[pick]
+        if ef[pick] ~= false and s and ns.VisEffective(s) ~= "never" then return s end
+    end
+    local focus = p.focus
     if ef.focus ~= false and focus and ns.VisEffective(focus) ~= "never" then return focus end
-    local target = db.profile.target
+    local target = p.target
     if ef.target ~= false and target and ns.VisEffective(target) ~= "never" then return target end
-    return db.profile.player
+    return p.player
 end
 local GetMiniDonorSettings = ns.GetMiniDonorSettings
 
@@ -5684,7 +5695,8 @@ local function UpdateBordersForScale(frame, unit)
     if ns.UF_Blizz() and not ns._ufReloadSweep then ns.UF_ApplyBlizzardLayout(frame, unit) end
     if settings.portraitSeparator or frame._portraitSeparator then
         ns.UpdatePortraitSeparator(frame, frame.Portrait and frame.Portrait.backdrop,
-            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz())
+            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz(), nil,
+            unit == "targettarget" and GetMiniDonorSettings(unit) or nil)
     end
 end
 
@@ -7410,14 +7422,17 @@ end
 -- Attached portrait divider: reuse the border style's vertical companion art.
 -- A sibling of the portrait avoids clipping the strip where it crosses into the
 -- bars. Built only on opt-in; layout and colour updates use existing passes.
-function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview)
+function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview, borderSettings)
     local seam = frame._portraitSeparator
     local power = frame.Power or frame._power
     local powerSeam = power and power._pbSeam
+    local sizeOverride = borderSettings and s.borderSizeOverride
+    local b = borderSettings or s
+    local size = sizeOverride or b.borderSize or 1
     local path
     if s.portraitSeparator and attached and portrait and portrait:IsShown()
-       and not stock and (s.borderSize or 1) > 0 then
-        path = EllesmereUI.GetBorderCompanion(s.borderTexture or "solid", "sepV")
+       and not stock and size > 0 then
+        path = EllesmereUI.GetBorderCompanion(b.borderTexture or "solid", "sepV")
     end
     if not path then
         if seam then
@@ -7437,11 +7452,12 @@ function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, p
     local border = frame.unifiedBorder or frame._border
     seam:SetFrameLevel(math.max(frame:GetFrameLevel() + (preview and 4 or 9),
         border and border:GetFrameLevel() + 1 or 0))
-    seam._key, seam._step = s.borderTexture, s.borderSize or 1
-    seam._px = EllesmereUI.BorderPx(s.borderSizePx, seam._step, seam._key)
+    seam._key, seam._step = b.borderTexture, size
+    seam._px = nil
+    if not sizeOverride then seam._px = EllesmereUI.BorderPx(b.borderSizePx, size, seam._key) end
     seam._right = side == "right"
-    local c = s.borderColor
-    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, s.borderAlpha or 1)
+    local c = b.borderColor
+    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, b.borderAlpha or 1)
     ns.UF_LayoutPortraitSeparator(seam)
     seam:Show()
     if powerSeam and powerSeam:IsShown() then ns.UF_LayoutPowerSeam(powerSeam) end
@@ -9186,7 +9202,7 @@ local function FrameBorderEnter(self)
         return
     end
     local isMini = (unit == "pet" or unit == "targettarget" or unit == "focustarget")
-    local settings = isMini and GetMiniDonorSettings() or GetSettingsForUnit(unit)
+    local settings = isMini and GetMiniDonorSettings(unit) or GetSettingsForUnit(unit)
     -- Highlight defaults ON (nil == enabled); only an explicit false disables it.
     if settings.highlightEnabled == false then return end
     -- Per-mini-frame opt-out: with "Show Highlight Border" off, a mini frame never
@@ -9216,7 +9232,7 @@ local function FrameBorderLeave(self)
         return
     end
     local isMini = (unit == "pet" or unit == "targettarget" or unit == "focustarget")
-    local settings = isMini and GetMiniDonorSettings() or GetSettingsForUnit(unit)
+    local settings = isMini and GetMiniDonorSettings(unit) or GetSettingsForUnit(unit)
     local bc = settings.borderColor or { r = 0, g = 0, b = 0 }
     local ba = settings.borderAlpha or 1
     EllesmereUI.SetBorderStyleColor(self.unifiedBorder, bc.r, bc.g, bc.b, ba)
@@ -10230,10 +10246,10 @@ local function StyleSimpleFrame(frame, unit)
     health.colorDisconnected = true
     health._euiUnitKey = UnitToSettingsKey(unit)
 
-    -- Inherit health bar texture from donor frame (focus > target > player),
+    -- Inherit health bar texture from the donor frame (Copy Look From),
     -- unless this frame set its own override.
-    local donor = GetMiniDonorSettings()
     local unitKey = UnitToSettingsKey(unit)
+    local donor = GetMiniDonorSettings(unitKey)
     ApplyHealthBarTexture(health, unitKey, ns.ResolveHealthBarTextureKey(settings, donor))
     ApplyHealthBarAlpha(health, unitKey)
     health:SetReverseFill(settings.healthReverseFill and true or false)
@@ -14562,7 +14578,7 @@ ReloadFramesBody = function()
 
             -- Determine if this is a mini frame that inherits border/texture/font
             local isMiniFrame = (unit == "pet" or unit == "targettarget" or unit == "focustarget" or unit:match("^boss%d$"))
-            local donorSettings = isMiniFrame and GetMiniDonorSettings() or settings
+            local donorSettings = isMiniFrame and GetMiniDonorSettings(UnitToSettingsKey(unit)) or settings
 
             -- Apply health bar texture overlay (mini frames inherit the donor
             -- texture unless they set their own override).
@@ -14951,7 +14967,7 @@ function ns.UF_FrameBorderPad(k)
     local settings = GetSettingsForUnit(k)
     if not settings then return nil end
     local isMini = (k == "pet" or k == "targettarget" or k == "focustarget")
-    local d = isMini and GetMiniDonorSettings() or settings
+    local d = isMini and GetMiniDonorSettings(k) or settings
     local btex = d.borderTexture or "solid"
     if btex == "solid" then return nil end
     local bs = settings.borderSizeOverride or d.borderSize or 1
@@ -18942,6 +18958,14 @@ local EllesmereUF = EllesmereUI.Lite.NewAddon("EllesmereUIUnitFrames")
 
 function EllesmereUF:OnInitialize()
     db = EllesmereUI.Lite.NewDB("EllesmereUIUnitFramesDB", defaults, true)
+
+    -- A fresh install starts Target of Target on the Target frame's look; a
+    -- profile from an earlier version keeps Automatic (no lookSource). Written
+    -- here, not a default: the logout strip drops a value equal to its default.
+    if EllesmereUI._firstInstallPending then
+        local tot = db.profile.targettarget
+        if tot and tot.lookSource == nil then tot.lookSource = "target" end
+    end
 
     ResolveFontPath()
 

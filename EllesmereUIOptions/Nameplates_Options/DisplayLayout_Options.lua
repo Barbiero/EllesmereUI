@@ -389,14 +389,31 @@ local function BuildDisplayLayout(parent, y, ctx)
                       tooltip="Gives the cast bar spell icon the custom border instead of its 1-pixel border.",
                       disabled=function()
                         return DBVal("showCastIcon") == false or DBVal("hideCastIconBorder") == true
+                            or DBVal("castbarIconInWidth") == true
                       end,
-                      disabledTooltip="This option requires the spell icon and its border to be shown.",
+                      disabledTooltip=function()
+                        if DBVal("castbarIconInWidth") == true then
+                            return "This option is disabled while Make Icon Part of the Bar is enabled."
+                        end
+                        return "This option requires the spell icon and its border to be shown."
+                      end,
                       rawTooltip=true,
                       get=function() return DBVal("castIconCustomBorder") == true end,
                       set=function(v)
                         DB().castIconCustomBorder = v
                         -- Re-applies every plate's appearance (pooled plates too), which
                         -- builds or turns off the icon border.
+                        ns.RefreshAllSettings()
+                        UpdatePreview()
+                      end },
+                    { type="toggle", label="Vertical Separator",
+                      tooltip="Draws a divider between the integrated spell icon and the cast bar using the custom border appearance.",
+                      disabled=function() return not ns.NP_CanShowCastIconSeparator(DB()) end,
+                      disabledTooltip="Requires Make Icon Part of the Bar, a shown non-full-sized icon, and a Solid or Pixels border with size above 0.",
+                      rawTooltip=true,
+                      get=function() return DBVal("castIconSeparator") == true end,
+                      set=function(v)
+                        DB().castIconSeparator = v
                         ns.RefreshAllSettings()
                         UpdatePreview()
                       end },
@@ -540,6 +557,18 @@ local function BuildDisplayLayout(parent, y, ctx)
                   end,
                   set = function(v)
                     DB().absorbAlpha = v
+                    ns.ApplyAbsorbStyleAll()
+                    UpdatePreview()
+                  end },
+                -- Same placements as the unit frames' Absorb Rendering cog.
+                { type = "dropdown", label = "Placement",
+                  tooltip = "Overlay fills empty health first, then draws any excess over current health. Overlay Reverse draws the whole shield back over current health. From Right Edge and From Left Edge grow the whole shield from that end of the bar.",
+                  values = { overlay = "Overlay", overlayReverse = "Overlay Reverse",
+                             right = "From Right Edge", left = "From Left Edge" },
+                  order = { "overlay", "overlayReverse", "right", "left" },
+                  get = function() return DBVal("absorbEdgeMode") or "overlay" end,
+                  set = function(v)
+                    DB().absorbEdgeMode = v
                     ns.ApplyAbsorbStyleAll()
                     UpdatePreview()
                   end },
