@@ -149,7 +149,7 @@ end
 --  the class baseline heal for friendly bosses (healer specs only). Whole-frame
 --  alpha follows db.profile.boss.oorAlpha; 100% means no fade and the check
 --  short-circuits. The ticker exists only while a boss frame is shown.
---  (do-block: zero persistent main-chunk locals.)
+--  (do-block: no persistent file-level locals.)
 -------------------------------------------------------------------------------
 do
     local HARM_CHAIN = {
@@ -285,10 +285,10 @@ end
 -------------------------------------------------------------------------------
 --  Player Dispel Overlay (player frame only, health bar only). The 12.1
 --  container dispel slots render it (EUI_UnitFrames_AuraContainers.lua); this
---  block keeps what the slots ask this file for: the racial / talent dispel
+--  block keeps what the slots ask the module for: the racial / talent dispel
 --  knowledge the RAID_PLAYER_DISPELLABLE token is blind to, and the
 --  options-side poke that re-drives the slots after a color or toggle edit.
---  (do-block: zero persistent main-chunk locals.)
+--  (do-block: no persistent file-level locals.)
 -------------------------------------------------------------------------------
 do
 

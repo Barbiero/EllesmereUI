@@ -73,7 +73,7 @@ function SetupOptionsPanel()
         if builtCP == frames._classPowerBuiltStyle then return end
         -- The toggle reparents Blizzard's class power frame and re-anchors the
         -- health bar. The throttle body keeps running after ReloadFrames()'s
-        -- lockdown return (same shape as the UpdateFrameVisibility note above),
+        -- lockdown return (same shape as the UpdateFrameVisibility note in InitializeFrames),
         -- so this needs its own guard plus a regen re-run to re-arm the pass.
         if InCombatLockdown() then
             ns.CombatQueue.Defer("RealiseClassPowerStyle", RealiseClassPowerStyle)

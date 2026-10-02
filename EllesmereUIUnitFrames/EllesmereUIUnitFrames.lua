@@ -16174,9 +16174,9 @@ function InitializeFrames()
 end
 
 -- Main-chunk locals the other EUI_UnitFrames_*.lua files re-import by name.
--- dbSetters: each file that reads db keeps its own local and adds a setter
--- here, this file first; EllesmereUF:OnInitialize (EUI_UnitFrames_Lifecycle.lua)
--- runs the list right after it creates the DB.
+-- dbSetters: a file that reads db keeps its own local and adds a setter here,
+-- this file first; EllesmereUF:OnInitialize (EUI_UnitFrames_Lifecycle.lua)
+-- assigns its own db, then runs the list.
 ns._internals = {
     frames = frames, GetSettingsForUnit = GetSettingsForUnit, UnsnapTex = UnsnapTex,
     CastbarUnlockKey = CastbarUnlockKey, CreatePowerBar = CreatePowerBar,

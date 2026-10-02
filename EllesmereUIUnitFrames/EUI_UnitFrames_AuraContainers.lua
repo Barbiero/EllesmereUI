@@ -2472,7 +2472,7 @@ end
 -- a type rather than giving the by-me twin a filter that would match it: two
 -- slots declaring one filter string share a single engine parse batch (see
 -- AK.Filter) and both are not guaranteed to receive the aura. The rule itself
--- lives with the legacy overlay in EllesmereUIUnitFrames.lua, which needs the
+-- lives with the legacy overlay in EUI_UnitFrames_Lifecycle.lua, which needs the
 -- same answer.
 local function TokenBlindDispelSlot(slotKey)
     return ns.UF_TokenBlindDispel ~= nil and ns.UF_TokenBlindDispel(slotKey)
