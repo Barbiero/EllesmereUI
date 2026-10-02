@@ -1,3 +1,29 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Visibility.lua
+--
+--  Bar visibility outside the secure drivers: the managed visibility of the
+--  data bars and extra bars, Hide Bar When Using Gamepad, the slot-export
+--  addon compatibility and the Toggle Action Bar keybind. Loads after the
+--  main file and reads it through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, pairs = ipairs, pairs
+local InCombatLockdown = InCombatLockdown
+local RegisterAttributeDriver = RegisterAttributeDriver
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE, barButtons = ns.EAB, ns.EAB_VTABLE, ns.barButtons
+local BAR_LOOKUP, ALL_BARS, EXTRA_BARS = ns.BAR_LOOKUP, ns.ALL_BARS, ns.EXTRA_BARS
+local I = ns._internals
+local BAR_CONFIG, barFrames, _fadeAlpha = I.BAR_CONFIG, I.barFrames, I._fadeAlpha
+local dataBarFrames, extraBarHolders, blizzMovableHolders = I.dataBarFrames, I.extraBarHolders, I.blizzMovableHolders
+local hoverStates, _quickKeybindState = I.hoverStates, I._quickKeybindState
+local SafeEnableMouse, SafeEnableMouseMotionOnly = I.SafeEnableMouse, I.SafeEnableMouseMotionOnly
+local ShouldQuickKeybindSurfaceBar, BuildVisibilityString = I.ShouldQuickKeybindSurfaceBar, I.BuildVisibilityString
+
 -------------------------------------------------------------------------------
 --  Managed Non-Secure Visibility: XP/Rep bars and extra bars such as
 --  Micro/Bag/QueueStatus are not secure bar headers, so they need an

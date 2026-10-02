@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Pushed.lua
+--
+--  Pushed and highlight textures, the border edge lines they draw, the
+--  Match Bar Border copies and the pushed-state flash. Loads after the main
+--  file and reads it through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local ipairs, pairs = ipairs, pairs
+local InCombatLockdown = InCombatLockdown
+local hooksecurefunc = hooksecurefunc
+local GetBindingKey = GetBindingKey
+local EFD = ns.EFD
+
+local EAB, barButtons = ns.EAB, ns.barButtons
+local HIGHLIGHT_TEXTURES, ResolveBorderThickness = ns.HIGHLIGHT_TEXTURES, ns.ResolveBorderThickness
+local I = ns._internals
+local BAR_CONFIG, _quickKeybindState = I.BAR_CONFIG, I._quickKeybindState
+local SetSquareTexture, _controllerButtons, allButtons = I.SetSquareTexture, I._controllerButtons, I.allButtons
+
 -------------------------------------------------------------------------------
 --  Pushed / Highlight / Cooldown Edge / Misc Textures / Proc Glows
 --  These are global settings that apply to ALL action bar buttons.

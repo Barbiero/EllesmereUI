@@ -1,3 +1,28 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_ButtonArt.lua
+--
+--  Button appearance: stripping the stock art, the classic button art, the
+--  button borders and the shape masks. Loads right after the main file, reads
+--  it through ns only, and hands its entry points to the files after it
+--  through ns._internals (bottom of this file).
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local ipairs, pcall = ipairs, pcall
+local max = math.max
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+local PP = EllesmereUI.PP
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE = ns.EAB, ns.EAB_VTABLE
+local HIGHLIGHT_TEXTURES, ResolveBorderThickness, ButtonHasAction = ns.HIGHLIGHT_TEXTURES, ns.ResolveBorderThickness, ns.ButtonHasAction
+local SHAPE_MASKS, SHAPE_BORDERS, SHAPE_INSETS = ns.SHAPE_MASKS, ns.SHAPE_BORDERS, ns.SHAPE_INSETS
+local SHAPE_ZOOM_DEFAULTS, SHAPE_ICON_EXPAND, SHAPE_ICON_EXPAND_OFFSETS = ns.SHAPE_ZOOM_DEFAULTS, ns.SHAPE_ICON_EXPAND, ns.SHAPE_ICON_EXPAND_OFFSETS
+local I = ns._internals
+local SHAPE_EDGE_SCALES, _quickKeybindState, HideSlotArt = I.SHAPE_EDGE_SCALES, I._quickKeybindState, I.HideSlotArt
+
 -------------------------------------------------------------------------------
 --  Visual Customization Button Appearance
 -------------------------------------------------------------------------------
@@ -997,3 +1022,8 @@ local function ApplyShapeToButton(btn, shape, brdOn, brdR, brdG, brdB, brdA, brd
     fd.cropped = false
 end
 
+-- Entry points the files after this one re-import by name.
+I.SetSquareTexture = SetSquareTexture
+I.ApplyButtonBorders = ApplyButtonBorders
+I.ApplyShapeToButton = ApplyShapeToButton
+I.MaskFrameTextures = MaskFrameTextures

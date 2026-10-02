@@ -8786,7 +8786,8 @@ function EAB:FinishSetup()
 end
 
 -- Main-chunk locals the other EUI_ActionBars_*.lua files re-import by name
--- (EUI_ActionBars_DataBars.lua adds SetupDataBars for the extra bars file).
+-- (EUI_ActionBars_ButtonArt.lua adds its entry points for the files after it,
+-- EUI_ActionBars_DataBars.lua adds SetupDataBars for the extra bars file).
 ns._internals = {
     BAR_CONFIG = BAR_CONFIG, BINDING_MAP = BINDING_MAP, BUTTON_EVENT_LISTS = BUTTON_EVENT_LISTS,
     ReRegisterButtonEvents = ReRegisterButtonEvents, barFrames = barFrames,
@@ -8800,10 +8801,11 @@ ns._internals = {
     SHOWGRID = SHOWGRID, SetShowGridInsecure = SetShowGridInsecure,
     SyncPagingAlpha = SyncPagingAlpha, InitPagingQuickKeybindButton = InitPagingQuickKeybindButton,
     FONT_PATH = FONT_PATH, LayoutBar = LayoutBar, buttonToBar = buttonToBar, _gridState = _gridState,
-    ApplyButtonBorders = ApplyButtonBorders, ApplyShapeToButton = ApplyShapeToButton,
     NUM_ACTIONBAR_BUTTONS = NUM_ACTIONBAR_BUTTONS,
     barBaseSize = barBaseSize, SHAPE_EDGE_SCALES = SHAPE_EDGE_SCALES,
-    GetButtonActionSlot = GetButtonActionSlot, MaskFrameTextures = MaskFrameTextures,
+    GetButtonActionSlot = GetButtonActionSlot, HideSlotArt = HideSlotArt,
+    _controllerButtons = _controllerButtons, allButtons = allButtons,
+    BuildVisibilityString = BuildVisibilityString,
 }
 -- A re-import of a name this table lacks fails where the part file loads,
 -- not later as a nil upvalue inside one of its functions.
