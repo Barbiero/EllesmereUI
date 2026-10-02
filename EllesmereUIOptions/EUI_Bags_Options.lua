@@ -750,6 +750,48 @@ initFrame:SetScript("OnEvent", function(self)
                       end }
                 ); y = y - h
 
+                -- Row Height | Quality Icon Border
+                _, h = W:DualRow(parent, y,
+                    { type="slider", text="Row Height", min=16, max=32, step=1,
+                      tooltip="Height of each row in the bag and bank lists. Icons shrink to fit short rows.",
+                      getValue=function() return db.profile.bagListRowHeight or 24 end,
+                      setValue=function(v)
+                          db.profile.bagListRowHeight = v
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end },
+                    { type="toggle", text="Quality Icon Border",
+                      tooltip="Draw a border in the item's quality color around square icons in the bag and bank lists.",
+                      getValue=function() return db.profile.bagListQualityBorder == true end,
+                      setValue=function(v)
+                          db.profile.bagListQualityBorder = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end }
+                ); y = y - h
+
+                -- Hide Row Stripes | Show Section Value (bags list only)
+                _, h = W:DualRow(parent, y,
+                    { type="toggle", text="Hide Row Stripes",
+                      tooltip="Remove the shading on every other row in the bag and bank lists.",
+                      getValue=function() return db.profile.bagListHideStripes == true end,
+                      setValue=function(v)
+                          db.profile.bagListHideStripes = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end },
+                    bagList and { type="toggle", text="Show Section Value",
+                      tooltip="Show the total vendor sell price of each section's items next to its count in the bag list.",
+                      getValue=function() return db.profile.bagListSectionValue == true end,
+                      setValue=function(v)
+                          db.profile.bagListSectionValue = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                      end } or EllesmereUI.BlankRowCfg()
+                ); y = y - h
+
                 if bagList then
                     -- Split Armor by Type | Split Weapons by Type
                     _, h = W:DualRow(parent, y,

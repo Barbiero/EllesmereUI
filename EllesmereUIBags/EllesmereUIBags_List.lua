@@ -19,6 +19,7 @@ local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
 local ROW_H, ICON_SIZE, COL_GAP = 24, 20, 6
+local function RowH() return BP().bagListRowHeight or ROW_H end
 local COLHDR_H = 20
 local SECTION_H, SUBSECTION_H = 22, 18
 local ROUND_MASK = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
@@ -37,10 +38,11 @@ local COLUMNS = {
     reqlvl = { label = "Req",        width = 32,  field = "_lvReq",   desc = true, justify = "RIGHT", menuLabel = "Required Level" },
     type   = { label = "Type",       width = 96,  field = "_lvType",  justify = "LEFT" },
     bind   = { label = "Bind",       width = 40,  field = "_lvBind",  justify = "LEFT", menuLabel = "Bind Status" },
+    track  = { label = "Track",      width = 40,  field = "_lvTrackSort", desc = true, justify = "RIGHT", menuLabel = "Upgrade Track" },
     count  = { label = "#",      width = 40,  field = "_lvCount", desc = true, justify = "RIGHT" },
     sell   = { label = "Sell Price", width = 100, field = "_lvSell",  desc = true, justify = "RIGHT" },
 }
-local COLUMN_ORDER = { "icon", "name", "ilvl", "reqlvl", "type", "bind", "count", "sell" }
+local COLUMN_ORDER = { "icon", "name", "ilvl", "track", "reqlvl", "type", "bind", "count", "sell" }
 local DEFAULT_COLUMNS = { "icon", "name", "ilvl", "count", "sell" }
 
 local function GetColumns()
@@ -123,6 +125,10 @@ local function StampItem(d)
     d._lvReq = (reqLevel and reqLevel > 1) and reqLevel or 0
     d._lvType = subType or ""
     d._lvCount = count
+    -- Track sort: tier (EUI._TRACK_RANK) then rank within it
+    local rank, tc = d._giTrackRank or "", d._giTrackColor
+    d._lvTrack = rank
+    d._lvTrackSort = tc and ((EUI._TRACK_RANK and EUI._TRACK_RANK[tc] or 0) * 100 + (tonumber(rank:match("^(%d+)")) or 0)) or 0
     d._lvSell = (not info.hasNoValue and sellPrice) and sellPrice * count or 0
     if bindType == IB.OnEquip and not info.isBound and d.bag and d.slot then
         _bindLoc:SetBagAndSlot(d.bag, d.slot)
@@ -291,11 +297,20 @@ end
 
 -- Collapsed sections, keyed by category _defaultName, "junk", or
 -- "<section key>/<subtype>" for sub-sections. Saved in the profile.
+-- Shift-click on a top-level section collapses or expands all of them.
 local function ToggleCollapsed(self)
     local p = BP()
     local set = p.bagListCollapsed
     if not set then set = {}; p.bagListCollapsed = set end
-    set[self._key] = not set[self._key] or nil
+    if IsShiftKeyDown() and not self._sub then
+        local collapse = not set[self._key] or nil
+        for i = 1, _sectionsUsed do
+            local s = _sections[i]
+            if not s._sub then set[s._key] = collapse end
+        end
+    else
+        set[self._key] = not set[self._key] or nil
+    end
     Refresh()
 end
 
@@ -679,13 +694,13 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
     if rowW ~= _lastRowW then LayoutColumns(rowW) end
     local parent = btn:GetParent()
     parent:ClearAllPoints()
-    parent:SetSize(rowW, ROW_H)
+    parent:SetSize(rowW, RowH())
     parent:SetPoint("TOPLEFT", x, y)
     parent:SetID(data.bag)
     btn:SetID(data.slot)
     parent:Show()
     btn:Show()
-    btn._stripe:SetShown(stripe)
+    btn._stripe:SetShown(stripe and BP().bagListHideStripes ~= true)
 
     local info = data.info
     local q = info.quality or 1
@@ -695,6 +710,8 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
         local cx, cw = _colX[id], _colW[id]
         if id == "icon" then
             local icon = btn._lvIcon
+            local isz = math.min(ICON_SIZE, RowH() - 4)
+            icon:SetSize(isz, isz)
             icon:ClearAllPoints()
             icon:SetPoint("LEFT", btn, "LEFT", cx, 0)
             icon:SetTexture(info.iconFileID)
@@ -710,6 +727,15 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
                 icon:SetVertexColor(1, 1, 1)
             end
             icon:Show()
+            if BP().bagListQualityBorder == true and not round then
+                local ov = btn._textOverlay
+                if not ov._brdT then ns.CreateInsetBorder(ov) end
+                local c = ITEM_QUALITY_COLORS[q]
+                if c then ns.SetInsetBorderColor(ov, c.r, c.g, c.b, 1)
+                else ns.SetInsetBorderColor(ov, 0.25, 0.25, 0.25, 1) end
+            elseif btn._textOverlay._brdT then
+                ns.SetInsetBorderColor(btn._textOverlay, 0, 0, 0, 0)
+            end
         else
             local fs = GetCell(btn, id)
             fs:ClearAllPoints()
@@ -730,6 +756,10 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
                     text = data._lvType
                 elseif id == "bind" then
                     text = data._lvBind
+                elseif id == "track" then
+                    text = data._lvTrack
+                    local tc = data._giTrackColor
+                    if tc then fs:SetTextColor(tc.r, tc.g, tc.b) end
                 elseif id == "count" then
                     text = data._lvCount > 1 and data._lvCount or ""
                 elseif id == "sell" then
@@ -761,13 +791,13 @@ local function RenderEmptyRow(btn, cols, d, rowW, x, y, stripe)
     if rowW ~= _lastRowW then LayoutColumns(rowW) end
     local parent = btn:GetParent()
     parent:ClearAllPoints()
-    parent:SetSize(rowW, ROW_H)
+    parent:SetSize(rowW, RowH())
     parent:SetPoint("TOPLEFT", x, y)
     parent:SetID(d.bag)
     btn:SetID(d.slot)
     parent:Show()
     btn:Show()
-    btn._stripe:SetShown(stripe)
+    btn._stripe:SetShown(stripe and BP().bagListHideStripes ~= true)
     btn._lvIcon:Hide()
     for _, fs in pairs(btn._cells) do fs:Hide() end
     if btn.Cooldown then btn.Cooldown:Clear() end
@@ -784,7 +814,7 @@ local function RenderEmptyRow(btn, cols, d, rowW, x, y, stripe)
     EUI_Bags.RunItemOverlays(btn, d)
     if GameTooltip:IsOwned(btn) and btn.UpdateTooltip then btn:UpdateTooltip() end
 end
-ns.LIST_ROW_H = ROW_H
+ns.ListRowH = RowH
 
 -- Returns the header height and whether the section is collapsed.
 local function PlaceSection(key, label, count, x, y, w, sub)
@@ -799,7 +829,7 @@ local function PlaceSection(key, label, count, x, y, w, sub)
     s._label:SetTextColor(sub and 0.55 or 0.7, sub and 0.55 or 0.7, sub and 0.55 or 0.7)
     s._label:SetText(label)
     s._count:SetText(count)
-    s._key = key
+    s._key, s._sub = key, sub
     local collapsed = (BP().bagListCollapsed or _emptyP)[key] == true
     -- Arrow points right when collapsed, down when open
     s._arrow:SetRotation(collapsed and math.pi or math.pi / 2)
@@ -832,7 +862,7 @@ function ns.RenderListView(items, opts)
     local function GetBucket(key)
         local b = buckets[key]
         if not b then
-            b = { key = key, subs = {}, subList = {}, n = 0 }
+            b = { key = key, subs = {}, subList = {}, n = 0, sell = 0 }
             buckets[key] = b
             order[#order + 1] = b
         end
@@ -848,6 +878,7 @@ function ns.RenderListView(items, opts)
         end
         sl[#sl + 1] = d
         b.n = b.n + 1
+        b.sell = b.sell + d._lvSell
     end
     -- OneBag: a WoW Forever special bag (ns.SpecialBags) keeps a section of
     -- its own, as the reagent bag does, after Main Bags.
@@ -911,6 +942,8 @@ function ns.RenderListView(items, opts)
     for _, s in ipairs(_sections) do s:Hide() end
     _sectionsUsed, _rowsUsed = 0, 0
     local x, y = opts.startX, -4
+    local showValue = BP().bagListSectionValue == true
+    local rowH = RowH()
 
     -- Same warning the OneBag / MultiBag grid shows
     local warn = slotView and not BP().bagHideOneBagWarning
@@ -945,7 +978,9 @@ function ns.RenderListView(items, opts)
             label, secKey = ns.BagDisplayName(b.key), "bag" .. b.key
             count = "(" .. b.n .. " / " .. C_Container.GetContainerNumSlots(b.key) .. ")"
         else label, secKey = cats[b.key].name, cats[b.key]._defaultName end
-        local h, collapsed = PlaceSection(secKey, label, count or ("(" .. b.n .. ")"), x, y, rowW, false)
+        count = count or ("(" .. b.n .. ")")
+        if showValue and b.sell > 0 then count = count .. "  " .. C_CurrencyInfo.GetCoinTextureString(b.sell) end
+        local h, collapsed = PlaceSection(secKey, label, count, x, y, rowW, false)
         if secKey == "recent" and BP().bagShowRecentClear == true then
             local s = _sections[_sectionsUsed]
             s._line:SetPoint("RIGHT", ns.ShowRecentClearButton(s), "LEFT", -6, 0)
@@ -970,7 +1005,7 @@ function ns.RenderListView(items, opts)
                     else
                         RenderEmptyRow(btn, cols, d, rowW, x, y, i % 2 == 0)
                     end
-                    y = y - ROW_H
+                    y = y - rowH
                 end
             end
         end

@@ -67,6 +67,10 @@ local BAGS_DEFAULTS = {
         bagListGapL           = 15,
         bagListGapR           = 23,
         bagListFontSize       = 11,
+        bagListRowHeight      = 24,
+        bagListQualityBorder  = false,
+        bagListHideStripes    = false,
+        bagListSectionValue   = false,
     },
 }
 local db = EllesmereUI.Lite.NewDB("EllesmereUIBagsDB", BAGS_DEFAULTS)
