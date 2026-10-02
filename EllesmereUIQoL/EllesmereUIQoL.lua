@@ -3017,6 +3017,108 @@ do
 end
 
 -------------------------------------------------------------------------------
+--  Environment-only Ping
+--  While the bound key is held, left-clicking the world sends a ping that
+--  ignores units and UI. "/ping [@cursor]" takes SendMacroPing's point-ping
+--  branch, which targets the environment only and ignores the Ping Target
+--  setting, so no CVar is touched.
+--
+--  Nothing is built until a key is set. The hold key is an override binding
+--  on holdBtn; its secure snippet claims BUTTON1 for pingBtn on the key's down
+--  edge and releases it on the up edge, so the claim works in combat. The two
+--  buttons must stay separate frames: a mouse click routed to the frame the
+--  held key is bound to swallows that key's up edge, and the claim would then
+--  never be released.
+-------------------------------------------------------------------------------
+do
+    local holdBtn, pingBtn, claimer, bindOwner
+
+    local function BuildEnvPing()
+        if holdBtn then return end
+        local header = CreateFrame("Frame", "EUI_EnvPingHeader", UIParent, "SecureHandlerBaseTemplate")
+        -- Owns the BUTTON1 claim, so one ClearBindings hands it back.
+        claimer = CreateFrame("Frame", "EUI_EnvPingClaimer", UIParent, "SecureHandlerBaseTemplate")
+        claimer:Hide()
+        bindOwner = CreateFrame("Frame", "EUI_EnvPingBindOwner", UIParent)
+
+        pingBtn = CreateFrame("Button", "EUI_EnvPingButton", UIParent, "SecureActionButtonTemplate")
+        pingBtn:RegisterForClicks("AnyDown")
+        pingBtn:SetAttribute("useOnKeyDown", true)
+        pingBtn:EnableMouse(false)
+        pingBtn:SetSize(1, 1)
+        pingBtn:SetAlpha(0)
+        pingBtn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -120, -120)
+        pingBtn:Show()
+        pingBtn:SetAttribute("type", "macro")
+        pingBtn:SetAttribute("macrotext", (SLASH_PING1 or "/ping") .. " [@cursor]")
+        -- Backstop for a hold key whose up edge never arrived (alt-tab, a
+        -- loading screen): the claim would keep every left click pinging.
+        -- Checked right after a ping, so it costs nothing between pings.
+        pingBtn:SetScript("PostClick", function()
+            local key = EllesmereUIDB and EllesmereUIDB.envPingKey
+            local base = key and key:match("[^%-]+$")
+            if base and IsKeyDown(base) then return end
+            if InCombatLockdown() then
+                ns.CombatQueue.Defer("EnvPingRelease", function() ClearOverrideBindings(claimer) end)
+            else
+                ClearOverrideBindings(claimer)
+            end
+        end)
+
+        holdBtn = CreateFrame("Button", "EUI_EnvPingHoldButton", UIParent, "SecureActionButtonTemplate")
+        holdBtn:RegisterForClicks("AnyDown", "AnyUp")
+        holdBtn:SetAttribute("useOnKeyDown", false)
+        holdBtn:EnableMouse(false)
+        holdBtn:SetSize(1, 1)
+        holdBtn:SetAlpha(0)
+        holdBtn:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", -120, -120)
+        holdBtn:Show()
+        SecureHandlerSetFrameRef(holdBtn, "claimer", claimer)
+        SecureHandlerSetFrameRef(holdBtn, "ping", pingBtn)
+        SecureHandlerWrapScript(holdBtn, "OnClick", header, [[
+            local claim = self:GetFrameRef("claimer")
+            local ping = self:GetFrameRef("ping")
+            if not (claim and ping) then return end
+            if down then
+                claim:SetBindingClick(true, "BUTTON1", ping)
+            else
+                claim:ClearBindings()
+            end
+        ]])
+    end
+
+    local function ApplyEnvPing()
+        if InCombatLockdown() then
+            ns.CombatQueue.Defer("EnvPing", ApplyEnvPing)
+            return
+        end
+        local key = EllesmereUIDB and EllesmereUIDB.envPingKey
+        if not key then
+            -- Never enabled: nothing was built, nothing to undo.
+            if bindOwner then
+                ClearOverrideBindings(bindOwner)
+                ClearOverrideBindings(claimer)
+            end
+            return
+        end
+        BuildEnvPing()
+        ClearOverrideBindings(bindOwner)
+        ClearOverrideBindings(claimer)
+        SetOverrideBindingClick(bindOwner, true, key, "EUI_EnvPingHoldButton")
+    end
+    EllesmereUI._applyEnvPing = ApplyEnvPing
+
+    if EllesmereUIDB and EllesmereUIDB.envPingKey then
+        local loginFrame = CreateFrame("Frame")
+        loginFrame:RegisterEvent("PLAYER_LOGIN")
+        loginFrame:SetScript("OnEvent", function(self)
+            self:UnregisterEvent("PLAYER_LOGIN")
+            ApplyEnvPing()
+        end)
+    end
+end
+
+-------------------------------------------------------------------------------
 --  Durability Warning
 -------------------------------------------------------------------------------
 do
