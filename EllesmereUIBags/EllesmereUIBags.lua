@@ -6359,7 +6359,8 @@ function EUI_Bags:RefreshInventory()
             leftX = sidebarW, topY = -(HEADER_H + 1),
             allItems = isAllItems,
             slotView = (selectedCategoryIndex == -1 and "one") or (selectedCategoryIndex == -2 and "multi") or nil,
-            recent = (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true and showRecent)
+            -- Same rule as the grid's Recent Items section
+            recent = (showRecent and (isAllItems or (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true)))
                 and EUI_Bags._recentItems or nil,
             -- Empty rows only when nothing is search-filtered out
             emptySlots = (#displayItems == #tempItems) and emptySlots or nil,
