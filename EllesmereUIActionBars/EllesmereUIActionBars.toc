@@ -12,6 +12,7 @@
 # Main Luas
 EllesmereUIActionBars.lua
 EUI_ActionBars_ButtonArt.lua
+EUI_ActionBars_Range.lua
 EUI_ActionBars_Apply.lua
 EUI_ActionBars_Glows.lua
 EUI_ActionBars_Pushed.lua
