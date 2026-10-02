@@ -1,3 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Unlock.lua
+--
+--  Unit frame movers for Unlock Mode. RegisterUFUnlockElements is published
+--  as I.RegisterUFUnlockElements for EUI_UnitFrames_Lifecycle.lua (EnableBody
+--  calls it). db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, GetSettingsForUnit, GetFrameDimensions = I.frames, I.GetSettingsForUnit, I.GetFrameDimensions
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Register unit frame elements with Unlock Mode. Called synchronously from
 --  OnEnable (right after InitializeFrames) so registration lands inside the
@@ -492,3 +509,4 @@ local function RegisterUFUnlockElements()
     end
 end
 
+I.RegisterUFUnlockElements = RegisterUFUnlockElements

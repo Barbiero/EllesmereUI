@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Lifecycle.lua
+--
+--  The addon object (OnInitialize creates the DB and runs I.dbSetters,
+--  OnEnable builds through EnableBody) and the load-time blocks after it:
+--  Boss Frame Range Dimming, Player Dispel Overlay helpers, Party Mode.
+--  Loads before PlayerAuraBars/ForeverImbues/AuraContainers (event order).
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local GetSpecialization = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
+local issecretvalue = issecretvalue
+
+local I = ns._internals
+local frames, defaults, ResolveFontPath = I.frames, I.defaults, I.ResolveFontPath
+local healthBarTextureNames, healthBarTextureOrder, healthBarTextures =
+    I.healthBarTextureNames, I.healthBarTextureOrder, I.healthBarTextures
+local RegisterUFUnlockElements = I.RegisterUFUnlockElements
+local db -- assigned by EllesmereUF:OnInitialize below, no setter
+
 local EllesmereUF = EllesmereUI.Lite.NewAddon("EllesmereUIUnitFrames")
 
 function EllesmereUF:OnInitialize()
@@ -353,4 +374,3 @@ if EllesmereUI.RegisterVisEdge then
         if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
     end)
 end
-

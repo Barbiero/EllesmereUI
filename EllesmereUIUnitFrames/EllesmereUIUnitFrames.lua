@@ -16173,15 +16173,19 @@ function InitializeFrames()
     ReloadFrames()
 end
 
-
 -- Main-chunk locals the other EUI_UnitFrames_*.lua files re-import by name.
--- dbSetters: a part file keeps its own local db and adds a setter here;
--- EllesmereUF:OnInitialize runs the list once the DB exists.
+-- dbSetters: each file that reads db keeps its own local and adds a setter
+-- here, this file first; EllesmereUF:OnInitialize (EUI_UnitFrames_Lifecycle.lua)
+-- runs the list right after it creates the DB.
 ns._internals = {
     frames = frames, GetSettingsForUnit = GetSettingsForUnit, UnsnapTex = UnsnapTex,
     CastbarUnlockKey = CastbarUnlockKey, CreatePowerBar = CreatePowerBar,
-    ApplyFramePosition = ApplyFramePosition,
-    dbSetters = {},
+    ApplyFramePosition = ApplyFramePosition, GetFrameDimensions = GetFrameDimensions,
+    ReloadFrames = ReloadFrames, ResolveFontPath = ResolveFontPath, ApplyDarkTheme = ApplyDarkTheme,
+    ApplyBlizzCastbarState = ApplyBlizzCastbarState, ApplyUnitFrameCastColor = ApplyUnitFrameCastColor,
+    defaults = defaults, healthBarTextures = healthBarTextures,
+    healthBarTextureNames = healthBarTextureNames, healthBarTextureOrder = healthBarTextureOrder,
+    dbSetters = { function(v) db = v end },
 }
 -- A re-import of a name this table lacks fails where the part file loads,
 -- not later as a nil upvalue inside one of its functions.

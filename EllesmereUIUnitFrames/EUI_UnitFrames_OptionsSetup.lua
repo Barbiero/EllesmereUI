@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_OptionsSetup.lua
+--
+--  SetupOptionsPanel, run one frame after the frames build: publishes the ns
+--  fields the options pages read (ns.db, ns.frames, ns.ReloadFrames, ...) and
+--  builds the boss frame preview. Reads the main file through ns and
+--  ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, ApplyFramePosition, GetFrameDimensions = I.frames, I.ApplyFramePosition, I.GetFrameDimensions
+local ReloadFrames, ResolveFontPath, ApplyDarkTheme = I.ReloadFrames, I.ResolveFontPath, I.ApplyDarkTheme
+local ApplyBlizzCastbarState, ApplyUnitFrameCastColor = I.ApplyBlizzCastbarState, I.ApplyUnitFrameCastColor
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 function SetupOptionsPanel()
     ns.db = db
     ns.frames = frames
@@ -657,4 +677,3 @@ function SetupOptionsPanel()
     -- instead of riding this execution (login budget split rule).
     if ns.PAB_CreateBars then C_Timer.After(0, ns.PAB_CreateBars) end
 end
-
