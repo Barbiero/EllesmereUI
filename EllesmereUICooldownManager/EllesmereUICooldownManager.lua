@@ -3314,23 +3314,11 @@ local function EnforceCooldownViewerEditModeSettings()
         return
     end
 
-    local layoutInfo = C_EditMode.GetLayouts()
-    if type(layoutInfo) ~= "table" or type(layoutInfo.layouts) ~= "table" then return end
-
-    -- Merge preset layouts so activeLayout index resolves correctly
-    local numPresets = 0
-    if EditModePresetLayoutManager and EditModePresetLayoutManager.GetCopyOfPresetLayouts then
-        local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
-        if type(presets) == "table" then
-            numPresets = #presets
-            tAppendAll(presets, layoutInfo.layouts)
-            layoutInfo.layouts = presets
-        end
-    end
-
-    -- Presets unresolved: activeLayout counts them, so without the merge it picks the WRONG
-    -- layout below and the save hands the client a list its own index no longer fits.
-    if numPresets == 0 then return end
+    -- Presets merged first so the activeLayout index resolves correctly. Presets unresolved:
+    -- activeLayout counts them, so without the merge it picks the WRONG layout below and the
+    -- save hands the client a list its own index no longer fits.
+    local layoutInfo, numPresets = EllesmereUI.EditModeLayoutsForSave()
+    if not layoutInfo then return end
 
     local activeLayout = type(layoutInfo.activeLayout) == "number"
         and layoutInfo.layouts[layoutInfo.activeLayout]
@@ -3355,10 +3343,14 @@ local function EnforceCooldownViewerEditModeSettings()
     -- Returns changed(bool). A layout stores a CooldownViewer setting ONLY when changed away
     -- from Blizzard's default, so an absent entry means "at the default" (defaultValue). When
     -- that already equals what we want, leave the entry absent (no change, no forced reload); only add an explicit entry when default differs from desired.
-    local function UpsertSetting(settings, settingEnum, desiredValue, defaultValue)
+    -- Each change is noted for Uninstall EUI (only the player's own earlier value is put
+    -- back: these are Blizzard's defaults, so there is no fallback).
+    local function UpsertSetting(sysInfo, settingEnum, desiredValue, defaultValue)
+        local settings = sysInfo.settings
         for _, s in ipairs(settings) do
             if s.setting == settingEnum then
                 if s.value ~= desiredValue then
+                    EllesmereUI.NoteEditModeSetting(activeLayout, sysInfo, settingEnum, s.value, desiredValue)
                     s.value = desiredValue
                     return true
                 end
@@ -3369,6 +3361,7 @@ local function EnforceCooldownViewerEditModeSettings()
         if desiredValue == defaultValue then
             return false
         end
+        EllesmereUI.NoteEditModeSetting(activeLayout, sysInfo, settingEnum, defaultValue, desiredValue)
         settings[#settings + 1] = { setting = settingEnum, value = desiredValue }
         return true
     end
@@ -3376,14 +3369,14 @@ local function EnforceCooldownViewerEditModeSettings()
     for _, sysInfo in ipairs(activeLayout.systems) do
         if sysInfo.system == cooldownSystem and type(sysInfo.settings) == "table" then
             -- VisibleSetting=Always on ALL viewers. That IS the default, so an absent entry is already correct and is left alone.
-            if UpsertSetting(sysInfo.settings, visSetting, visAlways, visAlways) then
+            if UpsertSetting(sysInfo, visSetting, visAlways, visAlways) then
                 changed = true
             end
             -- Both buff viewers keep Blizzard's default HideWhenInactive=1 (inactive entries
             -- stay hidden): Always Show Buffs is drawn by our own per-bar placeholder icons, NOT
             -- Blizzard's layout, so any stale HideWhenInactive=0 is reset. New installs are already at the default (no change, no reload).
             if sysInfo.systemIndex == buffIconIdx or sysInfo.systemIndex == buffBarIdx then
-                if UpsertSetting(sysInfo.settings, hideEnum, 1, 1) then
+                if UpsertSetting(sysInfo, hideEnum, 1, 1) then
                     changed = true
                 end
             end
@@ -10181,9 +10174,7 @@ function ECME:OnEnable()
     -- reanchor tail in CdmHooks). Removal sync = settled-state triggers only.
 
     -- Enable CDM cooldown viewer (keep Blizzard CDM running in background so we can read its children even while hidden)
-    if C_CVar and C_CVar.SetCVar then
-        pcall(C_CVar.SetCVar, "cooldownViewerEnabled", "1")
-    end
+    pcall(EllesmereUI.SetCVar, "cooldownViewerEnabled", "1", "EllesmereUICooldownManager")
 
     -- Spec-gated build: only run CDMFinishSetup once a real spec key exists from the live API; if
     -- the API isn't ready, defer until it is. Wait until the truth is known, then build once -- never guess the spec and repair later.

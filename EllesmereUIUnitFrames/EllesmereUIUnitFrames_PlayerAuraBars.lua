@@ -3320,6 +3320,8 @@ function SyncCancelCVar()
     if not AnyRightClickCancelActive(s) then return end
     if InCombatLockdown() then return end
     if tonumber(GetCVar(CANCEL_CVAR)) == CANCEL_CVAR_BROKEN then
+        -- A repair to Blizzard's default, which Uninstall EUI must not undo:
+        -- plain SetCVar, not EllesmereUI.SetCVar.
         SetCVar(CANCEL_CVAR, CANCEL_CVAR_DEFAULT)
     end
 end

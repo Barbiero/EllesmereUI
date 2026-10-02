@@ -1572,6 +1572,26 @@ local COMMAND_CLICK_BODY = [[
     end
 ]]
 
+-- Takes this header's wrapper off frame's script wherever it sits. UnwrapScript
+-- only ever pops the TOP wrapper, whoever made it, so another addon's wrappers
+-- above ours come off first and go back on, in their order, once ours is gone.
+-- Out of combat only, like every caller.
+local function UnwrapOwn(frame, script)
+    local above
+    while true do
+        local h, pre, post = header:UnwrapScript(frame, script)
+        if not h or h == header then break end
+        above = above or {}
+        above[#above + 1] = { h, pre, post }
+    end
+    if above then
+        for i = #above, 1, -1 do
+            local w = above[i]
+            SecureHandlerWrapScript(frame, script, w[1], w[2], w[3])
+        end
+    end
+end
+
 local commandClickAttrs
 
 local function ConfigureCommandClicks(frame, bindings)
@@ -1610,7 +1630,7 @@ local function ConfigureCommandClicks(frame, bindings)
         end
         commandClickAttrs[frame] = attrs
     elseif previous then
-        header:UnwrapScript(frame, "OnClick")
+        UnwrapOwn(frame, "OnClick")
         commandClickAttrs[frame] = nil
         if not next(commandClickAttrs) then commandClickAttrs = nil end
     end
@@ -1836,8 +1856,8 @@ local function DoUnregisterFrame(frame)
     if wrappedFrames[frame] then
         wrappedFrames[frame] = nil
         if header and header.UnwrapScript then
-            pcall(header.UnwrapScript, header, frame, "OnEnter")
-            pcall(header.UnwrapScript, header, frame, "OnLeave")
+            pcall(UnwrapOwn, frame, "OnEnter")
+            pcall(UnwrapOwn, frame, "OnLeave")
         end
     end
 end

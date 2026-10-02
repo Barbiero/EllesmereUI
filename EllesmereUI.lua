@@ -3290,7 +3290,7 @@ SlashCmdList.EUIDEV = function()
     local current = GetCVar(cvars[1])
     local newVal = (current == "1") and "0" or "1"
     for _, cv in ipairs(cvars) do
-        SetCVar(cv, newVal)
+        EllesmereUI.SetCVar(cv, newVal)
     end
     local state = newVal == "1" and "ON" or "OFF"
     EllesmereUI.Print("|cff00ff00[EllesmereUI]|r Dev mode: all addon restriction CVars " .. state .. ".")
@@ -4044,7 +4044,7 @@ initFrame:SetScript("OnEvent", function(self, event)
             local db = EllesmereUIDB
             local on = db and db.showSpellID
                 and (db.spellIDModifier or "none") == "none"
-            pcall(C_CVar.SetCVar, "tooltipShowAuraSpellIDs", on and "1" or "0")
+            pcall(EllesmereUI.SetCVar, "tooltipShowAuraSpellIDs", on and "1" or "0")
         end
         do
             -- PLAYER_ENTERING_WORLD, not PLAYER_LOGIN: the engine settles its
@@ -4083,6 +4083,8 @@ initFrame:SetScript("OnEvent", function(self, event)
                     cancelText  = EllesmereUI.L("Ignore"),
                     reload      = true,
                     onConfirm   = function()
+                        -- The player's own fix, which Uninstall EUI must not
+                        -- undo: plain SetCVar, not EllesmereUI.SetCVar.
                         pcall(C_CVar.SetCVar, "taintLog", "0")
                         pcall(C_CVar.SetCVar, "scriptProfile", "0")
                     end,

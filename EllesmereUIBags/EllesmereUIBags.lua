@@ -110,6 +110,15 @@ local EUI = EllesmereUI
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
+-- Uninstall EUI: Sort to Bottom flips Blizzard's own sort direction, so the
+-- player's is handed back, as turning the option off does.
+EUI.OnUninstall(function()
+    local p = BP()
+    if p.bagSortToBottom and p.bagSortBlizzRTLWas ~= nil then
+        C_Container.SetSortBagsRightToLeft(p.bagSortBlizzRTLWas)
+    end
+end)
+
 local layerUpdateFrame = CreateFrame("Frame")
 function EUI_Bags:ApplyWindowLayering()
     -- The bank's purchase buttons are secure, so defer layer changes in combat.
@@ -1109,7 +1118,7 @@ local function CreateHeader()
         if sfxWas == "1" and (tonumber(GetCVar("Sound_SFXVolume")) or 0) > 0 then
             PlaySound(SOUNDKIT.UI_BAG_SORTING_01, "Master")
         end
-        SetCVar("Sound_EnableSFX", "0")
+        EllesmereUI.HoldCVar("Sound_EnableSFX", "0", "EllesmereUIBags")
 
         -----------------------------------------------------------------------
         --  Phase 1: consolidate partial stacks (smallest onto largest of the same itemID; the engine performs the combine).
@@ -1315,7 +1324,7 @@ local function CreateHeader()
         end
 
         local function FinishSort()
-            SetCVar("Sound_EnableSFX", sfxWas)
+            EllesmereUI.ReleaseCVar("Sound_EnableSFX", sfxWas, "EllesmereUIBags")
             C_Timer.After(0.3, function()
                 EUI_Bags.refreshEnabled = true
                 EUI_Bags:RefreshInventory()
@@ -1564,13 +1573,13 @@ local function CreateHeader()
         end
 
         local sfxWas = GetCVar("Sound_EnableSFX")
-        SetCVar("Sound_EnableSFX", "0")
+        EllesmereUI.HoldCVar("Sound_EnableSFX", "0", "EllesmereUIBags")
         for _, m in ipairs(moves) do
             C_Container.PickupContainerItem(m[1], m[2])
             C_Container.PickupContainerItem(m[3], m[4])
             ClearCursor()
         end
-        SetCVar("Sound_EnableSFX", sfxWas)
+        EllesmereUI.ReleaseCVar("Sound_EnableSFX", sfxWas, "EllesmereUIBags")
 
         C_Timer.After(0.5, function()
             EUI_Bags.refreshEnabled = true

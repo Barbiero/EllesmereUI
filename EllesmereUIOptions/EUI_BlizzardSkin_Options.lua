@@ -484,7 +484,7 @@ initFrame:SetScript("OnEvent", function(self)
                         -- Only enforced on login after the user has toggled it once.
                         EllesmereUIDB.uberTooltipsManual = true
                         EllesmereUIDB.uberTooltips = v
-                        SetCVar("UberTooltips", v and "1" or "0")
+                        EllesmereUI.SetCVar("UberTooltips", v and "1" or "0", "EllesmereUIBlizzardSkin")
                     else
                         EllesmereUIDB[k] = v
                     end

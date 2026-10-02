@@ -1281,7 +1281,7 @@ local function BuildBarAppearance(parent, y, ctx)
           getValue=function() return GetCVarBool("countdownForCooldowns") end,
           setValue=function(v)
               if InCombatLockdown() then return end
-              SetCVar("countdownForCooldowns", v and "1" or "0")
+              EllesmereUI.SetCVar("countdownForCooldowns", v and "1" or "0", "EllesmereUIActionBars")
               -- Refresh so the inline cog dims/undims with the CVar state.
               EllesmereUI:RefreshPage()
           end });  y = y - h

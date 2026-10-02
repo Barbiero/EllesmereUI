@@ -89,6 +89,21 @@ function EllesmereUI.BlizzWindowSkinsKilled()
     return (prof and prof.disableWindowSkins) and true or false
 end
 
+-- WoW Forever's Gamepad interface style shows, hides and navigates Blizzard's
+-- windows, popups and tooltips from its own secure code and makes protected
+-- calls in the same execution, so a script hook of ours on those frames taints
+-- that path (ADDON_ACTION_FORBIDDEN, and the blocked-action popup's gamepad
+-- handling can loop until the client freezes). Under that style the Blizzard
+-- frame skins stand down for the session, like the bags and the Shifter.
+-- Decided at the first call once logged in; false on retail.
+local _padStandDown
+function EllesmereUI.BlizzSkinPadStandDown()
+    if _padStandDown ~= nil then return _padStandDown end
+    local v = EllesmereUI.PadGamepadUI()
+    if IsLoggedIn() then _padStandDown = v end
+    return v
+end
+
 -------------------------------------------------------------------------------
 --  One-time style seed for window keys added after the fact: each adopts
 --  whichever style (EUI/Modern/off) the user already runs MOST windows with,
@@ -251,7 +266,7 @@ function EllesmereUI.GetBlizzWindowStyle(winKey)
     if type(winKey) == "string" and winKey:sub(1, 3) == "tp:" then
         return EllesmereUI.GetThirdPartySkinStyle()
     end
-    if EllesmereUI.BlizzWindowSkinsKilled() then return "off" end
+    if EllesmereUI.BlizzWindowSkinsKilled() or EllesmereUI.BlizzSkinPadStandDown() then return "off" end
     local ek = WINDOW_ENABLE_KEYS[winKey]
     if ek and EllesmereUIDB and EllesmereUIDB[ek] == false then return "off" end
     local styles = EllesmereUIDB and EllesmereUIDB.blizzWindowSkinStyles
@@ -594,6 +609,7 @@ end
 
     local function _ttHook(tt)
         if not tt or tt:IsForbidden() or _ttSkinned[tt] then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         _ttSkinned[tt] = true
         tt:HookScript("OnShow", _ttOnShow)
     end
@@ -1173,6 +1189,7 @@ end
 
     -- Visual reskin: dark bg/border (via _ttHook -> _ttSkin), EUI fonts, and restyled status bar. Gated on "Reskin Tooltip" (customTooltips).
     local function _ttInitVisual()
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         for _, tt in ipairs({
             _GameTooltip, ShoppingTooltip1, ShoppingTooltip2,
             ItemRefTooltip, ItemRefShoppingTooltip1, ItemRefShoppingTooltip2,
@@ -1212,7 +1229,9 @@ end
         if _ttDataInited then return end
         _ttDataInited = true
         -- Clear the recorded identity on hide so a late inspect result can never append to a closed/switched tooltip. HookScript (never SetScript) keeps the secure OnHide handler intact.
-        _GameTooltip:HookScript("OnHide", function() _tipShownGUID = nil end)
+        if not EllesmereUI.BlizzSkinPadStandDown() then
+            _GameTooltip:HookScript("OnHide", function() _tipShownGUID = nil end)
+        end
         -- Item level inspect pacing starts at login, so the request history from other
         -- addons is already being tracked before the first hover.
         if not EllesmereUIDB or EllesmereUIDB.tooltipItemLevel ~= false then _insp.Activate() end
@@ -1484,6 +1503,7 @@ end
     end
 
     local function _popupInit()
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         for i = 1, STATICPOPUP_NUMDIALOGS or 4 do
             local popup = _G["StaticPopup" .. i]
             if popup then
@@ -1584,7 +1604,7 @@ end
 
     -- Install OnShow/OnHide hooks once. Hooks cannot be uninstalled, so they self-gate (OnShow early-returns when off, OnHide is a raw weak-table lookup); never called before the first enable.
     local function _resGlowInit()
-        if _resGlowHooked then return end
+        if _resGlowHooked or EllesmereUI.BlizzSkinPadStandDown() then return end
         _resGlowHooked = true
         for i = 1, STATICPOPUP_NUMDIALOGS or 4 do
             local popup = _G["StaticPopup" .. i]
@@ -1974,7 +1994,7 @@ end
         -- Hook OnShow so the skin applies the moment the acceptance panel appears, before any specific event fires.
         local _statusHooked = false
         local function HookStatusOnShow()
-            if _statusHooked then return end
+            if _statusHooked or EllesmereUI.BlizzSkinPadStandDown() then return end
             local status = _G.LFGDungeonReadyStatus
             if not status then return end
             _statusHooked = true
@@ -2066,7 +2086,7 @@ end
         -- of any Dungeon Finder UI ever being opened locally, so it is hooked directly.
         local _roleCheckHooked = false
         local function HookRoleCheckOnShow()
-            if _roleCheckHooked then return end
+            if _roleCheckHooked or EllesmereUI.BlizzSkinPadStandDown() then return end
             local popup = _G.LFDRoleCheckPopup
             if not popup then return end
             _roleCheckHooked = true
@@ -2221,7 +2241,7 @@ do
     -- Blizzard_QuickKeybind is LoadOnDemand, so the frame may not exist at login: try after login, with ADDON_LOADED as the late-load fallback.
     local _qkbHooked = false
     local function TryHookQKB()
-        if _qkbHooked then return end
+        if _qkbHooked or EllesmereUI.BlizzSkinPadStandDown() then return end
         if not EllesmereUIDB then return end
         if EllesmereUIDB.reskinQueuePopup == false then return end
         local qkb = QuickKeybindFrame
@@ -2453,6 +2473,7 @@ do
         if not GameMenuFrame then return end
         -- Independent toggle, default on: this is a popup menu, not a window, so no master reskin setting (window-skins style included) governs it.
         if EllesmereUIDB and EllesmereUIDB.reskinGameMenu == false then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
 
         local RS = EllesmereUI.RESKIN
 
@@ -2573,9 +2594,9 @@ do
         self:UnregisterAllEvents()
         if not EllesmereUIDB then EllesmereUIDB = {} end
         if EllesmereUIDB.uberTooltipsManual then
-            SetCVar("UberTooltips", EllesmereUIDB.uberTooltips and "1" or "0")
+            EllesmereUI.SetCVar("UberTooltips", EllesmereUIDB.uberTooltips and "1" or "0", "EllesmereUIBlizzardSkin")
         else
-            SetCVar("UberTooltips", "1")
+            EllesmereUI.SetCVar("UberTooltips", "1", "EllesmereUIBlizzardSkin")
         end
     end)
 end
@@ -2709,7 +2730,7 @@ do
     end
 
     local function InstallHook()
-        if hooked then return end
+        if hooked or EllesmereUI.BlizzSkinPadStandDown() then return end
         hooked = true
         EnsureCursorFrame()
         -- Stop the tracker when the tooltip closes; ApplyCursorAnchor reshows it.
@@ -3289,9 +3310,18 @@ do
     local _comparisonManagerHookInstalled = false
     local _comparisonHideHookInstalled = false
     local function InstallComparisonHooks()
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         InstallComparisonPreCall()
 
         if not _comparisonHideHookInstalled then
+            GameTooltip:HookScript("OnHide", function(tt)
+                -- Item setters can fire OnHide while rebuilding content, so do not latch
+                -- owner eligibility here. Active state is derived from IsShown instead.
+                if not (_comparisonSupportActive or _comparisonStateWatcherRegistered) then return end
+                if EllesmereUI._tooltipSuppressedByMode(tt) then
+                    QueueSuppressedComparisonClear()
+                end
+            end)
             -- Blizzard resets the field itself before hooks run, so only forget
             -- our ownership; restoring would overwrite Blizzard's reset.
             GameTooltip:HookScript("OnHide", ForgetComparisonSuppression)
@@ -3371,7 +3401,7 @@ do
     end
     local _modeShowHookInstalled = false
     local function EnsureModeShowHook()
-        if _modeShowHookInstalled then return end
+        if _modeShowHookInstalled or EllesmereUI.BlizzSkinPadStandDown() then return end
         _modeShowHookInstalled = true
         -- Item data can hide and re-show the tooltip without another SetOwner,
         -- including after asynchronous data arrives. Re-apply before it renders.
@@ -3398,14 +3428,6 @@ do
         -- character equipment slots, and custom EUI tooltip owners.
         if ComparisonSuppressionModeEnabled() then
             ApplySuppression(tt)
-        end
-    end)
-    GameTooltip:HookScript("OnHide", function(tt)
-        -- Item setters can fire OnHide while rebuilding content, so do not latch
-        -- owner eligibility here. Active state is derived from IsShown instead.
-        if not (_comparisonSupportActive or _comparisonStateWatcherRegistered) then return end
-        if EllesmereUI._tooltipSuppressedByMode(tt) then
-            QueueSuppressedComparisonClear()
         end
     end)
 
@@ -3458,7 +3480,13 @@ do
             _comparisonStateWatcherRegistered = true
         end
     end
-    UpdateStateWatcher()
+    -- First pass at login, once the interface style is known.
+    local loginWatch = CreateFrame("Frame")
+    loginWatch:RegisterEvent("PLAYER_LOGIN")
+    loginWatch:SetScript("OnEvent", function(self)
+        self:UnregisterAllEvents()
+        UpdateStateWatcher()
+    end)
 
     -- Live peek: pressing the modifier while already hovering reveals the tip
     -- for the current frame; releasing hides it again. Moving onto other frames
@@ -4722,6 +4750,7 @@ end
         -- the user has never chosen, and that now means "leave Blizzard's
         -- button alone".
         if not (EllesmereUIDB and EllesmereUIDB.reskinExtraActionButton == true) then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
 
         local d = GetFFD(btn)
         local style = btn.style
@@ -4782,6 +4811,7 @@ end
             hooksecurefunc("ExtraActionBar_Update", StripExtraAction)
         end
         if not (EllesmereUIDB and EllesmereUIDB.reskinExtraActionButton == true) then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         StripExtraAction()
         if C_Timer then
             C_Timer.After(0, StripExtraAction)
@@ -4811,6 +4841,7 @@ end
         -- buttons and get identical treatment, so two settings was a
         -- distinction without a difference. DEFAULT OFF, by request.
         if not (EllesmereUIDB and EllesmereUIDB.reskinExtraActionButton == true) then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
 
         local style = f.Style
         if style then
@@ -4884,6 +4915,7 @@ end
             end
         end
         if not (EllesmereUIDB and EllesmereUIDB.reskinExtraActionButton == true) then return end
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         StripZoneAbility()
         if C_Timer then
             C_Timer.After(0, StripZoneAbility)

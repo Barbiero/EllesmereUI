@@ -1936,10 +1936,10 @@ local function HideBlizzardBars()
     -- owned by Blizzard's ValidateActionBarTransition(). No RegisterAttributeDriver on
     -- Blizzard-owned frames -- risks tainting protected state OverrideActionBar buttons
     -- inherit. Force all Blizzard action bars "enabled" via CVars so buttons work.
-    C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_1", "1")
-    C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_2", "1")
-    C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_3", "1")
-    C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_4", "1")
+    EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_1", "1", "EllesmereUIActionBars")
+    EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_2", "1", "EllesmereUIActionBars")
+    EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_3", "1", "EllesmereUIActionBars")
+    EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_4", "1", "EllesmereUIActionBars")
 
 end
 
@@ -12020,29 +12020,14 @@ local function SyncEditModeIconCounts()
     -- layoutInfo for the whole session and pushes that copy whole on Save, so a write from here
     -- is either discarded by the next Save or discards the edit in progress. This runs again on
     -- the next options close, so skipping costs nothing.
-    local emf = _G.EditModeManagerFrame
-    if emf and (emf.editModeActive or (emf.IsShown and emf:IsShown())) then return end
-
-    local ok, layoutInfo = pcall(C_EditMode.GetLayouts)
-    if not ok or type(layoutInfo) ~= "table" or type(layoutInfo.layouts) ~= "table" then return end
+    if EllesmereUI.EditModeOpen() then return end
 
     -- SaveLayouts replaces the character's ENTIRE layout set (the client holds it and writes it
-    -- at logout), so the payload has to have the shape Blizzard always passes: the preset layouts
-    -- first, then the saved ones, with activeLayout an index into that merged list.
-    -- C_EditMode.GetLayouts returns only the saved half, so writing it straight back hands the
-    -- client a list whose indices no longer line up with the activeLayout riding along with it.
-    -- Rebuild the list the way EditModeManagerFrame:UpdateLayoutInfo does before saving, and if
+    -- at logout), so the payload has to have the shape Blizzard always passes: the presets
+    -- first, then the saved layouts, with activeLayout an index into that merged list. When
     -- the presets cannot be resolved, skip the write entirely rather than send the short list.
-    local numPresets = 0
-    if EditModePresetLayoutManager and EditModePresetLayoutManager.GetCopyOfPresetLayouts then
-        local presets = EditModePresetLayoutManager:GetCopyOfPresetLayouts()
-        if type(presets) == "table" then
-            numPresets = #presets
-            tAppendAll(presets, layoutInfo.layouts)
-            layoutInfo.layouts = presets
-        end
-    end
-    if numPresets == 0 then return end
+    local layoutInfo, numPresets = EllesmereUI.EditModeLayoutsForSave()
+    if not layoutInfo then return end
 
     -- Build desired icon counts keyed by systemIndex (all bars are system 0).
     -- MainMenuBar has no system; MainActionBar is system=0 systemIndex=1.
@@ -12076,6 +12061,9 @@ local function SyncEditModeIconCounts()
 
     -- Check ALL saved layouts so switching never reverts to fewer icons. The merged-in presets
     -- are read-only (SaveLayouts drops edits to them), so they are carried through untouched.
+    -- Each row is noted for Uninstall EUI: a raised count is put back when its earlier value is
+    -- known, and bar art is noted every time (shown is Blizzard's default, the fallback for an
+    -- account older than the record).
     for layoutIndex, layout in ipairs(layoutInfo.layouts) do
         if layoutIndex > numPresets and type(layout.systems) == "table" then
             for _, sysInfo in ipairs(layout.systems) do
@@ -12083,12 +12071,16 @@ local function SyncEditModeIconCounts()
                     local want = desired[sysInfo.systemIndex]
                     for _, s in ipairs(sysInfo.settings) do
                         if want and s.setting == ICON_COUNT_SETTING and s.value < want then
+                            EllesmereUI.NoteEditModeSetting(layout, sysInfo, s.setting, s.value, want)
                             s.value = want
                             changed = true
                         end
-                        if HIDE_BAR_ART_SETTING and s.setting == HIDE_BAR_ART_SETTING and s.value ~= 1 then
-                            s.value = 1
-                            changed = true
+                        if HIDE_BAR_ART_SETTING and s.setting == HIDE_BAR_ART_SETTING then
+                            EllesmereUI.NoteEditModeSetting(layout, sysInfo, s.setting, s.value, 1, 0)
+                            if s.value ~= 1 then
+                                s.value = 1
+                                changed = true
+                            end
                         end
                     end
                 end
@@ -12159,10 +12151,10 @@ function EAB:FinishSetup()
             -- Combat reload: non-protected setup only; secure handler does the rest.
             -- Stock bar disposal (including ActionBarParent) already happened at
             -- file load time. OverrideActionBar is fully Blizzard-owned.
-            C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_1", "1")
-            C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_2", "1")
-            C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_3", "1")
-            C_CVar.SetCVar("SHOW_MULTI_ACTIONBAR_4", "1")
+            EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_1", "1", "EllesmereUIActionBars")
+            EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_2", "1", "EllesmereUIActionBars")
+            EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_3", "1", "EllesmereUIActionBars")
+            EllesmereUI.SetCVar("SHOW_MULTI_ACTIONBAR_4", "1", "EllesmereUIActionBars")
 
             -- Create bar frames and buttons (no protected ops)
             for _, info in ipairs(BAR_CONFIG) do

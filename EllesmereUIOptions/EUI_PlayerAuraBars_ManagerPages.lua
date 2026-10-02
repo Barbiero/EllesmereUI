@@ -181,13 +181,12 @@ end
 -- BigDefensive=1, UnitFrameDebuff=2, ImportantOnly=3, Expiration=4,
 -- ExpirationOnly=5, Name=6, NameOnly=7, AuraInstanceIDOnly=8},
 -- AuraContainerSortDirection = {Normal=0, Reverse=1}). Curated down
--- to the 4 values whose names are unambiguous for an aura bar --
--- BigDefensive/UnitFrameDebuff/ExpirationOnly/NameOnly/ AuraInstanceIDOnly read as
--- narrower, other-UI-specific variants and are deliberately left out of this dropdown
--- (their exact behavior isn't documented anywhere in this repo either way).
+-- to the 4 values whose names are unambiguous for an aura bar.
 -- "Expiration"/"Name" are saved under these keys but resolve to the native
 -- ExpirationOnly/NameOnly at apply time (ResolveSortMethod in the PAB module): the
 -- plain variants rank player-cast/canApplyAura ahead of the named criterion.
+-- BigDefensive/UnitFrameDebuff/AuraInstanceIDOnly are other-UI-specific variants
+-- and are left out of this dropdown.
 --
 -- "Important" (native key ImportantOnly) sorts by `C_Spell.IsSpellImportant` (verified
 -- against Blizzard's PTR source, AuraUtil.lua's ImportantOnlyAuraCompare) -- a native

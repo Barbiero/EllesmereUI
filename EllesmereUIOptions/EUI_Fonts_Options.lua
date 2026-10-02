@@ -1085,7 +1085,7 @@ local function TileCombatText(parent, y, W, tile)
           setValue = function(v)
               if InCombatLockdown() then return end
               v = math.floor(v * 10 + 0.5) / 10
-              SetCVar("WorldTextScale_v2", v)
+              EllesmereUI.SetCVar("WorldTextScale_v2", v)
           end },
         BLANK());  y = y - h
     y = LinkRow(parent, y, "Combat Text Font (logout required)",

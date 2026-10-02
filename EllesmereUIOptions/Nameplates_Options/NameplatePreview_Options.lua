@@ -195,15 +195,15 @@ local function BuildNameplatePreview(parent, parentW)
             ApplyPreviewAbsorbStyle()
             pvAbs.absorb:SetMinMaxValues(0, 1)
             pvAbs.absorb:SetValue(shield)
-            pvAbs.absorb:Show()
+            pvAbs._absCurClip:Show()
             if mode == "overlay" then
                 pvAbs.absorbForward:SetMinMaxValues(0, 1)
                 pvAbs.absorbForward:SetValue(shield)
-                pvAbs.absorbForward:Show()
+                pvAbs._absMissClip:Show()
             end
         else
-            pvAbs.absorb:Hide()
-            pvAbs.absorbForward:Hide()
+            pvAbs._absCurClip:Hide()
+            pvAbs._absMissClip:Hide()
         end
     end
 

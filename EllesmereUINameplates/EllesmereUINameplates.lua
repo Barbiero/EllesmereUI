@@ -1944,8 +1944,11 @@ function ns.NP_BuildAbsorbBars(owner, health, mask)
         bar:SetFrameLevel(lvl)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
-        bar:Hide()
     end
+    -- The clips carry the visibility (the bars inside stay shown): hidden,
+    -- their fill-edge anchors cost nothing on a plate with no shield.
+    curClip:Hide()
+    missClip:Hide()
     owner._absCurClip, owner._absMissClip = curClip, missClip
     owner.absorb, owner.absorbForward = ab, fw
 end
@@ -1984,7 +1987,7 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
         ab:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
         ab:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     end
-    if mode ~= "overlay" then fw:Hide() end
+    if mode ~= "overlay" then missClip:Hide() end
     owner._absEdge, owner._absFill = mode, fillTex
 end
 
@@ -1995,8 +1998,7 @@ function ns.NP_SizeAbsorbBars(owner, w, h)
 end
 
 function ns.ApplyAbsorbStyleAll()
-    -- Pooled plates re-run their appearance pass (and with it this style and
-    -- placement) at next spawn; without it a recycled plate keeps the old one.
+    -- Pooled plates pick the change up at their next spawn.
     ns._npAppearanceGen = (ns._npAppearanceGen or 0) + 1
     for _, plate in pairs(ns.plates) do
         ns.ApplyAbsorbStyle(plate)
@@ -2987,11 +2989,13 @@ function ns.NP_CanShowCastIconSeparator(db)
         and (tex == "solid" or tex == "" or EllesmereUI.GetBorderCompanion(tex, "sepV") ~= nil)
 end
 
--- Shared by live plates and the preview; the cast bar owns this lazy divider.
+-- Shared by live plates and the preview; the cast bar owns this lazy divider. It
+-- does not follow the target or threat tint, so the border-colour passes that land
+-- here (every threat repaint) change nothing: only a moved style input restyles it.
 function ns.NP_ApplyCastIconSeparator(cast, icon, db, customOn, strata)
     local seam = cast._iconSeam
     if not (db and db.castIconSeparator == true and customOn and ns.NP_CanShowCastIconSeparator(db)) then
-        if seam then
+        if seam and seam:IsShown() then
             seam:Hide()
             EllesmereUI.RegisterPxReapply(seam, nil)
         end
@@ -3004,14 +3008,27 @@ function ns.NP_ApplyCastIconSeparator(cast, icon, db, customOn, strata)
         seam._tex = seam:CreateTexture(nil, "OVERLAY", nil, 7)
         cast._iconSeam = seam
     end
-    seam:SetFrameStrata(strata or cast:GetFrameStrata())
-    seam:SetFrameLevel(icon:GetFrameLevel() + 5)
-    seam._key = db.customBorderTexture or defaults.customBorderTexture
-    seam._size = db.customBorderSize or defaults.customBorderSize
-    seam._px = EllesmereUI.BorderPx(db.customBorderSizePx, seam._size, seam._key)
-    seam._right = db.castIconOnRight == true
+    local st = strata or cast:GetFrameStrata()
+    local lvl = icon:GetFrameLevel() + 5
+    local key = db.customBorderTexture or defaults.customBorderTexture
+    local size = db.customBorderSize or defaults.customBorderSize
+    local px = EllesmereUI.BorderPx(db.customBorderSizePx, size, key)
+    local right = db.castIconOnRight == true
     local c = db.customBorderColor or defaults.customBorderColor
-    seam._tex:SetVertexColor(c.r, c.g, c.b, db.customBorderAlpha or defaults.customBorderAlpha)
+    local a = db.customBorderAlpha or defaults.customBorderAlpha
+    -- Restyle inputs: shown state, strata, level (a strata change resets it), texture,
+    -- size step, exact px, side, the scale its width snaps to, and its colour.
+    if seam:IsShown() and seam:GetFrameStrata() == st and seam:GetFrameLevel() == lvl
+        and seam._key == key and seam._size == size and seam._px == px and seam._right == right
+        and seam._es == seam:GetEffectiveScale()
+        and seam._r == c.r and seam._g == c.g and seam._b == c.b and seam._a == a then
+        return
+    end
+    seam:SetFrameStrata(st)
+    seam:SetFrameLevel(lvl)
+    seam._key, seam._size, seam._px, seam._right = key, size, px, right
+    seam._r, seam._g, seam._b, seam._a = c.r, c.g, c.b, a
+    seam._tex:SetVertexColor(c.r, c.g, c.b, a)
     ns.NP_LayoutCastIconSeparator(seam)
     seam:Show()
     EllesmereUI.RegisterPxReapply(seam, strata and ns.NP_LayoutCastIconSeparator or nil)
@@ -3019,6 +3036,7 @@ end
 
 function ns.NP_LayoutCastIconSeparator(seam)
     local t, es = seam._tex, seam:GetEffectiveScale()
+    seam._es = es
     if EllesmereUI.GetBorderCompanion(seam._key, "sepV") then
         EllesmereUI.PlaceBorderDividerV(t, seam, seam._right, false, seam._key, seam._size, seam._px, es)
         return
@@ -5060,16 +5078,15 @@ function ns.RefreshStackingBounds()
 end
 
 function ns.RefreshStackingMotion()
-    if not C_CVar or not C_CVar.SetCVarBitfield then return end
     if not (Enum and Enum.NamePlateStackType) then return end
     local db = p or defaults
     -- Enemy stacking is always EUI-owned; apply every time. Must NOT be gated on friendly
     -- players, or enemy plates stop stacking for anyone who hands friendly plates to Blizzard.
-    C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Enemy, db.stackingEnabled ~= false)
+    EllesmereUI.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Enemy, db.stackingEnabled ~= false, "EllesmereUINameplates")
     -- Friendly stacking is only ours to write while we manage friendly players; when
     -- Blizzard-managed, leave the friendly bit untouched so the user's setting survives.
     if (db.showFriendlyPlayers ~= false) then
-        C_CVar.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Friendly, db.stackingFriendly == true)
+        EllesmereUI.SetCVarBitfield("nameplateStackingTypes", Enum.NamePlateStackType.Friendly, db.stackingFriendly == true, "EllesmereUINameplates")
     end
 end
 
@@ -5416,21 +5433,21 @@ function ns.FriendlyNameClassCVar(db)
 end
 
 local function SetupAuraCVars()
-    if C_CVar and C_CVar.SetCVarBitfield and NamePlateConstants and Enum then
+    if NamePlateConstants and Enum then
         local npcCVar = NamePlateConstants.ENEMY_NPC_AURA_DISPLAY_CVAR
         local npcEnum = Enum.NamePlateEnemyNpcAuraDisplay
         if npcCVar and npcEnum then
-            if npcEnum.Debuffs then C_CVar.SetCVarBitfield(npcCVar, npcEnum.Debuffs, true) end
-            if npcEnum.CrowdControl then C_CVar.SetCVarBitfield(npcCVar, npcEnum.CrowdControl, true) end
+            if npcEnum.Debuffs then EllesmereUI.SetCVarBitfield(npcCVar, npcEnum.Debuffs, true, "EllesmereUINameplates") end
+            if npcEnum.CrowdControl then EllesmereUI.SetCVarBitfield(npcCVar, npcEnum.CrowdControl, true, "EllesmereUINameplates") end
         end
         local plyCVar = NamePlateConstants.ENEMY_PLAYER_AURA_DISPLAY_CVAR
         local plyEnum = Enum.NamePlateEnemyPlayerAuraDisplay
         if plyCVar and plyEnum then
-            if plyEnum.Debuffs then C_CVar.SetCVarBitfield(plyCVar, plyEnum.Debuffs, true) end
-            if plyEnum.LossOfControl then C_CVar.SetCVarBitfield(plyCVar, plyEnum.LossOfControl, true) end
+            if plyEnum.Debuffs then EllesmereUI.SetCVarBitfield(plyCVar, plyEnum.Debuffs, true, "EllesmereUINameplates") end
+            if plyEnum.LossOfControl then EllesmereUI.SetCVarBitfield(plyCVar, plyEnum.LossOfControl, true, "EllesmereUINameplates") end
         end
     end
-    if SetCVar then
+    do
         local db = p or defaults
         local nameOnly = (db.friendlyNameOnly ~= false)
         local showPlayers = (db.showFriendlyPlayers ~= false)
@@ -5439,8 +5456,8 @@ local function SetupAuraCVars()
         -- with "Show EUI Friendly Player Nameplates" off we relinquish them entirely to
         -- Blizzard's own settings. Friendly NPC and enemy pet CVars are always managed.
         if showPlayers then
-            SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", nameOnly and 1 or 0)
-            SetCVar("UnitNameFriendlyPlayerName", 1)
+            EllesmereUI.SetCVar("nameplateShowOnlyNameForFriendlyPlayerUnits", nameOnly and 1 or 0, "EllesmereUINameplates")
+            EllesmereUI.SetCVar("UnitNameFriendlyPlayerName", 1, "EllesmereUINameplates")
             -- Visibility is NOT re-asserted: nameplateShowFriends/nameplateShowFriendlyPlayers
             -- persist across sessions, so forcing them each login would re-show plates the user
             -- deliberately hid. The one-time seed below covers a first install only.
@@ -5453,34 +5470,34 @@ local function SetupAuraCVars()
                 end
             end
         end
-        SetCVar("nameplateShowFriendlyNPCs", showNPCs and 1 or 0)
-        SetCVar("nameplateShowFriendlyNpcs", showNPCs and 1 or 0)
-        SetCVar("nameplateShowEnemyPets", (db.showEnemyPets == true) and 1 or 0)
+        EllesmereUI.SetCVar("nameplateShowFriendlyNPCs", showNPCs and 1 or 0, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateShowFriendlyNpcs", showNPCs and 1 or 0, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateShowEnemyPets", (db.showEnemyPets == true) and 1 or 0, "EllesmereUINameplates")
         if showPlayers then
-            SetCVar("ShowClassColorInFriendlyNameplate", (db.classColorFriendly ~= false) and 1 or 0)
+            EllesmereUI.SetCVar("ShowClassColorInFriendlyNameplate", (db.classColorFriendly ~= false) and 1 or 0, "EllesmereUINameplates")
         end
-        SetCVar("ShowClassColorInNameplate", 1)
-        SetCVar("nameplateSize", 3)
-        SetCVar("nameplateShowAll", 1)
-        SetCVar("nameplateMinScale", 1)
-        SetCVar("nameplateOverlapH", 1)
+        EllesmereUI.SetCVar("ShowClassColorInNameplate", 1, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateSize", 3, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateShowAll", 1, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMinScale", 1, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateOverlapH", 1, "EllesmereUINameplates")
         -- nameplateOverlapV is deliberately left alone: it's the user's own vertical-spacing
         -- cvar (Blizzard default 1.10). Our "Stacked Nameplate Spacing" slider layers extra
         -- spacing on top via the stacking-bounds frame.
-        SetCVar("nameplateMaxAlpha", 1)
-        SetCVar("nameplateMaxAlphaDistance", 40)
-        SetCVar("nameplateMinAlpha", 0.6)
-        SetCVar("nameplateMinAlphaDistance", -100000)
-        SetCVar("nameplateMaxDistance", 60)
-        SetCVar("nameplateMaxScale", 1)
+        EllesmereUI.SetCVar("nameplateMaxAlpha", 1, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMaxAlphaDistance", 40, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMinAlpha", 0.6, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMinAlphaDistance", -100000, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMaxDistance", 60, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateMaxScale", 1, "EllesmereUINameplates")
         -- Neutralize Blizzard's selected-target scaling: the EUI plate is a child of the base
         -- nameplate, so Blizzard's scaling shows through our own SetScale (min/max pinned to 1
         -- for the same reason). Pinned to 1, "Scale Target Nameplate" is the sole authority.
-        SetCVar("nameplateSelectedScale", 1)
-        SetCVar("nameplateTargetBehindMaxDistance", 30)
-        SetCVar("clampTargetNameplateToScreen", 1)
+        EllesmereUI.SetCVar("nameplateSelectedScale", 1, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("nameplateTargetBehindMaxDistance", 30, "EllesmereUINameplates")
+        EllesmereUI.SetCVar("clampTargetNameplateToScreen", 1, "EllesmereUINameplates")
         if showPlayers then
-            SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", ns.FriendlyNameClassCVar(db))
+            EllesmereUI.SetCVar("nameplateUseClassColorForFriendlyPlayerUnitNames", ns.FriendlyNameClassCVar(db), "EllesmereUINameplates")
         end
     end
     -- Hide realm names on friendly nameplates inside instances
@@ -8620,8 +8637,8 @@ function NameplateFrame:ClearUnit()
     if self.leftArrow then self.leftArrow:Hide() end
     if self.rightArrow then self.rightArrow:Hide() end
     HideClassPowerOnPlate(self)
-    self.absorb:Hide()
-    self.absorbForward:Hide()
+    self._absCurClip:Hide()
+    self._absMissClip:Hide()
     self:Hide()
     self:SetScale(1)
     self._curScale = nil
@@ -8745,8 +8762,8 @@ function NameplateFrame:UpdateHealthValues()
         -- the next absorb edge.
         if not self._absorbHidden then
             self._absorbHidden = true
-            self.absorb:Hide()
-            self.absorbForward:Hide()
+            self._absCurClip:Hide()
+            self._absMissClip:Hide()
         end
     else
         self._absorbHidden = false
@@ -8754,16 +8771,16 @@ function NameplateFrame:UpdateHealthValues()
         -- the split (ns.NP_BuildAbsorbBars), so no Lua math touches it.
         self.absorb:SetMinMaxValues(0, maxHealth)
         self.absorb:SetValue(absorbAmt)
-        self.absorb:Show()
+        self._absCurClip:Show()
         -- The forward bar fills empty health in the Overlay placement only;
         -- the others draw the whole shield through the main bar.
         local fw = self.absorbForward
         if self._absEdge == "overlay" then
             fw:SetMinMaxValues(0, maxHealth)
             fw:SetValue(absorbAmt)
-            fw:Show()
+            self._absMissClip:Show()
         else
-            fw:Hide()
+            self._absMissClip:Hide()
         end
     end
     end -- lean-gate else (full absorb path)
@@ -11771,7 +11788,7 @@ ns.ApplyOOCPlates = function()
         -- change, and a redundant SetCVar broadcasts CVAR_UPDATE to the whole UI.
         local want = InCombatLockdown() and "1" or "0"
         if GetCVar("nameplateShowEnemies") ~= want then
-            SetCVar("nameplateShowEnemies", want)
+            EllesmereUI.SetCVar("nameplateShowEnemies", want, "EllesmereUINameplates")
         end
     else
         ctl:UnregisterEvent("PLAYER_REGEN_DISABLED")
@@ -11779,7 +11796,7 @@ ns.ApplyOOCPlates = function()
         ctl:UnregisterEvent("PLAYER_ENTERING_WORLD")
         if ns._oocPlatesOwned then
             ns._oocPlatesOwned = nil
-            SetCVar("nameplateShowEnemies", "1")
+            EllesmereUI.SetCVar("nameplateShowEnemies", "1", "EllesmereUINameplates")
         end
     end
 end
@@ -11790,10 +11807,10 @@ ns._oocPlatesCtl:SetScript("OnEvent", function(self, event)
         return
     end
     if event == "PLAYER_REGEN_DISABLED" then
-        SetCVar("nameplateShowEnemies", "1")
+        EllesmereUI.SetCVar("nameplateShowEnemies", "1", "EllesmereUINameplates")
     elseif not InCombatLockdown() then
         -- REGEN_ENABLED, or a world entry that lands out of combat.
-        SetCVar("nameplateShowEnemies", "0")
+        EllesmereUI.SetCVar("nameplateShowEnemies", "0", "EllesmereUINameplates")
     end
 end)
 ns._oocPlatesCtl:RegisterEvent("PLAYER_LOGIN")
