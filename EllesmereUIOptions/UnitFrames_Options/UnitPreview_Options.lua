@@ -2085,11 +2085,18 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
                     border:EnableMouse(false)
                     icon._euiAuraBorder = border
                 end
+                local aboveEffects = unitKey == "boss" and ns.UF_BossAuraBorderAboveEffects(s)
                 if s.auraBorderBehindUnitFrame then
                     border:SetFrameLevel(0)
+                elseif aboveEffects then
+                    border:SetFrameLevel(icon:GetFrameLevel() + 20)
                 else
                     border:SetFrameLevel(s.auraBorderBehind
                         and math.max(0, icon:GetFrameLevel() - 1) or (icon:GetFrameLevel() + 1))
+                end
+                if icon._durText and (aboveEffects or icon._borderAboveEffects) then
+                    icon._durText:GetParent():SetFrameLevel(icon:GetFrameLevel() + (aboveEffects and 25 or 2))
+                    icon._borderAboveEffects = aboveEffects or nil
                 end
                 EllesmereUI.ApplyBorderStyle(border, s.auraBorderSize or 1,
                     s.auraBorderR or 0, s.auraBorderG or 0, s.auraBorderB or 0, s.auraBorderA or 1,
@@ -3694,7 +3701,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         if s.portraitSeparator or pf._portraitSeparator then
             ns.UpdatePortraitSeparator(pf, portraitFrame, s, effectiveSide,
                 sp and isAttached, EllesmereUI.BlizzStyle.Get("unitframes"), true,
-                unitKey == "targettarget" and bds or nil)
+                (unitKey == "targettarget" or unitKey == "boss") and bds or nil)
         end
         -- Color Custom Borders: while the Magic border copy shows, both
         -- separators are tinted Magic at full opacity in place, as the live
