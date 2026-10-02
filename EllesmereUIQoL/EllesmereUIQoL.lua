@@ -2238,19 +2238,27 @@ do
     local FOREVER_STAT = {
         { key = "ap",        label = "Attack Power",   short = "AP",     hex = "ff8c42", fmt = "%.0f", def = true,
           get = function() return fSum(UnitAttackPower("player")) end },
-        { key = "mcrit",     label = "Melee Crit",     short = "Crit",   hex = "ffd100", fmt = "%.2f%%", def = true,
+        { key = "mcrit",     label = "Melee Crit",     short = "M.Crit", hex = "ffd100", fmt = "%.2f%%",
           get = function() return GetCritChance() end },
         { key = "rcrit",     label = "Ranged Crit",    short = "R.Crit", hex = "ffd100", fmt = "%.2f%%",
           get = function() return GetRangedCritChance() end },
+        -- Spell Crit: general spell crit (no school index), matching the char
+        -- pane -- GetSpellCritChance(2) was Holy-only, a wrong attribution.
         { key = "scrit",     label = "Spell Crit",     short = "S.Crit", hex = "ffd100", fmt = "%.2f%%",
-          get = function() return GetSpellCritChance(2) end },
+          get = function() return GetSpellCritChance() end },
+        { key = "mhaste",    label = "Melee Haste",    short = "M.Haste", hex = "7fe3d4", fmt = "%.2f%%",
+          get = function() return GetMeleeHaste() end },
+        { key = "rhaste",    label = "Ranged Haste",   short = "R.Haste", hex = "7fe3d4", fmt = "%.2f%%",
+          get = function() return fSum(GetRangedHaste()) end },
+        { key = "shaste",    label = "Spell Haste",    short = "S.Haste", hex = "7fe3d4", fmt = "%.2f%%",
+          get = function() return UnitSpellHaste("player") end },
         { key = "mhit",      label = "Melee Hit",      short = "Hit",    hex = "ffa94d", fmt = "%.2f%%",
           get = function() return GetHitModifier() end },
         { key = "shit",      label = "Spell Hit",      short = "S.Hit",  hex = "ffa94d", fmt = "%.2f%%",
           get = function() return GetSpellHitModifier() end },
         { key = "rap",       label = "Ranged AP",      short = "RAP",    hex = "ff8c42", fmt = "%.0f",
           get = function() return fSum(UnitRangedAttackPower("player")) end },
-        { key = "sp",        label = "Spell Power",    short = "SP",     hex = "c77dff", fmt = "%.0f", def = true,
+        { key = "sp",        label = "Spell Power",    short = "SP",     hex = "c77dff", fmt = "%.0f",
           get = function()
               local m = 0
               for i = 2, 7 do
@@ -2260,7 +2268,7 @@ do
               end
               return m
           end },
-        { key = "healing",   label = "Healing Power",  short = "Heal",   hex = "4ec9b0", fmt = "%.0f", def = true,
+        { key = "healing",   label = "Healing Power",  short = "Heal",   hex = "4ec9b0", fmt = "%.0f",
           get = function() return GetSpellBonusHealing() end },
         { key = "sp_holy",   label = "Holy SP",   short = "Holy",   hex = "fff2b0", fmt = "%.0f",
           get = function() return GetSpellBonusDamage(2) end },
@@ -2278,7 +2286,7 @@ do
           get = function() return GetSpellPenetration() end },
         { key = "mp5",       label = "Mana Regen", short = "MP5",   hex = "4fc3f7", fmt = "%.0f", def = true,
           get = function() local b = GetManaRegen(); if issecretvalue(b) then return nil end; return floor((b or 0) * 5) end },
-        { key = "hp5",       label = "Health Regen", short = "HP5", hex = "e57373", fmt = "%.0f",
+        { key = "hp5",       label = "Health Regen", short = "HP5", hex = "e57373", fmt = "%.0f", def = true,
           get = function() local r = GetHealthRegen and GetHealthRegen(); if r == nil or issecretvalue(r) then return nil end; return floor(r * 5) end },
         { key = "armor",     label = "Armor",   short = "Armor", hex = "b0bec5", fmt = "%.0f",
           get = function() return (select(2, UnitArmor("player"))) end },
@@ -2341,8 +2349,8 @@ do
         -- Grouped view for the columnar Stats-to-Show picker: ordered groups,
         -- each with a title and its {key,label} stats (labels from descriptors).
         local FOREVER_GROUPS = {
-            { key = "offensive",   title = "Offensive",            keys = { "ap", "rap", "mcrit", "rcrit", "mhit" } },
-            { key = "spell",       title = "Spell",                keys = { "sp", "healing", "scrit", "shit", "spen" } },
+            { key = "offensive",   title = "Offensive",            keys = { "ap", "rap", "mcrit", "rcrit", "mhaste", "rhaste", "mhit" } },
+            { key = "spell",       title = "Spell",                keys = { "sp", "healing", "scrit", "shaste", "shit", "spen" } },
             { key = "spellschool", title = "Spell Power / School", keys = { "sp_holy", "sp_fire", "sp_frost", "sp_nature", "sp_shadow", "sp_arcane" } },
             { key = "defensive",   title = "Defensive",            keys = { "armor", "defense", "dodge", "parry", "block", "blockval" } },
             { key = "resist",      title = "Resistances",          keys = { "res_holy", "res_fire", "res_frost", "res_nature", "res_shadow", "res_arcane" } },
@@ -2485,40 +2493,44 @@ do
             customHex = statsFrame._classHex or "ffffff"
         end
 
+        -- Retail ratings (crit/haste/mastery/vers + their raw figures) do not
+        -- exist on Forever and the Forever render path below never reads them --
+        -- so compute them ONLY off Forever. Declarations stay at function scope
+        -- for the retail render branch; the whole computation is skipped on
+        -- Forever (where it was ~12 wasted API calls, incl. ForeverCritChance/
+        -- ForeverHaste, every repaint).
         local crit, critCR, haste, hasteCR
-        if EllesmereUI.IS_FOREVER then
-            crit, critCR = EllesmereUI.ForeverCritChance()
-            haste, hasteCR = EllesmereUI.ForeverHaste()
-        else
+        local mastery, vers
+        local showBoth, showRawOnly, showRawValues
+        local critRaw, hasteRaw, masteryRaw, versRaw
+        if not EllesmereUI.IS_FOREVER then
             crit, critCR = EllesmereUI.PlayerCritChance()
             haste, hasteCR = UnitSpellHaste("player"), CR_HASTE_MELEE
-        end
-        local mastery = GetMasteryEffect()
-        -- Versatility is the only row built by ADDING two getters, and addition
-        -- is what a secret refuses -- so under restriction the real total is
-        -- not computable here. Blizzard's pane still shows it (its code reads
-        -- true values; an addon gets secrets), which is why the two disagreed.
-        -- Falling back to the rating alone silently drops the non-rating bonus,
-        -- so remember the last clean total and show that instead; "?" is the
-        -- floor when there has never been a clean read.
-        local versRating = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
-        local versBase = GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
-        local vers
-        if issecretvalue(versRating) or issecretvalue(versBase) then
-            vers = statsFrame._versLastClean   -- nil until one exists -> "?"
-        else
-            vers = versRating + versBase
-            statsFrame._versLastClean = vers
-        end
-        local showBoth = EllesmereUI.QoLExtrasGet("showSecondaryStatsBoth")
-        local showRawOnly = not showBoth and EllesmereUI.QoLExtrasGet("showSecondaryStatsRaw")
-        local showRawValues = showRawOnly or showBoth
-        local critRaw, hasteRaw, masteryRaw, versRaw
-        if showRawValues then
-            critRaw = GetCombatRating(critCR)
-            hasteRaw = GetCombatRating(hasteCR)
-            masteryRaw = GetCombatRating(CR_MASTERY)
-            versRaw = GetCombatRating(CR_VERSATILITY_DAMAGE_DONE)
+            mastery = GetMasteryEffect()
+            -- Versatility is the only row built by ADDING two getters, and addition
+            -- is what a secret refuses -- so under restriction the real total is
+            -- not computable here. Blizzard's pane still shows it (its code reads
+            -- true values; an addon gets secrets), which is why the two disagreed.
+            -- Falling back to the rating alone silently drops the non-rating bonus,
+            -- so remember the last clean total and show that instead; "?" is the
+            -- floor when there has never been a clean read.
+            local versRating = GetCombatRatingBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
+            local versBase = GetVersatilityBonus(CR_VERSATILITY_DAMAGE_DONE) or 0
+            if issecretvalue(versRating) or issecretvalue(versBase) then
+                vers = statsFrame._versLastClean   -- nil until one exists -> "?"
+            else
+                vers = versRating + versBase
+                statsFrame._versLastClean = vers
+            end
+            showBoth = EllesmereUI.QoLExtrasGet("showSecondaryStatsBoth")
+            showRawOnly = not showBoth and EllesmereUI.QoLExtrasGet("showSecondaryStatsRaw")
+            showRawValues = showRawOnly or showBoth
+            if showRawValues then
+                critRaw = GetCombatRating(critCR)
+                hasteRaw = GetCombatRating(hasteCR)
+                masteryRaw = GetCombatRating(CR_MASTERY)
+                versRaw = GetCombatRating(CR_VERSATILITY_DAMAGE_DONE)
+            end
         end
 
         -- One template line per row, plus the figures to fill it. Nothing here
@@ -2568,25 +2580,30 @@ do
         end
         local hiddenStats = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
         if type(hiddenStats) ~= "table" then hiddenStats = nil end
-        local hasVisibleTertiary = not (hiddenStats
-            and hiddenStats.leech and hiddenStats.avoidance and hiddenStats.speed)
+        -- Tertiaries (leech/avoidance/speed) are retail ratings too -- skip on
+        -- Forever, whose render path never shows them.
+        local hasVisibleTertiary = false
         local tertHex, leech, avoidance, speed
         local leechRaw, avoidanceRaw, speedRaw
-        if hasVisibleTertiary then
-            local tc = EllesmereUI.QoLExtrasGet("tertiaryStatsColor")
-            local tmode = EllesmereUI.QoLExtrasGet("tertiaryStatsColorMode")
-                or (tc and "custom" or "class")
-            tertHex = (tmode == "custom" and tc)
-                and format("%02x%02x%02x", tc.r * 255, tc.g * 255, tc.b * 255)
-                or statsFrame._classHex or "ffffff"
+        if not EllesmereUI.IS_FOREVER then
+            hasVisibleTertiary = not (hiddenStats
+                and hiddenStats.leech and hiddenStats.avoidance and hiddenStats.speed)
+            if hasVisibleTertiary then
+                local tc = EllesmereUI.QoLExtrasGet("tertiaryStatsColor")
+                local tmode = EllesmereUI.QoLExtrasGet("tertiaryStatsColorMode")
+                    or (tc and "custom" or "class")
+                tertHex = (tmode == "custom" and tc)
+                    and format("%02x%02x%02x", tc.r * 255, tc.g * 255, tc.b * 255)
+                    or statsFrame._classHex or "ffffff"
 
-            leech = GetLifesteal()
-            avoidance = GetAvoidance()
-            speed = GetSpeed()
-            if showRawValues then
-                leechRaw = GetCombatRating(CR_LIFESTEAL)
-                avoidanceRaw = GetCombatRating(CR_AVOIDANCE)
-                speedRaw = GetCombatRating(CR_SPEED)
+                leech = GetLifesteal()
+                avoidance = GetAvoidance()
+                speed = GetSpeed()
+                if showRawValues then
+                    leechRaw = GetCombatRating(CR_LIFESTEAL)
+                    avoidanceRaw = GetCombatRating(CR_AVOIDANCE)
+                    speedRaw = GetCombatRating(CR_SPEED)
+                end
             end
         end
 
@@ -2787,6 +2804,20 @@ do
         if EllesmereUI.IS_FOREVER then
             statsFrame:RegisterUnitEvent("UNIT_ATTACK_SPEED", "player")
             statsFrame:RegisterUnitEvent("UNIT_RANGEDDAMAGE", "player")
+            -- Movement Speed is the one row that changes with no stat event --
+            -- stealth/prowl is a form aura. Listen to auras ONLY while an MS row
+            -- is actually shown (MS is default-on, so: unless the user hid it).
+            -- The block's OnEvent already debounces into the light repaint, so a
+            -- block without MS -- and the disabled feature -- registers nothing.
+            -- (Replaces the old always-on UNIT_AURA refresher at file end.)
+            local hidden = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
+            if not (type(hidden) == "table" and hidden.movespeed == true) then
+                statsFrame:RegisterUnitEvent("UNIT_AURA", "player")
+                statsFrame:RegisterEvent("PLAYER_FLAGS_CHANGED")
+            else
+                statsFrame:UnregisterEvent("UNIT_AURA")
+                statsFrame:UnregisterEvent("PLAYER_FLAGS_CHANGED")
+            end
         end
         for _, ev in ipairs({
             "COMBAT_RATING_UPDATE", "PLAYER_EQUIPMENT_CHANGED",
@@ -5310,31 +5341,10 @@ do
     end)
 end
 
--- Forever OG secondary-stats: keep the on-screen block fresh across stealth/prowl.
--- UpdateSecondaryStats reads Movement Speed live (GetUnitSpeed), but the HUD's event
--- list has no aura/speed event, so leaving stealth/prowl (a form aura that changes run
--- speed) never repaints the block -- the char sheet updates, the HUD stays stale until
--- the next periodic tick. UNIT_AURA catches prowl on/off; PLAYER_FLAGS_CHANGED is
--- belt-and-suspenders. Nudges the exported apply (recomputes live, no-ops while the HUD
--- is off). Debounced since UNIT_AURA is chatty.
-if EllesmereUI.IS_FOREVER then
-    local refresher = CreateFrame("Frame")
-    refresher:RegisterUnitEvent("UNIT_AURA", "player")
-    refresher:RegisterEvent("PLAYER_FLAGS_CHANGED")
-    local pending = false
-    local function doRefresh()
-        if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-    end
-    refresher:SetScript("OnEvent", function()
-        if pending then return end
-        pending = true
-        C_Timer.After(0.1, function()
-            pending = false
-            doRefresh()
-            -- Health/Mana Regen (hp5/mp5) recompute a beat after the aura applies, so an
-            -- immediate read still returns the pre-change value; a follow-up catches it.
-            C_Timer.After(0.4, doRefresh)
-        end)
-    end)
-end
+-- Forever OG secondary-stats stealth/prowl refresh now lives inside the block's
+-- own event set (ApplySecondaryStats): UNIT_AURA + PLAYER_FLAGS_CHANGED register
+-- only while the block is shown AND a Movement Speed row is visible, and drive
+-- the light UpdateSecondaryStats repaint (not a full re-apply). The old always-on
+-- refresher here fired for every Forever player even with the block off and
+-- double-called the full apply per aura burst; removed.
 
