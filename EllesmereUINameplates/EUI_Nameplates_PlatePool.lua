@@ -93,6 +93,7 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
             PP.HideBorder(plate.health)
             ns.HideCustomBorder(plate)
             ns.NP_ApplyClassicHealthArt(plate)
+            ns.NP_ApplyRounding(plate)
             return
         end
         if ns.IsCustomBorderEnabled() then
@@ -116,6 +117,7 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
         if (p and (p.castIconCustomBorder or p.castIconSeparator)) or (plate.cast and plate.cast._iconSeam) then
             ns.ApplyCastIconBorder(plate)
         end
+        ns.NP_ApplyRounding(plate)
     end
     function plate:ApplyBorderColor()
         if not PP then return end
@@ -271,6 +273,7 @@ local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(
         elseif PP.GetBorders(plate.cast) then
             PP.HideBorder(plate.cast)
         end
+        ns.NP_ApplyRounding(plate)
     end
     function plate:ApplyCastBorderColor()
         if not PP or not PP.GetBorders or not PP.GetBorders(plate.cast) then return end

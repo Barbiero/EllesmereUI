@@ -920,8 +920,46 @@ local function ApplyHealthBarTexture(plate)
     -- the bar's inner shadow (re-sized here on every appearance pass). The
     -- classic plate is the bare fill inside its 1px edge (the border path).
     if ns.NP_Style() == "blizzard" then ns.NP_ApplyBlizzBarArt(plate) end
+    ns.NP_ApplyRounding(plate)
 end
 ns.ApplyHealthBarTexture = ApplyHealthBarTexture
+
+-- Rounded corners (EllesmereUI_RoundedCorners.lua; nothing at radius 0 or
+-- under the stock styles). The body is listed texture by texture: glows and
+-- arrows on the health bar reach past it and must stay unmasked. Re-run after
+-- every retexture (a path swap mints a new fill object).
+local NO_ROOTS = {}
+function ns.NP_ApplyRounding(plate)
+    local health = plate.health
+    if not health then return end
+    local radius = (not ns.NP_Blizz() and p and p.cornerRadius) or 0
+    -- Off: free on every spawn unless this plate was rounded before.
+    if radius <= 0 then
+        if plate._npRounded then
+            plate._npRounded = nil
+            EllesmereUI.RoundCorners(plate, 0)
+            if plate.cast then EllesmereUI.RoundCorners(plate.cast, 0) end
+        end
+        return
+    end
+    plate._npRounded = true
+    -- Basic draws Solid strips on the health bar; Custom draws its own style
+    -- on its own frame (only Solid, Glow and Shadow round).
+    local custom = ns.IsCustomBorderEnabled() and plate._customBorder
+    EllesmereUI.RoundCorners(plate, radius, {
+        roots = NO_ROOTS, rect = health, border = custom or health,
+        style = custom and ((p and p.customBorderTexture) or defaults.customBorderTexture) or "solid",
+        textures = { health:GetStatusBarTexture(), plate.healthBG, plate.hashLine,
+            plate.highlight, plate.targetHighlight },
+    })
+    local cast = plate.cast
+    if cast then
+        EllesmereUI.RoundCorners(cast, radius, {
+            roots = NO_ROOTS, border = cast,
+            textures = { cast:GetStatusBarTexture(), plate.castBG },
+        })
+    end
+end
 
 -- Cast bar texture: mirrors ApplyHealthBarTexture with the same texture set (EUI built-ins +
 -- SharedMedia, appended into ns.healthBarTextures at options-build time). On ns (local cap).

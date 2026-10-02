@@ -346,6 +346,21 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
                 end,
                 true, 20)
             PP.Point(borderSwatch, "RIGHT", ctrl, "LEFT", -8, 0)
+            rgn._lastInline = borderSwatch  -- the Corner Radius cog chains left of the swatch
+            -- Corner Radius (EllesmereUI_RoundedCorners.lua): an inline cog on the
+            -- border size control.
+            if not EllesmereUI._prebuilding then
+                EllesmereUI.BuildInlineCog(hpBsRow._rightRegion, {
+                    title = "Corner Radius", tip = "Corner Radius",
+                    disabled = function() if healthOff() then return true end; local c = cfg(); return not EllesmereUI.RoundedStyleOK(c and c.borderTexture) end,
+                    disabledTooltip = function() if healthOff() then return "Health Bar" end; return "This option requires the Solid, Glow or Shadow border style." end,
+                    rows = {
+                        { type = "slider", label = "Corner Radius", min = 0, max = EllesmereUI.ROUNDED_MAX_RADIUS, step = 1,
+                          get = function() local c = cfg(); return c and c.cornerRadius or 0 end,
+                          set = function(v) local c = cfg(); if not c then return end; c.cornerRadius = v; RebuildHealth() end },
+                    },
+                })
+            end
             EllesmereUI.RegisterWidgetRefresh(function() updateBorderSwatch() end)
             local swBlock = CreateFrame("Frame", nil, borderSwatch)
             swBlock:SetAllPoints()
