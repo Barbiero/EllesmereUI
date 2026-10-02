@@ -189,7 +189,9 @@ local function BuildNameplatePreview(parent, parentW)
             -- past empty health would draw Overlay and From Right Edge alike.
             local shield = 0.15
             ns.NP_SizeAbsorbBars(pvAbs, health:GetWidth(), health:GetHeight())
-            if pvAbs._absEdge ~= mode then ns.NP_LayoutAbsorbBars(pvAbs, health, mode) end
+            if pvAbs._absEdge ~= mode or pvAbs._absFill ~= health:GetStatusBarTexture() then
+                ns.NP_LayoutAbsorbBars(pvAbs, health, mode)
+            end
             ApplyPreviewAbsorbStyle()
             pvAbs.absorb:SetMinMaxValues(0, 1)
             pvAbs.absorb:SetValue(shield)
