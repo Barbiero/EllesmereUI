@@ -5,7 +5,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  Out-of-range icon coloring: per-slot range checks and the icon tint. Loads
 --  after the main file and before EUI_ActionBars_Glows.lua, reads the main
 --  file through ns only, and hands GetButtonActionSlot to the files after it
---  through ns._internals (bottom of this file).
+--  through ns._internals (bottom of this file). At run time it also reads
+--  ns._eabBarDormant and ns._slotBtnMap, which EUI_ActionBars_Events.lua owns.
 -------------------------------------------------------------------------------
 local _, ns = ...
 
@@ -84,7 +85,8 @@ end
 -- range-enabled and each fire walks all bars).
 
 -- Release whatever the bar snapshot holds (no slot resolution: the snapshot
--- IS what was acquired, immune to page drift). On ns: chunk at the 200-local cap.
+-- IS what was acquired, immune to page drift). On ns, not a local: kept from
+-- the main file, which sits near the 200-local cap.
 ns._eabReleaseRangeSlots = function(barKey)
     local held = _range.barSlots[barKey]
     if not held then return end
@@ -108,7 +110,8 @@ end
 -- until the next transition, so a slot whose refcount just went 0->1 has
 -- nothing to paint from and the release-wiped cache entry stays wiped. The
 -- flip handler's "no change, return" gate then swallows the next report,
--- stranding the last painted tint. On ns: chunk at the 200-local cap.
+-- stranding the last painted tint. On ns, not a local: kept from the main
+-- file, which sits near the 200-local cap.
 ns._eabRangeSweepBar = function(barKey)
     local buttons = barButtons[barKey]
     local s = EAB.db.profile.bars[barKey]
@@ -182,8 +185,8 @@ local function DisableRangeCheckForBar(barKey)
     end
 end
 
--- Dormancy edges for range (via ns: ApplyBarDormancy is defined earlier in
--- the chunk). Hide releases the bar's slots; show re-acquires and the sweep
+-- Dormancy edges for range (via ns: the caller, ns.ApplyBarDormancy, lives in
+-- EUI_ActionBars_Events.lua). Hide releases the bar's slots; show re-acquires and the sweep
 -- repaints from the LIVE API -- repainting from cache would paint every
 -- button in-range, since the hide-time release wiped the bar's entries.
 ns._eabRangeBarDormancy = function(barKey, dormant)

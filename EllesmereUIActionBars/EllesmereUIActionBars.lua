@@ -4439,7 +4439,8 @@ function EAB_VTABLE.Hover.ScheduleFadeOut(barKey, state, opts)
 
     -- The bar frame and every button hook OnLeave, so one mouse sweep across a
     -- 12-button bar lands here 12+ times. Coalesced: one pending timer per bar covers
-    -- the whole sweep (same pattern as _range.slotPending) instead of a timer+closure
+    -- the whole sweep (same pattern as _range.slotPending in
+    -- EUI_ActionBars_Range.lua) instead of a timer+closure
     -- per OnLeave each running the O(bars) hovered scan. Callback built once per state
     -- and reused; opts is stable per bar (one BuildHandlers call).
     if state.foPending then return end
