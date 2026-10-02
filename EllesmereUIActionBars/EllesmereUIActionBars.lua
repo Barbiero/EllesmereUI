@@ -12463,4 +12463,10 @@ ns._internals = {
     SyncPagingAlpha = SyncPagingAlpha, InitPagingQuickKeybindButton = InitPagingQuickKeybindButton,
     FONT_PATH = FONT_PATH, LayoutBar = LayoutBar, buttonToBar = buttonToBar, _gridState = _gridState,
     ApplyButtonBorders = ApplyButtonBorders, ApplyShapeToButton = ApplyShapeToButton,
+    NUM_ACTIONBAR_BUTTONS = NUM_ACTIONBAR_BUTTONS,
 }
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._internals, { __index = function(_, k)
+    error("ns._internals has no entry " .. tostring(k), 2)
+end })
