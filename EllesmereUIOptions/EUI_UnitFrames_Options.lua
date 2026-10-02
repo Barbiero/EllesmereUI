@@ -2085,6 +2085,39 @@ initFrame:SetScript("OnEvent", function(self)
         label:SetPoint("LEFT", row, "CENTER", -totalW / 2, 0)
         ddBtn:SetPoint("LEFT", label, "RIGHT", GAP, 0)
 
+        return row, ROW_H, ddBtn
+    end
+
+    -- "Copy Look From" under a mini frame's Apply All Settings From row: the
+    -- main frame it copies its border, bar texture and hover highlight from
+    -- (lookSource; nil = Automatic). Its dropdown sits under that row's, the
+    -- label right-aligned beside it.
+    local function BuildLookSourceRow(parent, y, settingsTable, alignDD)
+        local ROW_H = 40
+        local contentPad = EllesmereUI.CONTENT_PAD or 45
+        local row = CreateFrame("Frame", nil, parent)
+        PP.Size(row, parent:GetWidth() - contentPad * 2, ROW_H)
+        PP.Point(row, "TOPLEFT", parent, "TOPLEFT", contentPad, y)
+
+        local ddBtn = EllesmereUI.BuildDropdownControl(
+            row, 180, row:GetFrameLevel() + 2,
+            { auto = "Automatic", target = "Target", focus = "Focus", player = "Player" },
+            { "auto", "target", "focus", "player" },
+            function() return settingsTable.lookSource or "auto" end,
+            function(v)
+                settingsTable.lookSource = (v ~= "auto") and v or nil
+                ReloadAndUpdate()
+                EllesmereUI:RefreshPage(true)
+            end)
+        ddBtn._ttText = "The main frame this frame copies its border, bar texture and hover highlight from. Automatic uses Focus, then Target, then Player."
+        EllesmereUI.RegisterWidgetRefresh(function() ddBtn._refreshLabel() end)
+        ddBtn:SetPoint("TOPLEFT", alignDD, "BOTTOMLEFT", 0, -10)
+
+        local label = EllesmereUI.MakeFont(row, 14, nil, 1, 1, 1)
+        label:SetText(EllesmereUI.L("Copy Look From"))
+        label:SetTextColor(1, 1, 1, 0.6)
+        label:SetPoint("RIGHT", ddBtn, "LEFT", -12, 0)
+
         return row, ROW_H
     end
 
@@ -2769,6 +2802,7 @@ initFrame:SetScript("OnEvent", function(self)
         btbTextOrder = btbTextOrder, btbTextValues = btbTextValues, buffAnchorOrder = buffAnchorOrder,
         buffAnchorValues = buffAnchorValues, buffGrowthOrder = buffGrowthOrder, buffGrowthValues = buffGrowthValues,
         BuildApplyAllRow = BuildApplyAllRow, BuildBarTexDropdown = BuildBarTexDropdown, BuildInactiveNotice = BuildInactiveNotice,
+        BuildLookSourceRow = BuildLookSourceRow,
         CLASS_FULL_COORDS = CLASS_FULL_COORDS, CLASS_FULL_SPRITE_BASE = CLASS_FULL_SPRITE_BASE, classIconLocOrder = classIconLocOrder,
         classIconLocValues = classIconLocValues, classIconOrder = classIconOrder, classIconValues = classIconValues,
         classPowerPosOrder = classPowerPosOrder, classPowerPosValues = classPowerPosValues, classPowerStyleOrder = classPowerStyleOrder,

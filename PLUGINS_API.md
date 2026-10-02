@@ -197,8 +197,15 @@ it in your own section; that is the only place plugins can add pages.
 **Do I need to wait for PLAYER_LOGIN?** No. Register from your main chunk or any
 later point; the panel picks the section up whenever it is shown.
 
-**My old code called `EllesmereUI:RegisterModule` or edited
-`EllesmereUI.ADDON_GROUPS`.** Neither works for third-party addons any more:
-`RegisterModule` only accepts EUI's own options files, and the sidebar no longer
-reads the public roster tables. Move the same `title` / `pages` / `buildPage`
-fields into a module spec of `RegisterPlugin`.
+**My old code called `EllesmereUI:RegisterModule`, wrote into
+`EllesmereUI._modules` or edited `EllesmereUI.ADDON_GROUPS`.** It keeps working.
+A page your addon registers under a key of its own keeps that key, from any of
+your code (a `loadstring` chunk included), and a group of your own that you
+inserted into `EllesmereUI.ADDON_GROUPS` shows above or below EUI's groups,
+wherever you inserted it, labelled from your entry in
+`EllesmereUI._addonInfoByFolder`. A row you placed inside one of EUI's groups
+appears in a section of your own instead, as does a page with no row (named
+after your addon). Changes aimed at EUI's own pages are ignored, and the player
+is told which addon made them. New code should use `RegisterPlugin`: it checks
+your spec, guards your callbacks and lets you pick your section's label and
+position.

@@ -24,6 +24,7 @@ local SECTION_H, SUBSECTION_H = 22, 18
 local ROUND_MASK = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local ROUND_ZOOM = 0.12
 local ARROW_TEX = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-left.png"
+local BAG_GLYPH_TEX = "Interface\\AddOns\\EllesmereUI\\media\\micromenu\\menu-bags.png"
 
 -- Column definitions. width nil = flexible (takes the leftover row width).
 -- field = the per-item sort value stamped in StampItem (nil = not
@@ -556,6 +557,15 @@ local function GetOrCreateHeaderBtn(bar, id)
     b._arrow = b:CreateTexture(nil, "OVERLAY")
     b._arrow:SetSize(8, 8)
     b._arrow:SetTexture(ARROW_TEX)
+    if id == "icon" then
+        -- The icon column has no label: a bag glyph over the row icons,
+        -- tinted like the labels.
+        b._glyph = b:CreateTexture(nil, "OVERLAY")
+        b._glyph:SetSize(12, 12)
+        b._glyph:SetPoint("CENTER")
+        b._glyph:SetTexture(BAG_GLYPH_TEX)
+        b._glyph:SetVertexColor(0.6, 0.6, 0.6)
+    end
     b:SetScript("OnMouseDown", OnHeaderMouseDown)
     b:SetScript("OnMouseUp", OnHeaderMouseUp)
     if COLUMNS[id].width and id ~= "icon" then
@@ -572,12 +582,14 @@ local function GetOrCreateHeaderBtn(bar, id)
     end
     b:SetScript("OnEnter", function(self)
         self._label:SetTextColor(1, 1, 1)
+        if self._glyph then self._glyph:SetVertexColor(1, 1, 1) end
         EUI.ShowWidgetTooltip(self, COLUMNS[self._colId].field
             and L("Click to sort. Drag to reorder. Right-click to add or remove columns.")
             or L("Drag to reorder. Right-click to add or remove columns."))
     end)
     b:SetScript("OnLeave", function(self)
         self._label:SetTextColor(0.6, 0.6, 0.6)
+        if self._glyph then self._glyph:SetVertexColor(0.6, 0.6, 0.6) end
         EUI.HideWidgetTooltip()
     end)
     bar._btns[id] = b

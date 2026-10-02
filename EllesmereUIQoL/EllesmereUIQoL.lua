@@ -54,8 +54,10 @@ qolFrame:SetScript("OnEvent", function(self)
     ---------------------------------------------------------------------------
     -- Bonus roll confirmation. Addon-owned overlays intercept Roll/Pass clicks;
     -- the journal link and other children retain their original behavior.
+    -- (Not on WoW Forever: no bonus rolls there, so the block and its options
+    -- row do not exist.)
     ---------------------------------------------------------------------------
-    do
+    if not EllesmereUI.IS_FOREVER then
         local active, lifecycleHooked, eventFrame
         local rollButton, passButton, rollOverlay, passOverlay
         local pending
@@ -68,10 +70,9 @@ qolFrame:SetScript("OnEvent", function(self)
         local function Invalidate()
             local old = pending
             pending = nil
-            -- The house popup is shared: never dismiss another feature's dialog.
-            if old and EUIConfirmPopup and EUIConfirmPopup._onCancel == old.cancel then
-                EUIConfirmPopup._dimmer:Hide()
-            end
+            -- The house popup is shared: the handle closes it only while it
+            -- still shows this request, never another feature's dialog.
+            if old then EllesmereUI:CloseConfirmPopup(old.handle) end
         end
 
         local function LootSpec()
@@ -111,7 +112,7 @@ qolFrame:SetScript("OnEvent", function(self)
                 if pending == request then pending = nil end
             end
             pending = request
-            EllesmereUI:ShowConfirmPopup({
+            request.handle = EllesmereUI:ShowConfirmPopup({
                 title = EllesmereUI.L("Bonus Roll Confirmation"),
                 message = isRoll and EllesmereUI.L("Use a bonus roll?")
                     or EllesmereUI.L("Pass on this bonus roll?"),
@@ -121,8 +122,7 @@ qolFrame:SetScript("OnEvent", function(self)
                 onCancel = request.cancel,
                 onConfirm = function()
                     if pending ~= request then return end
-                    local valid = EUIConfirmPopup and EUIConfirmPopup._onCancel == request.cancel
-                        and IsCurrent(request)
+                    local valid = IsCurrent(request)
                     Invalidate()
                     if valid then button:Click(mouseButton, down) end
                 end,
@@ -145,14 +145,10 @@ qolFrame:SetScript("OnEvent", function(self)
             overlay:SetScript("OnClick", function(_, mouseButton, down)
                 Click(isRoll, button, mouseButton, down)
             end)
-            overlay:SetScript("OnEnter", function()
-                local handler = button:GetScript("OnEnter")
-                if handler then handler(button) end
+            overlay:SetScript("OnEnter", function(self)
+                EllesmereUI.ShowWidgetTooltip(self, isRoll and ROLL or PASS)
             end)
-            overlay:SetScript("OnLeave", function()
-                local handler = button:GetScript("OnLeave")
-                if handler then handler(button) end
-            end)
+            overlay:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
             overlay:Hide()
             return overlay
         end
@@ -166,7 +162,6 @@ qolFrame:SetScript("OnEvent", function(self)
             local prompt = frame and frame.PromptFrame
             local roll, pass = prompt and prompt.RollButton, prompt and prompt.PassButton
             if not roll or not pass or roll:IsProtected() or pass:IsProtected() then return end
-            if roll._brcHooked or pass._brcHooked then return end
             if not roll:GetScript("OnClick") or not pass:GetScript("OnClick") then return end
             rollButton, passButton = roll, pass
             rollOverlay = MakeOverlay(roll, true)
@@ -176,10 +171,12 @@ qolFrame:SetScript("OnEvent", function(self)
                 local function Changed()
                     if active then Invalidate(); SyncOverlays() end
                 end
+                -- Secure post-hooks only: every prompt opens and closes through
+                -- these two (plus the events below). A script hook on the frame
+                -- would leave the rest of Blizzard's loot-container layout, which
+                -- hides it, running under our taint.
                 hooksecurefunc("BonusRollFrame_StartBonusRoll", Changed)
                 hooksecurefunc("BonusRollFrame_CloseBonusRoll", Changed)
-                frame:HookScript("OnHide", Changed)
-                frame:HookScript("OnShow", Changed)
             end
             SyncOverlays()
         end

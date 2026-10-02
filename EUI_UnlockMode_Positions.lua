@@ -6,9 +6,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  Edit Mode anchor guard.
 --  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
 -------------------------------------------------------------------------------
-EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
-EllesmereUI._unlockParts.Positions = function(UM)
-local ns, EAB, PP, FONT_PATH = UM.ns, UM.EAB, UM.PP, UM.FONT_PATH
+local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
+EUI_NS.unlockParts = EUI_NS.unlockParts or {}
+EUI_NS.unlockParts.Positions = function(UM)
+local ns, EAB, PP, FONT_PATH = EUI_NS, UM.EAB, UM.PP, UM.FONT_PATH
 local BAR_LOOKUP, registeredElements, registeredOrder, RebuildRegisteredOrder = UM.BAR_LOOKUP, UM.registeredElements, UM.registeredOrder, UM.RebuildRegisteredOrder
 local movers, pendingPositions, GetBarGrowDirActual, GetAnchorDB = UM.movers, UM.pendingPositions, UM.GetBarGrowDirActual, UM.GetAnchorDB
 local GetAnchorInfo, MatchH, ScheduleAnchorBatch, ApplyAllWidthHeightMatches = UM.GetAnchorInfo, UM.MatchH, UM.ScheduleAnchorBatch, UM.ApplyAllWidthHeightMatches

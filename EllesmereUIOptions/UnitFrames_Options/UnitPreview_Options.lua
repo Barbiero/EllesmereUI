@@ -1778,7 +1778,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
             end
             -- The small frames' bar takes the donor's texture, as live.
             local texKey = ns.ResolveHealthBarTextureKey(s,
-                ns.GetMiniDonorSettings and ns.GetMiniDonorSettings() or db.profile.player)
+                ns.GetMiniDonorSettings and ns.GetMiniDonorSettings(unitKey) or db.profile.player)
             local texPath = (ns.healthBarTextures or {})[texKey]
             local _, pToken = UnitPowerType("player")
             local pc = EllesmereUI.GetPowerColor(pToken or "MANA")
@@ -2103,13 +2103,13 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
             for i = 1, #debuffIcons do ApplyPreviewAuraBorder(debuffIcons[i]) end
         end
 
-        -- Donor settings for mini frames (border/texture inherit from
-        -- target/focus/player; text SIZES are the unit's own -- see
+        -- Donor settings for mini frames (border/texture inherit from the
+        -- frame Copy Look From picks; text SIZES are the unit's own -- see
         -- ApplyPreviewTextPositions)
         local isMini = (unitKey == "pet" or unitKey == "boss" or unitKey == "targettarget" or unitKey == "focustarget")
         local ds = s
         if isMini then
-            ds = ns.GetMiniDonorSettings and ns.GetMiniDonorSettings() or db.profile.player
+            ds = ns.GetMiniDonorSettings and ns.GetMiniDonorSettings(unitKey) or db.profile.player
         end
         -- The frame border's settings: the donor's for the minis; the boss
         -- frames' own once the boss Border Style leaves Inherit (the live
@@ -2864,8 +2864,9 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
             end
         end
 
-        -- Border size and color (encompasses health+power+BTB+above pips)
-        local bs = (unitKey == "targettarget" and s.borderSizeOverride) or bds.borderSize or 1
+        -- Border size and color (encompasses health+power+BTB+above pips); a mini
+        -- frame's Border Size override replaces the donor's size, as live.
+        local bs = s.borderSizeOverride or bds.borderSize or 1
         local bc = bds.borderColor or { r = 0, g = 0, b = 0 }
         local bTexKey = bds.borderTexture or "solid"
         local borderH = bh2 + (s.bottomTextBar and btbIsAtt and (s.bottomTextBarHeight or 16) or 0)
@@ -2874,7 +2875,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         border:SetPoint("TOPRIGHT", barArea, "TOPRIGHT", 0, 0)
         border:SetHeight(borderH)
         EllesmereUI.ApplyBorderStyle(border, bs, bc.r, bc.g, bc.b, bds.borderAlpha or 1, bTexKey, bds.borderTextureOffset, bds.borderTextureOffsetY, bds.borderTextureShiftX, bds.borderTextureShiftY, "unitframes", bs, nil,
-            EllesmereUI.BorderPx((unitKey ~= "targettarget" or not s.borderSizeOverride) and bds.borderSizePx, bs, bTexKey))
+            EllesmereUI.BorderPx((not s.borderSizeOverride) and bds.borderSizePx, bs, bTexKey))
 
         -- Class Power Pips update (player only)
         if cpPipContainer and cpPips then
@@ -3599,10 +3600,10 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
 
         -- Recalculate border sizes after scale change so they stay pixel-perfect
         if border then
-            local bs2 = (unitKey == "targettarget" and s.borderSizeOverride) or bds.borderSize or 1
+            local bs2 = s.borderSizeOverride or bds.borderSize or 1
             local bTex2 = bds.borderTexture or "solid"
             EllesmereUI.ApplyBorderStyle(border, bs2, (bds.borderColor or {r=0,g=0,b=0}).r, (bds.borderColor or {r=0,g=0,b=0}).g, (bds.borderColor or {r=0,g=0,b=0}).b, bds.borderAlpha or 1, bTex2, bds.borderTextureOffset, bds.borderTextureOffsetY, bds.borderTextureShiftX, bds.borderTextureShiftY, "unitframes", bs2, nil,
-                EllesmereUI.BorderPx((unitKey ~= "targettarget" or not s.borderSizeOverride) and bds.borderSizePx, bs2, bTex2))
+                EllesmereUI.BorderPx((not s.borderSizeOverride) and bds.borderSizePx, bs2, bTex2))
         end
         if castbar then
             if PP.GetBorders(castbar) then PP.SetBorderSize(castbar, 1) end

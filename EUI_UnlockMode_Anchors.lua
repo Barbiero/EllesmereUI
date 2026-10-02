@@ -6,9 +6,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  hooks, combat-parked positioning, fallback anchors.
 --  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
 -------------------------------------------------------------------------------
-EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
-EllesmereUI._unlockParts.Anchors = function(UM)
-local ns, floor, PP, registeredElements = UM.ns, UM.floor, UM.PP, UM.registeredElements
+local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
+EUI_NS.unlockParts = EUI_NS.unlockParts or {}
+EUI_NS.unlockParts.Anchors = function(UM)
+local ns, floor, PP, registeredElements = EUI_NS, UM.floor, UM.PP, UM.registeredElements
 local movers, pendingPositions, SELECT_ELEMENT_ALPHA, SELECT_ELEMENT_FADE = UM.movers, UM.pendingPositions, UM.SELECT_ELEMENT_ALPHA, UM.SELECT_ELEMENT_FADE
 
 -------------------------------------------------------------------------------

@@ -2251,6 +2251,9 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
+        -- Bonus Roll Confirmation. Not offered on WoW Forever: no bonus rolls
+        -- there, so the row is not built and the runtime block does not exist.
+        if not EllesmereUI.IS_FOREVER then
         local bonusRollRow
         local function bonusRollConflict()
             return C_AddOns.IsAddOnLoaded("BonusRollConfirm")
@@ -2269,7 +2272,7 @@ initFrame:SetScript("OnEvent", function(self)
                   if EllesmereUI._applyBonusRollConfirmation then EllesmereUI._applyBonusRollConfirmation() end
                   EllesmereUI:RefreshPage()
               end },
-            { type="label", text="" }
+            EllesmereUI.BlankRowCfg()
         );  y = y - h
         if not EllesmereUI._prebuilding then
             EllesmereUI.BuildInlineCog(bonusRollRow._leftRegion, {
@@ -2293,6 +2296,7 @@ initFrame:SetScript("OnEvent", function(self)
                 disabledTooltip = EllesmereUI.L("Bonus Roll Confirmation"),
             })
         end
+        end -- not IS_FOREVER
 
         -- Keys, Logs & Brez sections live at the bottom of this page (the
         -- separate tab was retired to keep the tab bar at five pages).

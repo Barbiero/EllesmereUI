@@ -678,6 +678,9 @@ function EllesmereUI:ShowConfirmPopup(opts)
     -- onDismiss: called on escape/click-outside. Falls back to onCancel if not provided.
     popup._onCancel = opts.onDismiss or opts.onCancel or nil
     popup._modal = opts.modal and true or false
+    -- This show's handle (returned below, for CloseConfirmPopup).
+    local handle = {}
+    popup._handle = handle
 
     -- Single-button mode: hide cancel, center confirm
     if opts.hideCancel then
@@ -769,6 +772,15 @@ function EllesmereUI:ShowConfirmPopup(opts)
     popup._dimmer:Show()
     -- Controller cursor: move it into the popup (the safe button is its first stop).
     EllesmereUI.PadFocus(popup)
+    return handle
+end
+
+-- Closes the confirm popup only while it still shows the request whose handle
+-- ShowConfirmPopup returned (the popup is shared, so never another caller's
+-- dialog), without running any of its callbacks.
+function EllesmereUI:CloseConfirmPopup(handle)
+    local popup = confirmPopup
+    if handle and popup and popup._handle == handle then popup._dimmer:Hide() end
 end
 
 -- There is no beta-reset welcome popup or wipe gate (EllesmereUI:ShowWelcomePopup does not exist); manual reset lives in Global Settings > Reset.
