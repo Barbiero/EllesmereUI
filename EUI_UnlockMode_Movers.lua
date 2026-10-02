@@ -4,9 +4,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  CreateMover: the draggable mover built for each registered element.
 --  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
 -------------------------------------------------------------------------------
-EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
-EllesmereUI._unlockParts.Movers = function(UM)
-local ns, EAB, floor, abs = UM.ns, UM.EAB, UM.floor, UM.abs
+local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
+EUI_NS.unlockParts = EUI_NS.unlockParts or {}
+EUI_NS.unlockParts.Movers = function(UM)
+local ns, EAB, floor, abs = EUI_NS, UM.EAB, UM.floor, UM.abs
 local min, max, round, DeferMoverSync = UM.min, UM.max, UM.round, UM.DeferMoverSync
 local FONT_PATH, MOVER_ALPHA, MOVER_HOVER, MOVER_DRAG = UM.FONT_PATH, UM.MOVER_ALPHA, UM.MOVER_HOVER, UM.MOVER_DRAG
 local BAR_LOOKUP, ALL_BAR_ORDER, GetVisibilityOnly, registeredElements = UM.BAR_LOOKUP, UM.ALL_BAR_ORDER, UM.GetVisibilityOnly, UM.registeredElements

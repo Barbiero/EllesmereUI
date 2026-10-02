@@ -5,9 +5,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  open / close with their animations, the one-time how-to-use tip.
 --  Loaded after EUI_UnlockMode.lua; _unlockCoreInit runs it once with UM.
 -------------------------------------------------------------------------------
-EllesmereUI._unlockParts = EllesmereUI._unlockParts or {}
-EllesmereUI._unlockParts.Session = function(UM)
-local ns, EAB, min, max = UM.ns, UM.EAB, UM.min, UM.max
+local _, EUI_NS = ...
+EUI_NS = EUI_NS.__euiCoreNS or EUI_NS  -- standalone builds: the core's own table (EllesmereUI.lua)
+EUI_NS.unlockParts = EUI_NS.unlockParts or {}
+EUI_NS.unlockParts.Session = function(UM)
+local ns, EAB, min, max = EUI_NS, UM.EAB, UM.min, UM.max
 local sin, FONT_PATH, LOCK_INNER, LOCK_OUTER = UM.sin, UM.FONT_PATH, UM.LOCK_INNER, UM.LOCK_OUTER
 local LOCK_TOP, MOVER_ALPHA, GEAR_ROTATION, ALL_BAR_ORDER = UM.LOCK_TOP, UM.MOVER_ALPHA, UM.GEAR_ROTATION, UM.ALL_BAR_ORDER
 local registeredElements, registeredOrder, RebuildRegisteredOrder, movers = UM.registeredElements, UM.registeredOrder, UM.RebuildRegisteredOrder, UM.movers

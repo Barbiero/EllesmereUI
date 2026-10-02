@@ -52,6 +52,170 @@ qolFrame:SetScript("OnEvent", function(self)
     self:UnregisterEvent("PLAYER_LOGIN")
 
     ---------------------------------------------------------------------------
+    -- Bonus roll confirmation. Addon-owned overlays intercept Roll/Pass clicks;
+    -- the journal link and other children retain their original behavior.
+    -- (Not on WoW Forever: no bonus rolls there, so the block and its options
+    -- row do not exist.)
+    ---------------------------------------------------------------------------
+    if not EllesmereUI.IS_FOREVER then
+        local active, lifecycleHooked, eventFrame
+        local rollButton, passButton, rollOverlay, passOverlay
+        local pending
+
+        local function Enabled()
+            return EllesmereUIDB and EllesmereUIDB.bonusRollConfirmation == true
+                and not C_AddOns.IsAddOnLoaded("BonusRollConfirm")
+        end
+
+        local function Invalidate()
+            local old = pending
+            pending = nil
+            -- The house popup is shared: the handle closes it only while it
+            -- still shows this request, never another feature's dialog.
+            if old then EllesmereUI:CloseConfirmPopup(old.handle) end
+        end
+
+        local function LootSpec()
+            local id = GetLootSpecialization()
+            if id == 0 then
+                local index = C_SpecializationInfo.GetSpecialization()
+                if index then id = C_SpecializationInfo.GetSpecializationInfo(index) end
+            end
+            local name = id and select(2, GetSpecializationInfoByID(id))
+            return id, name or UNKNOWN
+        end
+
+        local function IsCurrent(request)
+            local frame = BonusRollFrame
+            return active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
+                and frame.spellID == request.spellID and frame.endTime == request.endTime
+                and (frame.remaining or 0) > 0
+                and request.button:IsShown() and request.button:IsEnabled()
+                and not request.button:IsProtected()
+                and request.button:GetScript("OnClick") == request.handler
+                and (not request.isRoll or request.specID == LootSpec())
+        end
+
+        local function Click(isRoll, button, mouseButton, down)
+            if not active or not Enabled() then return end
+            Invalidate()
+            local frame = BonusRollFrame
+            if not frame then return end
+            local specID, specName = LootSpec()
+            local request = {
+                spellID = frame.spellID, endTime = frame.endTime,
+                specID = specID, isRoll = isRoll, button = button,
+                handler = button:GetScript("OnClick"),
+            }
+            if not IsCurrent(request) then return end
+            request.cancel = function()
+                if pending == request then pending = nil end
+            end
+            pending = request
+            request.handle = EllesmereUI:ShowConfirmPopup({
+                title = EllesmereUI.L("Bonus Roll Confirmation"),
+                message = isRoll and EllesmereUI.L("Use a bonus roll?")
+                    or EllesmereUI.L("Pass on this bonus roll?"),
+                disclaimer = isRoll and EllesmereUI.Lf("Loot specialization: %s", specName) or nil,
+                confirmText = isRoll and ROLL or PASS,
+                cancelText = CANCEL,
+                onCancel = request.cancel,
+                onConfirm = function()
+                    if pending ~= request then return end
+                    local valid = IsCurrent(request)
+                    Invalidate()
+                    if valid then button:Click(mouseButton, down) end
+                end,
+            })
+        end
+
+        local function SyncOverlays()
+            if not rollOverlay then return end
+            local frame = BonusRollFrame
+            local show = active and Enabled() and frame and frame:IsShown() and frame.state == "prompt"
+            rollOverlay:SetShown(show and true or false)
+            passOverlay:SetShown(show and EllesmereUIDB.bonusRollOnly == false or false)
+        end
+
+        local function MakeOverlay(button, isRoll)
+            local overlay = CreateFrame("Button", nil, button)
+            overlay:SetAllPoints(button)
+            overlay:SetFrameLevel(button:GetFrameLevel() + 1)
+            overlay:RegisterForClicks("LeftButtonUp")
+            overlay:SetScript("OnClick", function(_, mouseButton, down)
+                Click(isRoll, button, mouseButton, down)
+            end)
+            overlay:SetScript("OnEnter", function(self)
+                EllesmereUI.ShowWidgetTooltip(self, isRoll and ROLL or PASS)
+            end)
+            overlay:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            overlay:Hide()
+            return overlay
+        end
+
+        local function Install()
+            if rollButton then
+                SyncOverlays()
+                return
+            end
+            local frame = BonusRollFrame
+            local prompt = frame and frame.PromptFrame
+            local roll, pass = prompt and prompt.RollButton, prompt and prompt.PassButton
+            if not roll or not pass or roll:IsProtected() or pass:IsProtected() then return end
+            if not roll:GetScript("OnClick") or not pass:GetScript("OnClick") then return end
+            rollButton, passButton = roll, pass
+            rollOverlay = MakeOverlay(roll, true)
+            passOverlay = MakeOverlay(pass, false)
+            if not lifecycleHooked then
+                lifecycleHooked = true
+                local function Changed()
+                    if active then Invalidate(); SyncOverlays() end
+                end
+                -- Secure post-hooks only: every prompt opens and closes through
+                -- these two (plus the events below). A script hook on the frame
+                -- would leave the rest of Blizzard's loot-container layout, which
+                -- hides it, running under our taint.
+                hooksecurefunc("BonusRollFrame_StartBonusRoll", Changed)
+                hooksecurefunc("BonusRollFrame_CloseBonusRoll", Changed)
+            end
+            SyncOverlays()
+        end
+
+        local function Apply()
+            Invalidate()
+            active = Enabled()
+            if not active then
+                SyncOverlays()
+                if eventFrame then eventFrame:UnregisterAllEvents() end
+                return
+            end
+            if not eventFrame then
+                eventFrame = CreateFrame("Frame")
+                eventFrame:SetScript("OnEvent", function(_, event, addonName)
+                    if event == "ADDON_LOADED" then
+                        if addonName == "BonusRollConfirm" or not rollButton then
+                            EllesmereUI._applyBonusRollConfirmation()
+                        end
+                    else
+                        Invalidate()
+                        SyncOverlays()
+                    end
+                end)
+            end
+            eventFrame:RegisterEvent("ADDON_LOADED")
+            eventFrame:RegisterEvent("BONUS_ROLL_STARTED")
+            eventFrame:RegisterEvent("BONUS_ROLL_FAILED")
+            eventFrame:RegisterEvent("BONUS_ROLL_RESULT")
+            eventFrame:RegisterEvent("BONUS_ROLL_DEACTIVATE")
+            eventFrame:RegisterEvent("PLAYER_LOOT_SPEC_UPDATED")
+            eventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+            Install()
+        end
+        EllesmereUI._applyBonusRollConfirmation = Apply
+        Apply()
+    end
+
+    ---------------------------------------------------------------------------
     --  Auto Unwrap Collections (Mounts / Pets / Toys)
     ---------------------------------------------------------------------------
     do
