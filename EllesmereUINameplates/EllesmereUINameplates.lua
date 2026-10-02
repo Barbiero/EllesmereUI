@@ -1835,6 +1835,10 @@ local function ApplyHealthBarTexture(plate)
     local texKey = (p and p.healthBarTexture) or defaults.healthBarTexture or "none"
     local path   = EllesmereUI.ResolveTexturePath(ns.healthBarTextures, texKey, "Interface\\Buttons\\WHITE8x8")
     health:SetStatusBarTexture(path)
+    -- A path swap mints a new fill object: the shield anchors follow it.
+    if plate.absorb and plate._absFill ~= health:GetStatusBarTexture() then
+        ns.NP_LayoutAbsorbBars(plate, health, plate._absEdge)
+    end
     -- Blizzard Style: the user's fill under the stock background art, plus
     -- the bar's inner shadow (re-sized here on every appearance pass). The
     -- classic plate is the bare fill inside its 1px edge (the border path).
@@ -1896,7 +1900,7 @@ function ns.ApplyAbsorbStyle(plate)
         end
     end
     local mode = (p and p.absorbEdgeMode) or defaults.absorbEdgeMode
-    if plate._absEdge ~= mode then
+    if plate._absEdge ~= mode or plate._absFill ~= plate.health:GetStatusBarTexture() then
         ns.NP_LayoutAbsorbBars(plate, plate.health, mode)
         -- A shield already up repaints in its new placement (the forward
         -- bar's visibility is decided by the paint).
@@ -1923,20 +1927,15 @@ end
 --     right / left   = the whole shield from that end of the bar
 -- Shared with the options preview (owner is any table holding the bars).
 function ns.NP_BuildAbsorbBars(owner, health, mask)
-    local fillTex = health:GetStatusBarTexture()
     local lvl = health:GetFrameLevel() + 1
     local curClip = CreateFrame("Frame", nil, health)
     curClip:SetClipsChildren(true)
     curClip:SetFrameLevel(lvl)
     local missClip = CreateFrame("Frame", nil, health)
     missClip:SetClipsChildren(true)
-    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", -1, 0)
-    missClip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     missClip:SetFrameLevel(lvl)
     local fw = CreateFrame("StatusBar", nil, missClip)
     fw:SetReverseFill(false)
-    fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
-    fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
     local ab = CreateFrame("StatusBar", nil, curClip)
     for _, bar in ipairs({ ab, fw }) do
         bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
@@ -1951,11 +1950,19 @@ function ns.NP_BuildAbsorbBars(owner, health, mask)
     owner.absorb, owner.absorbForward = ab, fw
 end
 
--- Seats the filled clip and the shield bar for a placement. Settings-time
--- only, never per paint.
+-- Seats every anchor for a placement. Anchors ride the health fill object,
+-- and a health texture path swap mints a new one, so this also re-runs
+-- whenever the fill changes (stamped _absFill). Never per paint.
 function ns.NP_LayoutAbsorbBars(owner, health, mode)
     local fillTex = health:GetStatusBarTexture()
-    local curClip, ab = owner._absCurClip, owner.absorb
+    local curClip, missClip = owner._absCurClip, owner._absMissClip
+    local ab, fw = owner.absorb, owner.absorbForward
+    missClip:ClearAllPoints()
+    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", -1, 0)
+    missClip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
+    fw:ClearAllPoints()
+    fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
+    fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
     curClip:ClearAllPoints()
     ab:ClearAllPoints()
     if mode == "right" or mode == "left" then
@@ -1977,8 +1984,8 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
         ab:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
         ab:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     end
-    if mode ~= "overlay" then owner.absorbForward:Hide() end
-    owner._absEdge = mode
+    if mode ~= "overlay" then fw:Hide() end
+    owner._absEdge, owner._absFill = mode, fillTex
 end
 
 -- Both bars span the health bar so their textures render at bar scale.
@@ -1988,6 +1995,9 @@ function ns.NP_SizeAbsorbBars(owner, w, h)
 end
 
 function ns.ApplyAbsorbStyleAll()
+    -- Pooled plates re-run their appearance pass (and with it this style and
+    -- placement) at next spawn; without it a recycled plate keeps the old one.
+    ns._npAppearanceGen = (ns._npAppearanceGen or 0) + 1
     for _, plate in pairs(ns.plates) do
         ns.ApplyAbsorbStyle(plate)
     end
