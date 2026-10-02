@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_StockStyles.lua
+--
+--  Stock styles (Global Settings > Style): the Blizzard, Classic and WoW
+--  Forever art kits and the post-pass that lays them over the built frames.
+--  Loads right after the main file and reads it through ns and ns._internals;
+--  db is set through I.dbSetters when EllesmereUF:OnInitialize creates the DB.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, GetSettingsForUnit, UnsnapTex = I.frames, I.GetSettingsForUnit, I.UnsnapTex
+local CastbarUnlockKey, CreatePowerBar, ApplyFramePosition = I.CastbarUnlockKey, I.CreatePowerBar, I.ApplyFramePosition
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Stock styles (Global Settings > Style). A stock unit frame look on our own
 --  frames: the frame art, portrait masks, bar shapes and bar placement of one
@@ -1651,4 +1671,3 @@ function ns.UF_ApplyBlizzardLayout(frame, unit)
     end
     if frame.Castbar then ns.UF_ApplyBlizzCastbar(frame.Castbar) end
 end
-

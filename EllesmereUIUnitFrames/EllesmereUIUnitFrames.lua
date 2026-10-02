@@ -17332,6 +17332,7 @@ local EllesmereUF = EllesmereUI.Lite.NewAddon("EllesmereUIUnitFrames")
 
 function EllesmereUF:OnInitialize()
     db = EllesmereUI.Lite.NewDB("EllesmereUIUnitFramesDB", defaults, true)
+    for i = 1, #ns._internals.dbSetters do ns._internals.dbSetters[i](db) end
 
     -- A fresh install starts Target of Target on the Target frame's look; a
     -- profile from an earlier version keeps Automatic (no lookSource). Written
@@ -17682,3 +17683,18 @@ if EllesmereUI.RegisterVisEdge then
         if ns.UpdateFrameVisibility then ns.UpdateFrameVisibility() end
     end)
 end
+
+-- Main-chunk locals the other EUI_UnitFrames_*.lua files re-import by name.
+-- dbSetters: a part file keeps its own local db and adds a setter here;
+-- EllesmereUF:OnInitialize runs the list once the DB exists.
+ns._internals = {
+    frames = frames, GetSettingsForUnit = GetSettingsForUnit, UnsnapTex = UnsnapTex,
+    CastbarUnlockKey = CastbarUnlockKey, CreatePowerBar = CreatePowerBar,
+    ApplyFramePosition = ApplyFramePosition,
+    dbSetters = {},
+}
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._internals, { __index = function(_, k)
+    error("ns._internals has no entry " .. tostring(k), 2)
+end })
