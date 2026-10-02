@@ -94,7 +94,7 @@ end
 -- are still set (re-suppressing keeps the ORIGINAL pre-battle shown state,
 -- see `if not ffd[suppressKey]` below), so that battle's own close
 -- transition completes or re-defers as usual.
--- do-block with block locals; helper exported on the vtable (200-local cap).
+-- do-block with block locals; helper exported on the vtable.
 do
     local pending
     local function DrainPending()
@@ -282,7 +282,7 @@ end
 --  while Quick Keybind mode is open, which brings these bars back for binding).
 --  Both only turn ON out of combat: the secure drivers cannot follow in
 --  combat, and a still-visible bar in the Never set would skip its content
---  walks for the rest of the fight. EAB fields, not locals: 200-local cap.
+--  walks for the rest of the fight. EAB fields, not locals: read module-wide.
 -------------------------------------------------------------------------------
 -- Device edges arrive through EllesmereUI.WatchPad, one call per burst; a
 -- repaint only when the verdict flips.
@@ -467,7 +467,7 @@ end
 -------------------------------------------------------------------------------
 -- Settings swapped to force a bar fully visible. Listed once so backup and
 -- overwrite stay in sync. do/end keeps this a block upvalue, not a chunk
--- local (Lua 5.1 200-local-per-chunk cap).
+-- local.
 do
 local MYSLOT_VIS_FIELDS = {
     "barVisibility", "alwaysHidden", "mouseoverEnabled", "mouseoverAlpha",

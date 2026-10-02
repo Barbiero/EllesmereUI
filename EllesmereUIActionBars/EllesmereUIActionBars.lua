@@ -5443,7 +5443,9 @@ end
 -- bar border (out of combat; a combat pass defers to the regen ApplyAll);
 -- eligOnly (the shape tail) skips that restyle. A bar that moved in or out of
 -- eligibility re-runs the three role passes, which own the edges-or-copy
--- choice; ApplyAll runs them itself right after its bar loop.
+-- choice; ApplyAll runs them itself right after its bar loop. Lives here, not
+-- in EUI_ActionBars_Pushed.lua with the rest of Match Bar Border: it reads
+-- _isApplyingAll, a chunk local that ApplyAll rewrites.
 ns._ixBarSync = function(barKey, eligOnly)
     local p = EAB.db and EAB.db.profile
     if not p then return end

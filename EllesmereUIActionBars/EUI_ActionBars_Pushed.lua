@@ -21,7 +21,7 @@ local BAR_CONFIG, _quickKeybindState = I.BAR_CONFIG, I._quickKeybindState
 local SetSquareTexture, _controllerButtons, allButtons = I.SetSquareTexture, I._controllerButtons, I.allButtons
 
 -------------------------------------------------------------------------------
---  Pushed / Highlight / Cooldown Edge / Misc Textures / Proc Glows
+--  Pushed / Highlight Textures
 --  These are global settings that apply to ALL action bar buttons.
 -------------------------------------------------------------------------------
 local PUSHED_TYPES = {
@@ -102,8 +102,8 @@ end
 --  whose bodies return at once unless their role is armed. ONE painter picks
 --  pressed > spell cast > hover. While the copy shows, the bar border hides
 --  through its own backdrop's alpha (our frame), never Hide(); the button's
---  own alpha is never read or written. All on ns: the main chunk is at the
---  200-local cap.
+--  own alpha is never read or written. All on ns: the main file and the
+--  glow file reach them there.
 -------------------------------------------------------------------------------
 
 -- Tint slots (r, g, b, a), refilled in place by the pushed and highlight passes

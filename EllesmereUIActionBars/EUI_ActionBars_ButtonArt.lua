@@ -551,7 +551,7 @@ end
 -- "Border Above Effects": +20 clears the proc glow wrapper (+10), the assist
 -- overlay (+14) and ring (+15), the cooldown swipe and the item-rank diamond
 -- (+18). Otherwise the button's own level, in front of the icon. Show Behind
--- wins. On ns: the main chunk is at the 200-local cap.
+-- wins. On ns: EUI_ActionBars_Pushed.lua calls it too.
 ns._eabBorderLevel = function(btn, behind, above)
     local lvl = btn:GetFrameLevel()
     if behind then return max(0, lvl - 1) end
