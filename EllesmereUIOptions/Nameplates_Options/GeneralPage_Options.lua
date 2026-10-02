@@ -905,7 +905,7 @@ local function BuildGeneralPage(pageName, parent, yOffset)
     local tfRangeOff = function() return DBVal("rangeTextEnabled") ~= true end
     local tfRangeRow
     tfRangeRow, h = W:DualRow(parent, y,
-        { type="toggle", text="Distance to Target Text",
+        { type="toggle", text="Distance to Target Text (Range)",
           tooltip="Shows the approximate distance to your current target on its nameplate as a range bracket, e.g. 15+ when the target is 15-20 yards away.",
           getValue=function() return DBVal("rangeTextEnabled") == true end,
           setValue=function(v)
@@ -921,7 +921,7 @@ local function BuildGeneralPage(pageName, parent, yOffset)
         EllesmereUI.BuildInlineCog(rgn, {
             icon = EllesmereUI.RESIZE_ICON,
             disabled = tfRangeOff,
-            disabledTooltip = "Distance to Target Text",
+            disabledTooltip = "Distance to Target Text (Range)",
             title = "Distance Text",
             rows = {
                 { type="slider", label="Text Size", min=6, max=32, step=1,
