@@ -2217,6 +2217,151 @@ do
     EllesmereUI._secondaryStatsOrder = SecondaryStatsOrder
     -- Tertiaries keep the original default: the player's class color.
 
+    -- EUI-CUSTOM: WoW Forever (Classic/Camelot, iface 16001) has none of
+    -- retail's secondary/tertiary ratings (mastery/vers/haste/leech/avoidance/
+    -- speed all read 0 here). This is the OG character-panel stat set instead:
+    -- each descriptor carries its label/short label, palette hue, display
+    -- format, and a getter verified against the client's own panel. Used only
+    -- when EllesmereUI.IS_FOREVER; retail keeps the tables above.
+    --   .def = shown by default (the rest are available but unchecked in options).
+    -- Getters that ADD or SCALE guard with issecretvalue and return nil ("?")
+    -- rather than error, matching the SECRET STATS note below.
+    local function fSum(...)
+        local total = 0
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if issecretvalue(v) then return nil end
+            total = total + (v or 0)
+        end
+        return total
+    end
+    local FOREVER_STAT = {
+        { key = "ap",        label = "Attack Power",   short = "AP",     hex = "ff8c42", fmt = "%.0f", def = true,
+          get = function() return fSum(UnitAttackPower("player")) end },
+        { key = "mcrit",     label = "Melee Crit",     short = "Crit",   hex = "ffd100", fmt = "%.2f%%", def = true,
+          get = function() return GetCritChance() end },
+        { key = "rcrit",     label = "Ranged Crit",    short = "R.Crit", hex = "ffd100", fmt = "%.2f%%",
+          get = function() return GetRangedCritChance() end },
+        { key = "scrit",     label = "Spell Crit",     short = "S.Crit", hex = "ffd100", fmt = "%.2f%%",
+          get = function() return GetSpellCritChance(2) end },
+        { key = "mhit",      label = "Melee Hit",      short = "Hit",    hex = "ffa94d", fmt = "%.2f%%",
+          get = function() return GetHitModifier() end },
+        { key = "shit",      label = "Spell Hit",      short = "S.Hit",  hex = "ffa94d", fmt = "%.2f%%",
+          get = function() return GetSpellHitModifier() end },
+        { key = "rap",       label = "Ranged AP",      short = "RAP",    hex = "ff8c42", fmt = "%.0f",
+          get = function() return fSum(UnitRangedAttackPower("player")) end },
+        { key = "sp",        label = "Spell Power",    short = "SP",     hex = "c77dff", fmt = "%.0f", def = true,
+          get = function()
+              local m = 0
+              for i = 2, 7 do
+                  local v = GetSpellBonusDamage(i)
+                  if issecretvalue(v) then return nil end
+                  if v and v > m then m = v end
+              end
+              return m
+          end },
+        { key = "healing",   label = "Healing Power",  short = "Heal",   hex = "4ec9b0", fmt = "%.0f", def = true,
+          get = function() return GetSpellBonusHealing() end },
+        { key = "sp_holy",   label = "Holy SP",   short = "Holy",   hex = "fff2b0", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(2) end },
+        { key = "sp_fire",   label = "Fire SP",   short = "Fire",   hex = "ff6b35", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(3) end },
+        { key = "sp_nature", label = "Nature SP", short = "Nature", hex = "4caf50", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(4) end },
+        { key = "sp_frost",  label = "Frost SP",  short = "Frost",  hex = "3fc7eb", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(5) end },
+        { key = "sp_shadow", label = "Shadow SP", short = "Shadow", hex = "a335ee", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(6) end },
+        { key = "sp_arcane", label = "Arcane SP", short = "Arcane", hex = "ff7eb6", fmt = "%.0f",
+          get = function() return GetSpellBonusDamage(7) end },
+        { key = "spen",      label = "Spell Pen",  short = "S.Pen", hex = "b39ddb", fmt = "%.0f",
+          get = function() return GetSpellPenetration() end },
+        { key = "mp5",       label = "Mana Regen", short = "MP5",   hex = "4fc3f7", fmt = "%.0f", def = true,
+          get = function() local b = GetManaRegen(); if issecretvalue(b) then return nil end; return floor((b or 0) * 5) end },
+        { key = "hp5",       label = "Health Regen", short = "HP5", hex = "e57373", fmt = "%.0f",
+          get = function() local r = GetHealthRegen and GetHealthRegen(); if r == nil or issecretvalue(r) then return nil end; return floor(r * 5) end },
+        { key = "armor",     label = "Armor",   short = "Armor", hex = "b0bec5", fmt = "%.0f",
+          get = function() return (select(2, UnitArmor("player"))) end },
+        { key = "defense",   label = "Defense", short = "Def",   hex = "b0bec5", fmt = "%.0f",
+          get = function() if not UnitDefenseSkill then return nil end return fSum(UnitDefenseSkill("player")) end },
+        { key = "dodge",     label = "Dodge",   short = "Dodge", hex = "64b5f6", fmt = "%.2f%%",
+          get = function() return GetDodgeChance() end },
+        { key = "parry",     label = "Parry",   short = "Parry", hex = "64b5f6", fmt = "%.2f%%",
+          get = function() return GetParryChance() end },
+        { key = "block",     label = "Block",   short = "Block", hex = "64b5f6", fmt = "%.2f%%",
+          get = function() return GetBlockChance() end },
+        { key = "blockval",  label = "Block Value", short = "Blk V", hex = "64b5f6", fmt = "%.0f",
+          get = function() return GetShieldBlock() end },
+        { key = "res_holy",   label = "Holy Resist",   short = "Holy R",  hex = "fff2b0", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 1))) end },
+        { key = "res_fire",   label = "Fire Resist",   short = "Fire R",  hex = "ff6b35", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 2))) end },
+        { key = "res_nature", label = "Nature Resist", short = "Nat R",   hex = "4caf50", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 3))) end },
+        { key = "res_frost",  label = "Frost Resist",  short = "Frost R", hex = "3fc7eb", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 4))) end },
+        { key = "res_shadow", label = "Shadow Resist", short = "Shad R",  hex = "a335ee", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 5))) end },
+        { key = "res_arcane", label = "Arcane Resist", short = "Arc R",   hex = "ff7eb6", fmt = "%.0f",
+          get = function() return (select(2, UnitResistance("player", 6))) end },
+        { key = "movespeed", label = "Movement Speed", short = "MS", hex = "81c784", fmt = "%.0f%%", def = true,
+          get = function() local run = select(2, GetUnitSpeed("player")); if issecretvalue(run) then return nil end; return floor((run or 0) / 7 * 100 + 0.5) end },
+    }
+    local FOREVER_INDEX = {}
+    for _, d in ipairs(FOREVER_STAT) do FOREVER_INDEX[d.key] = d end
+    local function ForeverStatsOrder()
+        local saved = EllesmereUI.QoLExtrasGet("secondaryStatsOrder")
+        local order, added = {}, {}
+        if type(saved) == "table" then
+            for _, key in ipairs(saved) do
+                if FOREVER_INDEX[key] and not added[key] then
+                    added[key] = true
+                    order[#order + 1] = key
+                end
+            end
+        end
+        for _, d in ipairs(FOREVER_STAT) do
+            if not added[d.key] then order[#order + 1] = d.key end
+        end
+        return order
+    end
+    if EllesmereUI.IS_FOREVER then
+        EllesmereUI._secondaryStatsOrder = ForeverStatsOrder
+        -- Options consumes this: labels for the checklist and the set of stats
+        -- that default OFF (everything not flagged .def), so the shared show/
+        -- hide logic keeps the right rows unchecked.
+        EllesmereUI._secondaryStatsMeta = function()
+            local labels, defaultOff = {}, {}
+            for _, d in ipairs(FOREVER_STAT) do
+                labels[d.key] = d.label
+                if not d.def then defaultOff[d.key] = true end
+            end
+            return labels, defaultOff
+        end
+        -- Grouped view for the columnar Stats-to-Show picker: ordered groups,
+        -- each with a title and its {key,label} stats (labels from descriptors).
+        local FOREVER_GROUPS = {
+            { key = "offensive",   title = "Offensive",            keys = { "ap", "rap", "mcrit", "rcrit", "mhit" } },
+            { key = "spell",       title = "Spell",                keys = { "sp", "healing", "scrit", "shit", "spen" } },
+            { key = "spellschool", title = "Spell Power / School", keys = { "sp_holy", "sp_fire", "sp_frost", "sp_nature", "sp_shadow", "sp_arcane" } },
+            { key = "defensive",   title = "Defensive",            keys = { "armor", "defense", "dodge", "parry", "block", "blockval" } },
+            { key = "resist",      title = "Resistances",          keys = { "res_holy", "res_fire", "res_frost", "res_nature", "res_shadow", "res_arcane" } },
+            { key = "utility",     title = "Regen & Utility",      keys = { "mp5", "hp5", "movespeed" } },
+        }
+        EllesmereUI._secondaryStatsCatalog = function()
+            local out = {}
+            for _, g in ipairs(FOREVER_GROUPS) do
+                local stats = {}
+                for _, k in ipairs(g.keys) do
+                    local d = FOREVER_INDEX[k]
+                    if d then stats[#stats + 1] = { key = k, label = d.label } end
+                end
+                out[#out + 1] = { key = g.key, title = g.title, stats = stats }
+            end
+            return out
+        end
+    end
+
     -- SECRET STATS. In restricted content the stat getters return secret
     -- numbers. A secret refuses INSPECTION -- compare one, do arithmetic on
     -- one, or format one in Lua, and that errors -- but it renders perfectly
@@ -2445,6 +2590,34 @@ do
             end
         end
 
+        -- EUI-CUSTOM: on Forever render the OG stat catalog (retail ratings
+        -- do not exist here); retail keeps its crit/haste/mastery/vers/tert rows.
+        if EllesmereUI.IS_FOREVER then
+            for _, key in ipairs(ForeverStatsOrder()) do
+                local d = FOREVER_INDEX[key]
+                if d then
+                    local hk = hiddenStats and hiddenStats[key]
+                    local shown
+                    if hk == true then shown = false
+                    elseif hk == false then shown = true
+                    else shown = d.def == true end
+                    if shown then
+                        local hex = customHex or d.hex
+                        local v = d.get()
+                        if v == nil then
+                            statUnreadable = true
+                            rows[#rows + 1] = format("|cff%s%s:|r%s?", hex, Esc(Label(d.label, d.short)), LABEL_GAP)
+                        else
+                            if issecretvalue(v) then anySecret = true end
+                            vals[#vals + 1] = v
+                            rows[#rows + 1] = format("|cff%s%s:|r%s|cff%s%s|r",
+                                hex, Esc(Label(d.label, d.short)), LABEL_GAP,
+                                coloredPct and hex or "ffffff", d.fmt)
+                        end
+                    end
+                end
+            end
+        else
         for _, key in ipairs(SecondaryStatsOrder()) do
             if not (hiddenStats and hiddenStats[key]) then
                 if key == "crit" then
@@ -2463,6 +2636,7 @@ do
                     Row(tertHex, Label("Speed", "S"), speed, speedRaw)
                 end
             end
+        end
         end
 
         -- FPS and latency, drawn here rather than by the standalone counter
@@ -5133,6 +5307,34 @@ do
     f:SetScript("OnEvent", function(self)
         self:UnregisterAllEvents()
         InstallHook()
+    end)
+end
+
+-- Forever OG secondary-stats: keep the on-screen block fresh across stealth/prowl.
+-- UpdateSecondaryStats reads Movement Speed live (GetUnitSpeed), but the HUD's event
+-- list has no aura/speed event, so leaving stealth/prowl (a form aura that changes run
+-- speed) never repaints the block -- the char sheet updates, the HUD stays stale until
+-- the next periodic tick. UNIT_AURA catches prowl on/off; PLAYER_FLAGS_CHANGED is
+-- belt-and-suspenders. Nudges the exported apply (recomputes live, no-ops while the HUD
+-- is off). Debounced since UNIT_AURA is chatty.
+if EllesmereUI.IS_FOREVER then
+    local refresher = CreateFrame("Frame")
+    refresher:RegisterUnitEvent("UNIT_AURA", "player")
+    refresher:RegisterEvent("PLAYER_FLAGS_CHANGED")
+    local pending = false
+    local function doRefresh()
+        if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+    end
+    refresher:SetScript("OnEvent", function()
+        if pending then return end
+        pending = true
+        C_Timer.After(0.1, function()
+            pending = false
+            doRefresh()
+            -- Health/Mana Regen (hp5/mp5) recompute a beat after the aura applies, so an
+            -- immediate read still returns the pre-change value; a follow-up catches it.
+            C_Timer.After(0.4, doRefresh)
+        end)
     end)
 end
 
