@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Range.lua
+--
+--  Out-of-range icon coloring: per-slot range checks and the icon tint. Loads
+--  after the main file and before EUI_ActionBars_Glows.lua, reads the main
+--  file through ns only, and hands GetButtonActionSlot to the files after it
+--  through ns._internals (bottom of this file).
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local ipairs, pairs, pcall = ipairs, pairs, pcall
+local wipe = wipe
+local hooksecurefunc = hooksecurefunc
+local C_Timer_After = C_Timer.After
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE, barButtons = ns.EAB, ns.EAB_VTABLE, ns.barButtons
+local I = ns._internals
+local BAR_CONFIG, NUM_ACTIONBAR_BUTTONS, BAR_SLOT_OFFSETS = I.BAR_CONFIG, I.NUM_ACTIONBAR_BUTTONS, I.BAR_SLOT_OFFSETS
+local barFrames, buttonToBar = I.barFrames, I.buttonToBar
+
 -------------------------------------------------------------------------------
 --  Out-of-Range Icon Coloring: ACTION_RANGE_CHECK_UPDATE tints action button
 --  icons when the target is out of range. Each slot opts in via
@@ -425,3 +447,5 @@ function EAB:ApplyRangeColoring()
     end
 end
 
+-- Entry point the files after this one re-import by name.
+I.GetButtonActionSlot = GetButtonActionSlot
