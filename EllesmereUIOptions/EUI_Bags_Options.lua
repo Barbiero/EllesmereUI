@@ -580,7 +580,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local setNameRow
                     setNameRow, h = W:DualRow(parent, y,
                         { type="toggle", text="Merge Duplicate Items",
-                          tooltip="Show copies of the same item that sit in separate bag slots as one icon with their counts added together. Turn this off to keep every slot separate, for example when you deliberately split stacks. Merging is always paused while the mail, trade, auction house, bank or guild bank window is open, since those take one bag slot at a time.",
+                          tooltip="Show copies of the same item that sit in separate bag slots as one icon with their counts added together. Turn this off to keep every slot separate, for example when you deliberately split stacks. Merging is always paused while the mail, trade, auction house, vendor, bank or guild bank window is open, since those take one bag slot at a time.",
                           getValue=function() return db.profile.bagMergeDuplicates ~= false end,
                           setValue=function(v)
                               db.profile.bagMergeDuplicates = v
@@ -779,7 +779,7 @@ initFrame:SetScript("OnEvent", function(self)
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
                         { type="toggle", text="Merge Duplicate Items",
-                          tooltip="In the list, show copies of the same item that sit in separate bag slots, including unstackable items, as one row with their counts added together. Gear is never merged, and OneBag and MultiBag always show every slot. Merging is paused while the mail, trade, auction house, bank or guild bank window is open.",
+                          tooltip="In the list, show copies of the same item that sit in separate bag slots, including unstackable items, as one row with their counts added together. Gear is never merged, and OneBag and MultiBag always show every slot. Merging is paused while the mail, trade, auction house, vendor, bank or guild bank window is open.",
                           getValue=function() return db.profile.bagListMergeDuplicates == true end,
                           setValue=function(v)
                               db.profile.bagListMergeDuplicates = v and true or false

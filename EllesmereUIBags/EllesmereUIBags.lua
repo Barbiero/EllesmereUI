@@ -428,7 +428,7 @@ local function IsGearCategory(catIdx)
     return _gearCatSet[catIdx]
 end
 
--- Item panels (mail/trade/AH/bank/guildbank) take one bag slot at a time; a merged button
+-- Item panels (mail/trade/AH/vendor/bank/guildbank) take one bag slot at a time; a merged button
 -- only hands over the slot behind it (3 merged mails would mail 1), so duplicates stay unmerged while any panel is open. bagMergeDuplicates disables merging outright.
 local _openItemPanels = {}
 local _anyItemPanelOpen = false
@@ -7152,6 +7152,8 @@ local function StartAddon()
         TRADE_CLOSED          = { "trade",     false },
         AUCTION_HOUSE_SHOW    = { "auction",   true  },
         AUCTION_HOUSE_CLOSED  = { "auction",   false },
+        MERCHANT_SHOW         = { "merchant",  true  },
+        MERCHANT_CLOSED       = { "merchant",  false },
         BANKFRAME_OPENED      = { "bank",      true  },
         BANKFRAME_CLOSED      = { "bank",      false },
         GUILDBANKFRAME_OPENED = { "guildbank", true  },
