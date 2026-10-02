@@ -560,6 +560,18 @@ local function BuildDisplayLayout(parent, y, ctx)
                     ns.ApplyAbsorbStyleAll()
                     UpdatePreview()
                   end },
+                -- Same placements as the unit frames' Absorb Rendering cog.
+                { type = "dropdown", label = "Placement",
+                  tooltip = "Overlay fills empty health first, then draws any excess over current health. Overlay Reverse draws the whole shield back over current health. From Right Edge and From Left Edge grow the whole shield from that end of the bar.",
+                  values = { overlay = "Overlay", overlayReverse = "Overlay Reverse",
+                             right = "From Right Edge", left = "From Left Edge" },
+                  order = { "overlay", "overlayReverse", "right", "left" },
+                  get = function() return DBVal("absorbEdgeMode") or "overlay" end,
+                  set = function(v)
+                    DB().absorbEdgeMode = v
+                    ns.ApplyAbsorbStyleAll()
+                    UpdatePreview()
+                  end },
             },
         })
     end
