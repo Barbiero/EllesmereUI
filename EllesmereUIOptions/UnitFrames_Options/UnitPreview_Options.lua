@@ -2071,16 +2071,18 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
 
         -- Aura preview: mirror the live shared aura border style.
         if unitKey == "player" or unitKey == "target" or unitKey == "focus" or unitKey == "boss" then
-            local blizzFocus = unitKey == "focus" and blizzG
+            -- Blizzard Style: the live frames draw no custom aura border, so
+            -- the preview keeps the plain 1px edge and hides it too.
+            local blizzAura = blizzG ~= nil
             local function ApplyPreviewAuraBorder(icon)
                 if icon._iconTex then
                     icon._iconTex:ClearAllPoints()
-                    local inset = (blizzFocus or (s.auraBorderSize or 1) > 0) and 1 or 0
+                    local inset = (blizzAura or (s.auraBorderSize or 1) > 0) and 1 or 0
                     PP.Point(icon._iconTex, "TOPLEFT", icon, "TOPLEFT", inset, -inset)
                     PP.Point(icon._iconTex, "BOTTOMRIGHT", icon, "BOTTOMRIGHT", -inset, inset)
                 end
                 local border = icon._euiAuraBorder
-                if blizzFocus then
+                if blizzAura then
                     if border then border:Hide() end
                     return
                 end

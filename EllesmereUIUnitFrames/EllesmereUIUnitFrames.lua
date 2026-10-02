@@ -13102,7 +13102,6 @@ ReloadFramesBody = function()
     -- Refresh the tag-readable decimal globals before the combat early-return so
     -- tags pick up the saved state at login and on any settings change.
     ns.ApplyTextDecimalGlobals()
-    if ns.SCT_Refresh then ns.SCT_Refresh() end
     if InCombatLockdown() then
         return
     end
@@ -18476,8 +18475,6 @@ function SetupOptionsPanel()
         return true
     end
     ns.ResolveFontPath = ResolveFontPath
-
-    if ns.SCT_Refresh then ns.SCT_Refresh() end
 
     -- Trigger the EllesmereUI options module registration now that ns.db is ready
     if ns._InitEUIModule then

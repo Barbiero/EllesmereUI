@@ -262,6 +262,109 @@ local function ShowTransformsPopup()
     transformsPopup._dimmer:Show()
 end
 
+-------------------------------------------------------------------------------
+--  SELF COMBAT TEXT section of the QoL page (runtime:
+--  EllesmereUIQoL_SelfCombatText.lua, settings through its SCT_Get/SCT_Set)
+-------------------------------------------------------------------------------
+local function BuildSelfCombatTextSection(parent, y)
+    local W = EllesmereUI.Widgets
+    local qns = EllesmereUI._ModuleNS["EllesmereUIQoL"]
+    local SCTGet, SCTSet = qns.SCT_Get, qns.SCT_Set
+    local _, h
+
+    _, h = W:SectionHeader(parent, "SELF COMBAT TEXT", y);  y = y - h
+
+    local function sctOff() return not SCTGet("enabled") end
+    local function sctToggle(text, key)
+        return { type="toggle", text=text,
+          disabled=sctOff, disabledTooltip="Self Combat Text",
+          getValue=function() return SCTGet(key) end,
+          setValue=function(v) SCTSet(key, v); EllesmereUI:RefreshPage() end }
+    end
+    local function sctDropdown(text, key, values, order)
+        return { type="dropdown", text=text, values=values, order=order,
+          disabled=sctOff, disabledTooltip="Self Combat Text",
+          getValue=function() return SCTGet(key) end,
+          setValue=function(v) SCTSet(key, v) end }
+    end
+    -- A category toggle's colour, locked while the feature or that category is off
+    local function sctSwatch(rgn, key, colorKey, label)
+        if EllesmereUI._prebuilding then return end
+        EllesmereUI.BuildInlineSwatches(rgn, { {
+            disabled = function() return sctOff() or not SCTGet(key) end,
+            disabledTooltip = function() return sctOff() and "Self Combat Text" or label end,
+            getValue = function() local c = SCTGet(colorKey); return c.r, c.g, c.b end,
+            setValue = function(r, g, b) SCTSet(colorKey, { r = r, g = g, b = b }) end,
+        } })
+    end
+
+    local sctRow
+    sctRow, h = W:DualRow(parent, y,
+        { type="toggle", text="Self Combat Text",
+          tooltip="Shows your damage taken, healing, avoids and combat enter/leave above the player frame instead of Blizzard's combat text, whose other messages are hidden while this is on. Move it in Unlock Mode.",
+          getValue=function() return not sctOff() end,
+          setValue=function(v) SCTSet("enabled", v); EllesmereUI:RefreshPage() end },
+        { type="slider", text="Combat Text Size", min=10, max=48, step=1,
+          disabled=sctOff, disabledTooltip="Self Combat Text",
+          getValue=function() return SCTGet("size") end,
+          setValue=function(v) SCTSet("size", v) end });  y = y - h
+    if not EllesmereUI._prebuilding then
+        EllesmereUI.BuildInlineCog(sctRow._leftRegion, { disabled = sctOff, disabledTooltip = "Self Combat Text",
+            title = "Self Combat Text",
+            rows = {
+                { type="slider", label="Scroll Distance", min=20, max=300, step=5,
+                  get=function() return SCTGet("rise") end,
+                  set=function(v) SCTSet("rise", v) end },
+                { type="slider", label="Scroll Duration", min=0.5, max=4, step=0.1,
+                  get=function() return SCTGet("duration") end,
+                  set=function(v) SCTSet("duration", v) end },
+                { type="slider", label="Crit Scale", min=1, max=3, step=0.1,
+                  get=function() return SCTGet("critScale") end,
+                  set=function(v) SCTSet("critScale", v) end },
+                { type="toggle", label="Stagger Hits",
+                  get=function() return SCTGet("stagger") end,
+                  set=function(v) SCTSet("stagger", v) end },
+            },
+        })
+    end
+
+    _, h = W:DualRow(parent, y,
+        sctDropdown("Animation", "anim",
+            { straight = "Straight", fountain = "Fountain", static = "Static" },
+            { "straight", "fountain", "static" }),
+        sctDropdown("Scroll Direction", "direction",
+            { up = "Up", down = "Down" }, { "up", "down" }));  y = y - h
+
+    local fontValues, fontOrder = EllesmereUI.BuildFontDropdownData()
+    fontValues["__combat"] = { text = "Combat Text Font" }
+    table.insert(fontOrder, 1, "__combat")
+    _, h = W:DualRow(parent, y,
+        sctDropdown("Font", "font", fontValues, fontOrder),
+        sctDropdown("Outline", "outline",
+            { NONE = "None", OUTLINE = "Outline", THICKOUTLINE = "Thick Outline" },
+            { "NONE", "OUTLINE", "THICKOUTLINE" }));  y = y - h
+
+    _, h = W:DualRow(parent, y,
+        sctToggle("Text Shadow", "shadow"),
+        sctToggle("Abbreviate Numbers", "abbreviate"));  y = y - h
+
+    local sctRow2
+    sctRow2, h = W:DualRow(parent, y,
+        sctToggle("Show Damage Taken", "damage"),
+        sctToggle("Show Healing Received", "heal"));  y = y - h
+    sctSwatch(sctRow2._leftRegion, "damage", "damageColor", "Show Damage Taken")
+    sctSwatch(sctRow2._rightRegion, "heal", "healColor", "Show Healing Received")
+
+    local sctRow3
+    sctRow3, h = W:DualRow(parent, y,
+        sctToggle("Show Avoidance", "avoid"),
+        sctToggle("Show Combat Enter/Leave", "combat"));  y = y - h
+    sctSwatch(sctRow3._leftRegion, "avoid", "avoidColor", "Show Avoidance")
+    sctSwatch(sctRow3._rightRegion, "combat", "combatColor", "Show Combat Enter/Leave")
+
+    return y
+end
+
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:SetScript("OnEvent", function(self)
@@ -1256,7 +1359,7 @@ initFrame:SetScript("OnEvent", function(self)
         row4, h = W:DualRow(parent, y,
             { type="toggle", text="Secondary Stat Display",
               tooltip=EllesmereUI.IS_FOREVER
-                  and "Displays secondary stat percentages (Crit, Haste) at the top left of the screen."
+                  and "Displays your character stats at the top left of the screen."
                   or "Displays secondary stat percentages (Crit, Haste, Mastery, Vers) at the top left of the screen.",
               getValue=function()
                 return EllesmereUI.QoLExtrasGet("showSecondaryStats") or false
@@ -1415,13 +1518,6 @@ initFrame:SetScript("OnEvent", function(self)
             local DEFAULT_STAT_ORDER = {
                 "crit", "haste", "mastery", "vers", "leech", "avoidance", "speed",
             }
-            -- EUI-CUSTOM: on Forever swap in the OG catalog's labels and treat
-            -- everything not shown-by-default as "tertiary" (default-off), so
-            -- the shared show/hide/order logic below needs no other change.
-            -- (StatItems reads _secondaryStatsOrder, already the Forever order.)
-            if EllesmereUI.IS_FOREVER and EllesmereUI._secondaryStatsMeta then
-                STAT_LABELS, TERTIARY_STATS = EllesmereUI._secondaryStatsMeta()
-            end
             local function StatItems()
                 local order = EllesmereUI._secondaryStatsOrder
                     and EllesmereUI._secondaryStatsOrder() or DEFAULT_STAT_ORDER
@@ -1431,107 +1527,103 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 return items
             end
-            -- Forever: "Stats to Show" moves to its own page row + reorder gear
-            -- (built below), so the combined reorder-checklist ships on retail
-            -- only; it is inserted back at its original index there so retail's
-            -- cog layout is unchanged.
-            local cogRows = {
-                -- Key stays `coloredPercentages`: it is the shipped setting
-                -- name, and renaming it would drop everyone's saved choice.
-                { type = "toggle", label = "Colored Values",
-                  get = function()
-                      return EllesmereUI.QoLExtrasGet("coloredPercentages") or false
-                  end,
-                  set = function(v)
-                      EllesmereUI.QoLExtrasSet("coloredPercentages", v)
-                      if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                  end },
-                { type = "toggle", label = "Abbreviate Stat Labels",
-                  get = function()
-                      return EllesmereUI.QoLExtrasGet("secondaryStatsAbbreviateLabels") or false
-                  end,
-                  set = function(v)
-                      EllesmereUI.QoLExtrasSet("secondaryStatsAbbreviateLabels", v)
-                      if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                  end },
-                { type = "toggle", label = "Show Raw Rating",
-                  disabled = function() return EllesmereUI.IS_FOREVER end,
-                  disabledTooltip = "Combat ratings do not exist on this client.",
-                  get = function()
-                      return EllesmereUI.QoLExtrasGet("showSecondaryStatsRaw") or false
-                  end,
-                  set = function(v)
-                      EllesmereUI.QoLExtrasSet("showSecondaryStatsRaw", v)
-                      if v then EllesmereUI.QoLExtrasSet("showSecondaryStatsBoth", false) end
-                      if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                  end },
-                { type = "toggle", label = "Show % and Raw",
-                  disabled = function() return EllesmereUI.IS_FOREVER end,
-                  disabledTooltip = "Combat ratings do not exist on this client.",
-                  get = function()
-                      return EllesmereUI.QoLExtrasGet("showSecondaryStatsBoth") or false
-                  end,
-                  set = function(v)
-                      EllesmereUI.QoLExtrasSet("showSecondaryStatsBoth", v)
-                      if v then EllesmereUI.QoLExtrasSet("showSecondaryStatsRaw", false) end
-                      if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                  end },
-                -- Class / custom swatch pair, the same convention as the
-                -- minimap border row: the active mode at full alpha, a
-                -- naming tooltip on each swatch.
-                { type = "multiswatch", label = "Tertiary Label Color",
-                  disabled = function()
-                      if EllesmereUI.IS_FOREVER then return true end
-                      local hidden = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
-                      return type(hidden) == "table"
-                          and hidden.leech and hidden.avoidance and hidden.speed
-                  end,
-                  disabledTooltip = "a tertiary stat in Stats to Show",
-                  swatches = {
-                      { tooltip = "Class Color",
-                        getValue = function()
-                            local cc = EllesmereUI.GetClassColor(select(2, UnitClass("player")))
-                            if cc then return cc.r, cc.g, cc.b end
-                            return 1, 1, 1
-                        end,
-                        onClick = function() tsSetMode("class") end,
-                        refreshAlpha = function() return tsMode() == "class" and 1 or 0.3 end },
-                      { tooltip = "Custom Color",
-                        getValue = function()
-                            local c = EllesmereUI.QoLExtrasGet("tertiaryStatsColor")
-                            if c then return c.r, c.g, c.b end
-                            return 1, 1, 1
-                        end,
-                        setValue = function(r, g, b)
-                            EllesmereUI.QoLExtrasSet("tertiaryStatsColor", { r = r, g = g, b = b })
-                            EllesmereUI.QoLExtrasSet("tertiaryStatsColorMode", "custom")
-                            if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                        end,
-                        -- First click switches to custom; a second opens the picker.
-                        onClick = function(self, ...)
-                            if tsMode() ~= "custom" then tsSetMode("custom") return end
-                            if self._eabOrigClick then self._eabOrigClick(self, ...) end
-                        end,
-                        refreshAlpha = function() return tsMode() == "custom" and 1 or 0.3 end },
-                  } },
-                { type = "slider", label = "Scale", min = 50, max = 200, step = 5,
-                  get = function()
-                      local pos = EllesmereUI.QoLExtrasGet("secondaryStatsPos")
-                      return math.floor(((pos and pos.scale) or 1.0) * 100 + 0.5)
-                  end,
-                  set = function(v)
-                      -- Shallow-copy so we never mutate the shared account-wide
-                      -- fallback table in place; the write lands per-profile.
-                      local prev = EllesmereUI.QoLExtrasGet("secondaryStatsPos")
-                      local newPos = {}
-                      if prev then for pk, pv in pairs(prev) do newPos[pk] = pv end end
-                      newPos.scale = v / 100
-                      EllesmereUI.QoLExtrasSet("secondaryStatsPos", newPos)
-                      if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                  end },
-            }
-            if not EllesmereUI.IS_FOREVER then
-                table.insert(cogRows, 5, { type = "reordercheck", label = "Stats to Show",
+            -- Key stays `coloredPercentages`: it is the shipped setting
+            -- name, and renaming it would drop everyone's saved choice.
+            local coloredRow = { type = "toggle", label = "Colored Values",
+                get = function()
+                    return EllesmereUI.QoLExtrasGet("coloredPercentages") or false
+                end,
+                set = function(v)
+                    EllesmereUI.QoLExtrasSet("coloredPercentages", v)
+                    if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                end }
+            local abbreviateRow = { type = "toggle", label = "Abbreviate Stat Labels",
+                get = function()
+                    return EllesmereUI.QoLExtrasGet("secondaryStatsAbbreviateLabels") or false
+                end,
+                set = function(v)
+                    EllesmereUI.QoLExtrasSet("secondaryStatsAbbreviateLabels", v)
+                    if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                end }
+            local scaleRow = { type = "slider", label = "Scale", min = 50, max = 200, step = 5,
+                get = function()
+                    local pos = EllesmereUI.QoLExtrasGet("secondaryStatsPos")
+                    return math.floor(((pos and pos.scale) or 1.0) * 100 + 0.5)
+                end,
+                set = function(v)
+                    -- Shallow-copy so we never mutate the shared account-wide
+                    -- fallback table in place; the write lands per-profile.
+                    local prev = EllesmereUI.QoLExtrasGet("secondaryStatsPos")
+                    local newPos = {}
+                    if prev then for pk, pv in pairs(prev) do newPos[pk] = pv end end
+                    newPos.scale = v / 100
+                    EllesmereUI.QoLExtrasSet("secondaryStatsPos", newPos)
+                    if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                end }
+            local cogRows, cogBtn, cogShow
+            if EllesmereUI.IS_FOREVER then
+                -- WoW Forever has no ratings or tertiaries: its stat catalog is
+                -- picked in the grouped Choose Stats window
+                -- (EUI_QoL_StatPicker.lua) and the shown stats ordered here.
+                local FV_STAT = EllesmereUI._ModuleNS["EllesmereUIQoL"].FvStats.byKey
+                cogRows = {
+                    coloredRow,
+                    abbreviateRow,
+                    { type = "button", label = "Choose Stats...",
+                      action = function()
+                          -- The window takes the cog popup's place under the cog.
+                          cogShow._popupFrame:Hide()
+                          EllesmereUI._ShowStatPicker(cogBtn)
+                      end },
+                    { type = "reorder", label = "Reorder Shown Stats", maxVisible = 12,
+                      items = function()
+                          local hidden = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
+                          local items = {}
+                          for _, key in ipairs(EllesmereUI._secondaryStatsOrder()) do
+                              if not (type(hidden) == "table" and hidden[key]) then
+                                  items[#items + 1] = { key = key, label = EllesmereUI.L(FV_STAT[key].label) }
+                              end
+                          end
+                          return items
+                      end,
+                      -- The hidden stats follow the shown ones, in their saved order.
+                      set = function(keys)
+                          local order, seen = {}, {}
+                          for _, key in ipairs(keys) do
+                              order[#order + 1] = key
+                              seen[key] = true
+                          end
+                          for _, key in ipairs(EllesmereUI._secondaryStatsOrder()) do
+                              if not seen[key] then order[#order + 1] = key end
+                          end
+                          EllesmereUI.QoLExtrasSet("secondaryStatsOrder", order)
+                          EllesmereUI._applySecondaryStats()
+                      end },
+                    scaleRow,
+                }
+            else
+                cogRows = {
+                    coloredRow,
+                    abbreviateRow,
+                    { type = "toggle", label = "Show Raw Rating",
+                      get = function()
+                          return EllesmereUI.QoLExtrasGet("showSecondaryStatsRaw") or false
+                      end,
+                      set = function(v)
+                          EllesmereUI.QoLExtrasSet("showSecondaryStatsRaw", v)
+                          if v then EllesmereUI.QoLExtrasSet("showSecondaryStatsBoth", false) end
+                          if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                      end },
+                    { type = "toggle", label = "Show % and Raw",
+                      get = function()
+                          return EllesmereUI.QoLExtrasGet("showSecondaryStatsBoth") or false
+                      end,
+                      set = function(v)
+                          EllesmereUI.QoLExtrasSet("showSecondaryStatsBoth", v)
+                          if v then EllesmereUI.QoLExtrasSet("showSecondaryStatsRaw", false) end
+                          if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                      end },
+                    { type = "reordercheck", label = "Stats to Show",
                       items = StatItems,
                       hint = "Drag to Reorder",
                       get = function(key)
@@ -1545,6 +1637,8 @@ initFrame:SetScript("OnEvent", function(self)
                               for k, v in pairs(old) do hidden[k] = v end
                           end
                           if shown then
+                              -- Tertiaries default off, so false is the explicit
+                              -- per-profile override that keeps one checked.
                               if TERTIARY_STATS[key] then
                                   hidden[key] = false
                               else
@@ -1561,69 +1655,52 @@ initFrame:SetScript("OnEvent", function(self)
                           for i, key in ipairs(keys) do order[i] = key end
                           EllesmereUI.QoLExtrasSet("secondaryStatsOrder", order)
                           if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                      end })
+                      end },
+                    -- Class / custom swatch pair, the same convention as the
+                    -- minimap border row: the active mode at full alpha, a
+                    -- naming tooltip on each swatch.
+                    { type = "multiswatch", label = "Tertiary Label Color",
+                      disabled = function()
+                          local hidden = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
+                          return type(hidden) == "table"
+                              and hidden.leech and hidden.avoidance and hidden.speed
+                      end,
+                      disabledTooltip = "a tertiary stat in Stats to Show",
+                      swatches = {
+                          { tooltip = "Class Color",
+                            getValue = function()
+                                local cc = EllesmereUI.GetClassColor(select(2, UnitClass("player")))
+                                if cc then return cc.r, cc.g, cc.b end
+                                return 1, 1, 1
+                            end,
+                            onClick = function() tsSetMode("class") end,
+                            refreshAlpha = function() return tsMode() == "class" and 1 or 0.3 end },
+                          { tooltip = "Custom Color",
+                            getValue = function()
+                                local c = EllesmereUI.QoLExtrasGet("tertiaryStatsColor")
+                                if c then return c.r, c.g, c.b end
+                                return 1, 1, 1
+                            end,
+                            setValue = function(r, g, b)
+                                EllesmereUI.QoLExtrasSet("tertiaryStatsColor", { r = r, g = g, b = b })
+                                EllesmereUI.QoLExtrasSet("tertiaryStatsColorMode", "custom")
+                                if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
+                            end,
+                            -- First click switches to custom; a second opens the picker.
+                            onClick = function(self, ...)
+                                if tsMode() ~= "custom" then tsSetMode("custom") return end
+                                if self._eabOrigClick then self._eabOrigClick(self, ...) end
+                            end,
+                            refreshAlpha = function() return tsMode() == "custom" and 1 or 0.3 end },
+                      } },
+                    scaleRow,
+                }
             end
-            EllesmereUI.BuildInlineCog(leftRgn, {
+            cogBtn, cogShow = EllesmereUI.BuildInlineCog(leftRgn, {
                 title = "Secondary Stats Settings",
                 rows = cogRows,
                 disabled = statsOff, disabledTooltip = "Secondary Stat Display",
             })
-        end
-
-        -- Forever: "Stats to Show" as its own row -- a button opening the
-        -- columnar grouped picker (EllesmereUISecondaryStatsPicker addon), plus
-        -- a gear that reorders only the currently-shown stats.
-        if EllesmereUI.IS_FOREVER then
-            local function statsPickOff()
-                return not EllesmereUI.QoLExtrasGet("showSecondaryStats")
-            end
-            local statsShowRow
-            statsShowRow, h = W:DualRow(parent, y,
-                { type = "labeledButton", text = "Stats to Show", buttonText = "Choose Stats...",
-                  tooltip = "Pick which stats the on-screen block shows, grouped by type.",
-                  disabled = statsPickOff, disabledTooltip = "Secondary Stat Display",
-                  onClick = function(self)
-                      if EllesmereUI._ShowStatPicker then EllesmereUI._ShowStatPicker(self) end
-                  end },
-                { type = "spacer" }
-            );  y = y - h
-            if not EllesmereUI._prebuilding then
-                local leftRgn = statsShowRow._leftRegion
-                EllesmereUI.BuildInlineCog(leftRgn, {
-                    title = "Reorder Shown Stats",
-                    rows = {
-                        { type = "reorder", label = "Reorder",
-                          hint = "Drag to reorder the stats you've enabled",
-                          maxVisible = 12,
-                          items = function()
-                              local order = EllesmereUI._secondaryStatsOrder and EllesmereUI._secondaryStatsOrder() or {}
-                              local labels, defOff
-                              if EllesmereUI._secondaryStatsMeta then labels, defOff = EllesmereUI._secondaryStatsMeta() end
-                              labels = labels or {}; defOff = defOff or {}
-                              local hidden = EllesmereUI.QoLExtrasGet("secondaryStatsHidden")
-                              local items = {}
-                              for _, key in ipairs(order) do
-                                  local hv = type(hidden) == "table" and hidden[key]
-                                  local shown
-                                  if hv == true then shown = false
-                                  elseif hv == false then shown = true
-                                  else shown = not defOff[key] end
-                                  if shown then items[#items + 1] = { key = key, label = labels[key] or key } end
-                              end
-                              return items
-                          end,
-                          set = function(keys)
-                              local full = EllesmereUI._secondaryStatsOrder and EllesmereUI._secondaryStatsOrder() or {}
-                              local order, seen = {}, {}
-                              for _, k in ipairs(keys) do order[#order + 1] = k; seen[k] = true end
-                              for _, k in ipairs(full) do if not seen[k] then order[#order + 1] = k end end
-                              EllesmereUI.QoLExtrasSet("secondaryStatsOrder", order)
-                              if EllesmereUI._applySecondaryStats then EllesmereUI._applySecondaryStats() end
-                          end },
-                    },
-                    disabled = statsPickOff, disabledTooltip = "Secondary Stat Display",
-                })
-            end
         end
 
         -- Row 4: Rested Indicator (left) |
@@ -2150,6 +2227,9 @@ initFrame:SetScript("OnEvent", function(self)
 
         _, h = W:Spacer(parent, y, 20);  y = y - h
 
+        y = BuildSelfCombatTextSection(parent, y)
+        _, h = W:Spacer(parent, y, 20);  y = y - h
+
         ---------------------------------------------------------------------------
         --  GROUP FINDER
         ---------------------------------------------------------------------------
@@ -2539,6 +2619,7 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUI._applyAutoOpenContainers then EllesmereUI._applyAutoOpenContainers() end
             if EllesmereUI._ShutdownShifter then EllesmereUI._ShutdownShifter() end
             if _G._EUI_AutoLogging_Check then _G._EUI_AutoLogging_Check() end
+            EllesmereUI._ModuleNS["EllesmereUIQoL"].SCT_Reset()
             EllesmereUI:InvalidatePageCache()
         end,
         -- Tears down Duration Warning, Raid Tools, and Movement Alert
