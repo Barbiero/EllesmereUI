@@ -12461,4 +12461,6 @@ ns._internals = {
     ShouldQuickKeybindSurfaceBar = ShouldQuickKeybindSurfaceBar,
     SHOWGRID = SHOWGRID, SetShowGridInsecure = SetShowGridInsecure,
     SyncPagingAlpha = SyncPagingAlpha, InitPagingQuickKeybindButton = InitPagingQuickKeybindButton,
+    FONT_PATH = FONT_PATH, LayoutBar = LayoutBar, buttonToBar = buttonToBar, _gridState = _gridState,
+    ApplyButtonBorders = ApplyButtonBorders, ApplyShapeToButton = ApplyShapeToButton,
 }

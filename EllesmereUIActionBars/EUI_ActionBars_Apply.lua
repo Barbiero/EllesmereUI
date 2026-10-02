@@ -1,3 +1,35 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_ActionBars_Apply.lua
+--
+--  The apply methods the options UI and ApplyAll call: borders, shapes,
+--  layout passthroughs, fonts and keybind text, cooldown countdown fonts,
+--  bar and icon backgrounds, Always Show Buttons and the main bar page sync.
+--  Loads right after the main file and reads it through ns only.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local _G = _G
+local ipairs, pairs, pcall = ipairs, pairs, pcall
+local max = math.max
+local InCombatLockdown = InCombatLockdown
+local C_Timer_After = C_Timer.After
+local GetBindingKey = GetBindingKey
+local NUM_ACTIONBAR_BUTTONS = NUM_ACTIONBAR_BUTTONS or 12
+local EFD = ns.EFD
+
+local EAB, EAB_VTABLE, BAR_LOOKUP = ns.EAB, ns.EAB_VTABLE, ns.BAR_LOOKUP
+local ResolveBorderThickness, ButtonHasAction, barButtons = ns.ResolveBorderThickness, ns.ButtonHasAction, ns.barButtons
+local I = ns._internals
+local BAR_CONFIG, BINDING_MAP, FONT_PATH = I.BAR_CONFIG, I.BINDING_MAP, I.FONT_PATH
+local barFrames, buttonToBar, _fadeAlpha = I.barFrames, I.buttonToBar, I._fadeAlpha
+local _gridState, _quickKeybindState = I._gridState, I._quickKeybindState
+local LayoutBar, SyncPagingAlpha, FormatHotkeyText = I.LayoutBar, I.SyncPagingAlpha, I.FormatHotkeyText
+local ApplyButtonBorders, ApplyShapeToButton = I.ApplyButtonBorders, I.ApplyShapeToButton
+local SafeEnableMouse, SafeEnableMouseMotionOnly = I.SafeEnableMouse, I.SafeEnableMouseMotionOnly
+local ShouldQuickKeybindSurfaceBar = I.ShouldQuickKeybindSurfaceBar
+local SHOWGRID, SetShowGridInsecure = I.SHOWGRID, I.SetShowGridInsecure
+
 -------------------------------------------------------------------------------
 --  EAB Methods Apply functions called by the options UI
 -------------------------------------------------------------------------------
