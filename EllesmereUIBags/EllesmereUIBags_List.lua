@@ -720,7 +720,8 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
             -- Round: fixed crop past the icon's baked-in border so the circle edge stays clean
             local z = round and ROUND_ZOOM or (BP().bagItemIconZoom or 0.08)
             icon:SetTexCoord(z, 1 - z, z, 1 - z)
-            icon:SetDesaturated(info.isLocked or (BP().bagDesaturateJunkItems and q == 0) or false)
+            icon:SetDesaturated(info.isLocked or (BP().bagDesaturateJunkItems and q == 0)
+                or (EUI_CategoryManager and EUI_CategoryManager:IsJunk(info.itemID, q)) or false)
             if EUI._BagsItemUnusable(data.bag, data.slot, data.itemLink, info.itemID) then
                 icon:SetVertexColor(1, 0.1, 0.1)
             else

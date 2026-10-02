@@ -59,6 +59,17 @@ local BAGS_DEFAULTS = {
         bagDesaturateJunkItems = false,
         bagDisplayBindType    = false,
         bagBindTypeFontSize   = 11,
+        -- Junk Marker: whole feature is OFF by default (master toggle lives in
+        -- Bags -> Extras). When on, a "Junk" category collects grey (Poor)
+        -- items plus anything the player marks, a header button enters
+        -- junk-select mode, and a Sell Junk button appears at vendors.
+        bagJunkMarker         = false,
+        bagJunkAutoSell       = false,   -- auto-sell junk when a merchant opens
+        bagJunkOneBag         = false,   -- pull junk into its own category in One Bag
+        bagJunkMultiBag       = false,   -- pull junk into its own category in MultiBag
+        bagJunkAtTop          = false,   -- render the pulled-out Junk section at top (below Pinned) vs bottom
+        bagJunkCoinCorner     = "BOTTOMLEFT",  -- corner for the on-item junk coin badge (TL/TR/BL/BR)
+        bagJunkNoSellSummary  = false,   -- suppress the "Sold N junk item(s)" chat line after selling
         bagDisplayMode        = "grid",  -- "grid" | "list" (reload to apply)
         bagListRoundIcons     = false,
         bagListSplitArmor     = false,

@@ -35,6 +35,33 @@ local PreCacheSortFields = ns.PreCacheSortFields
 local VisualSortCompare = ns.VisualSortCompare
 local MergeDuplicates = ns.MergeDuplicates
 local ApplySavedOrder = ns.ApplySavedOrder
+
+-- Junk category ordering: most valuable first by vendor sell value (unit sell
+-- price x stack count), with the normal visual order as a stable tiebreak.
+-- Callers must have run PreCacheSortFields first (the tiebreak relies on it).
+local function SortJunkByVendor(items)
+    for _, d in ipairs(items) do
+        local id = d.info and d.info.itemID
+        -- global GetItemInfo (sellPrice at 11); C_Item.GetItemInfo returns nil here.
+        local price = (id and select(11, GetItemInfo(id))) or 0
+        d._junkSell = price * ((d.info and d.info.stackCount) or 1)
+    end
+    table.sort(items, function(a, b)
+        if a._junkSell ~= b._junkSell then return a._junkSell > b._junkSell end
+        return VisualSortCompare(a, b)
+    end)
+end
+
+-- Junk coin badge placement: each corner anchored to the matching button corner,
+-- nudged a few px OUTSIDE so it overhangs the frame like a badge. Corner is picked
+-- in the Junk cog; no per-user offsets.
+local JUNK_COIN_CORNER = {
+    TOPLEFT     = { "TOPLEFT",     "TOPLEFT",     -3,  3 },
+    TOPRIGHT    = { "TOPRIGHT",    "TOPRIGHT",     3,  3 },
+    BOTTOMLEFT  = { "BOTTOMLEFT",  "BOTTOMLEFT",  -3, -3 },
+    BOTTOMRIGHT = { "BOTTOMRIGHT", "BOTTOMRIGHT",  3, -3 },
+}
+
 local BuildExpansionBuckets = ns.BuildExpansionBuckets
 local BuildSlotBuckets = ns.BuildSlotBuckets
 -- Section label for a bag ID (MultiBag grid and list)
@@ -165,6 +192,7 @@ local function RenderButton(btn, data, _, col, row, startX, currentY, _, interac
         -- Reset to 1px and drop the marker, or a pooled slot vacated by a quest item keeps the 2px gold border + atlas.
         SetInsetBorderThickness(btn, (EUI and EUI.PP and EUI.PP.mult) or 1)
         if btn._questMarker then btn._questMarker:Hide() end
+        if btn._junkCoin then btn._junkCoin:Hide() end
         if btn.Cooldown then btn.Cooldown:Clear() end
         if btn.ItemLevelText then btn.ItemLevelText:SetText("") end
         if btn.KeystoneText then btn.KeystoneText:SetText("") end
@@ -184,10 +212,41 @@ local function RenderButton(btn, data, _, col, row, startX, currentY, _, interac
         btn:SetItemButtonCount(data._mergedCount or data.info.stackCount)
         btn._isMerged = data._mergedCount and true or nil
 
-        -- Desature: 1) locked items 2) junk items if option is active
+        -- Desature: 1) locked items 2) junk items. "Junk" means grey (when the
+        -- standalone Desaturate option is on) OR anything the Junk Marker feature
+        -- classifies as junk (grey + player-marked). EUI_CategoryManager:IsJunk
+        -- returns false whenever the feature is off, so marker items only react
+        -- while it is enabled.
         local quality = data.info.quality or 1
-        local isJunk = BP().bagDesaturateJunkItems and quality == 0
+        local markerJunk = EUI_CategoryManager and EUI_CategoryManager:IsJunk(data.info.itemID, quality)
+        local isJunk = (BP().bagDesaturateJunkItems and quality == 0) or markerJunk
         SetItemButtonDesaturated(btn, data.info.isLocked or isJunk)
+
+        -- Coin corner marker on junk items so marked (non-grey) items read as
+        -- junk at a glance. Lazily created once per pooled button, shown/hidden
+        -- per render.
+        if markerJunk then
+            if not btn._junkCoin then
+                local c = btn:CreateTexture(nil, "OVERLAY", nil, 6)
+                c:SetTexture(133784)  -- INV_Misc_Coin_01
+                c:SetTexCoord(0.12, 0.88, 0.12, 0.88)  -- crop for a clean round edge
+                c:SetSize(12, 12)
+                -- Rounded badge to match the rounded header coin button.
+                local cmask = btn:CreateMaskTexture()
+                cmask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+                cmask:SetAllPoints(c)
+                c:AddMaskTexture(cmask)
+                btn._junkCoin = c
+            end
+            -- Re-anchor each render so the chosen corner (and its outward lift)
+            -- applies live when the cog option changes.
+            local a = JUNK_COIN_CORNER[BP().bagJunkCoinCorner] or JUNK_COIN_CORNER.BOTTOMLEFT
+            btn._junkCoin:ClearAllPoints()
+            btn._junkCoin:SetPoint(a[1], btn, a[2], a[3], a[4])
+            btn._junkCoin:Show()
+        elseif btn._junkCoin then
+            btn._junkCoin:Hide()
+        end
 
         local filtered = data.info.isFiltered
         btn:SetAlpha(filtered and 0.2 or 1)
@@ -914,14 +973,44 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             curY = curY - (rows * (SLOT_SIZE + SPACING)) - 6
         end
 
+        -- Junk pull-out (OneBag/MultiBag): when enabled, divert player-marked or
+        -- grey junk out of the flat bag section(s) into their own "Junk" section,
+        -- sorted by vendor value like the category view. Pre-collected here (not
+        -- inline in the loops) so it can render either at the very bottom
+        -- (default) or at the top just below Pinned Items (bagJunkAtTop). Empty
+        -- slots are never diverted. Off by default -> no change.
+        local pullJunk = (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()
+            and ((not isMulti and BP().bagJunkOneBag) or (isMulti and BP().bagJunkMultiBag))) or false
+        local junkItems, diverted = {}, {}
+        if pullJunk then
+            for _, d in ipairs(tempItems) do
+                if d.bag ~= 5 and d.info and d.info.itemID
+                   and EUI_CategoryManager:IsJunk(d.info.itemID, d.info.quality) then
+                    junkItems[#junkItems + 1] = d
+                    diverted[d] = true
+                end
+            end
+        end
+        local function RenderJunkSection()
+            if #junkItems == 0 then return end
+            PreCacheSortFields(junkItems)
+            SortJunkByVendor(junkItems)
+            RenderBagGrid(EllesmereUI.L("Junk") .. " (" .. #junkItems .. ")", junkItems)
+        end
+        -- Top placement: below the Pinned Items section (drawn above), before the
+        -- bag section(s).
+        local junkAtTop = pullJunk and BP().bagJunkAtTop and #junkItems > 0
+        if junkAtTop then RenderJunkSection() end
+
         -- One bag's items + empties as a section titled with the bag's name, in
-        -- slot order (MultiBag's bags, OneBag's special bags).
+        -- slot order (MultiBag's bags, OneBag's special bags). Diverted junk is
+        -- excluded so it only shows in the pulled-out Junk section.
         local BagDisplayName = ns.BagDisplayName
         local function RenderOneBag(bag)
             local bagList = {}
             local bagFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag == bag then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
+                if d.bag == bag and not diverted[d] then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag == bag then bagList[#bagList + 1] = d end
@@ -939,7 +1028,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local mainSlots = {}
             local mainFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag ~= 5 and not (special and special[d.bag]) then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
+                if d.bag ~= 5 and not (special and special[d.bag]) and not diverted[d] then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag ~= 5 and not (special and special[d.bag]) then mainSlots[#mainSlots + 1] = d end
@@ -995,6 +1084,10 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local reagRows = math.ceil(#reagentSlotList / columns)
             curY = curY - (reagRows * (SLOT_SIZE + SPACING))
         end
+
+        -- Junk category at the very bottom (OneBag/MultiBag pull-out) unless the
+        -- player moved it to the top (already rendered above, below Pinned Items).
+        if not junkAtTop then RenderJunkSection() end
 
     elseif selectedCategoryIndex == 0 and not selectedGroupName then
         -- "All Items" view: group by category with headers
@@ -1247,7 +1340,22 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         end
 
         local hiddenSet = BP().bagHiddenInAllItems or {}
+        -- "Move Junk to Top" in All Items: render the Junk category right after
+        -- Pinned/Recent (the top display-only sections) and skip its normal order
+        -- slot below. Off -> Junk stays in its category-order position.
+        local junkIdx, junkCat
+        for i, c in ipairs(cats) do if c.isJunk then junkIdx, junkCat = i, c; break end end
+        local junkAtTopAll = junkIdx and EUI_CategoryManager:IsJunkMarkerEnabled()
+            and BP().bagJunkAtTop and not hiddenSet[junkCat._defaultName]
+        local junkRendered = false
+        local function RenderJunkCatTop()
+            junkRendered = true
+            RenderSection(junkCat.name, itemsByCat[junkIdx] or {}, false, false, false, junkIdx, true)
+        end
         for ci, cat in ipairs(cats) do
+            if junkAtTopAll and not junkRendered and not cat.isPinned and not cat.isRecent then
+                RenderJunkCatTop()
+            end
             if cat.isPinned then
                 -- Pinned Items: display-only duplicate (items also appear in their normal category)
                 if pinnedSet and showPinned then
@@ -1304,6 +1412,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 end
             elseif cat.isEquipSet then
                 -- Set children render inside their anchor's section
+            elseif cat.isJunk and junkAtTopAll then
+                -- Junk already rendered at the top; skip its normal order slot.
             else
                 if not hiddenSet[cat._defaultName] then
                     local catItems = itemsByCat[ci] or {}
@@ -1365,7 +1475,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
 
                 if #memberItems > 0 then
                     PreCacheSortFields(memberItems)
-                    table.sort(memberItems, VisualSortCompare)
+                    if memberCat and memberCat.isJunk then
+                        SortJunkByVendor(memberItems)
+                    else
+                        table.sort(memberItems, VisualSortCompare)
+                    end
                     memberItems = MergeDuplicates(memberItems)
                 end
 
@@ -1442,7 +1556,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             if #displayItems > 0 then
                 if not (selCat and selCat.isRecent) then
                     PreCacheSortFields(displayItems)
-                    table.sort(displayItems, VisualSortCompare)
+                    if selCat and selCat.isJunk then
+                        SortJunkByVendor(displayItems)
+                    else
+                        table.sort(displayItems, VisualSortCompare)
+                    end
                 end
                 displayItems = MergeDuplicates(displayItems)
             end
