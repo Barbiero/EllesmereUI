@@ -2300,8 +2300,8 @@ do
           get = function() return GetBlockChance() end },
         { key = "blockval",  label = "Block Value", short = "Blk V", hex = "64b5f6", fmt = "%.0f",
           get = function() return GetShieldBlock() end },
-        { key = "res_holy",   label = "Holy Resist",   short = "Holy R",  hex = "fff2b0", fmt = "%.0f",
-          get = function() return (select(2, UnitResistance("player", 1))) end },
+        -- No Holy Resist: UnitResistance index 1 (Holy) is not a player stat --
+        -- always 0 and absent from the character pane. Real resists are Fire..Arcane.
         { key = "res_fire",   label = "Fire Resist",   short = "Fire R",  hex = "ff6b35", fmt = "%.0f",
           get = function() return (select(2, UnitResistance("player", 2))) end },
         { key = "res_nature", label = "Nature Resist", short = "Nat R",   hex = "4caf50", fmt = "%.0f",
@@ -2353,7 +2353,7 @@ do
             { key = "spell",       title = "Spell",                keys = { "sp", "healing", "scrit", "shaste", "shit", "spen" } },
             { key = "spellschool", title = "Spell Power / School", keys = { "sp_holy", "sp_fire", "sp_frost", "sp_nature", "sp_shadow", "sp_arcane" } },
             { key = "defensive",   title = "Defensive",            keys = { "armor", "defense", "dodge", "parry", "block", "blockval" } },
-            { key = "resist",      title = "Resistances",          keys = { "res_holy", "res_fire", "res_frost", "res_nature", "res_shadow", "res_arcane" } },
+            { key = "resist",      title = "Resistances",          keys = { "res_fire", "res_frost", "res_nature", "res_shadow", "res_arcane" } },
             { key = "utility",     title = "Regen & Utility",      keys = { "mp5", "hp5", "movespeed" } },
         }
         EllesmereUI._secondaryStatsCatalog = function()
