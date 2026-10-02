@@ -210,6 +210,7 @@ function ns.CreateListRow(host)
     if btn.Cooldown then
         btn.Cooldown:ClearAllPoints()
         btn.Cooldown:SetAllPoints(btn._lvIcon)
+        btn.Cooldown:SetHideCountdownNumbers(true)
     end
     -- Third-party overlay painters (EUI_Bags.RunItemOverlays) parent to this,
     -- as on the grid slots: here it covers the row's icon.
