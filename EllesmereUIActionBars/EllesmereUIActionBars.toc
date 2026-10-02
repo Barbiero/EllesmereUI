@@ -11,6 +11,12 @@
 
 # Main Luas
 EllesmereUIActionBars.lua
+EUI_ActionBars_Events.lua
+EUI_ActionBars_Chrome.lua
+EUI_ActionBars_DataBars.lua
+EUI_ActionBars_ExtraBars.lua
+EUI_ActionBars_QuickKeybind.lua
+EUI_ActionBars_XPBar.lua
 EUI_ActionBars_Flyout.lua
 
 # Options

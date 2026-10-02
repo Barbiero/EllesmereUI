@@ -12,6 +12,16 @@
 # Widget factory first: everything below builds pages with it. File order
 # mirrors the original suite load order (parent files, then children A-Z).
 EllesmereUI_Widgets.lua
+EllesmereUI_Widgets_Color.lua
+EllesmereUI_Widgets_Rows.lua
+EllesmereUI_Widgets_CogPopup.lua
+EllesmereUI_Widgets_SegmentedControl.lua
+EllesmereUI_Widgets_ApplyToAll.lua
+EllesmereUI_Widgets_RowAddons.lua
+EllesmereUI_Widgets_AuraPopups.lua
+EllesmereUI_Widgets_CheckboxDropdowns.lua
+EllesmereUI_Widgets_Visibility.lua
+EllesmereUI_Widgets_PageParts.lua
 EllesmereUI_GlowOptions.lua
 EUI_Colors_Options.lua
 EUI_Profiles_Options.lua
@@ -28,7 +38,8 @@ ActionBars_Options\AnimationsPage_Options.lua
 ActionBars_Options\BarAppearance_Options.lua
 ActionBars_Options\BarVisibilityLayout_Options.lua
 ActionBars_Options\LivePreview_Options.lua
-ActionBars_Options\MenuBagsXPPage_Options.lua
+ActionBars_Options\XPBarPage_Options.lua
+ActionBars_Options\MenuBagsRepPage_Options.lua
 EUI_ActionBars_Options.lua
 EUI_AuraBuffReminders_Options.lua
 EUI_Bags_Options.lua
@@ -47,6 +58,7 @@ EllesmereUIDataBars_Options.lua
 EUI_ForeverEssentials_Options.lua
 EUI_ForeverEssentials_Travel_Options.lua
 EUI_ForeverEssentials_Threat_Options.lua
+EUI_ForeverEssentials_Loot_Options.lua
 EUI_Friends_Options.lua
 EUI_Minimap_Options.lua
 EUI_MythicTimer_Options.lua

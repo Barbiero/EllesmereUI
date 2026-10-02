@@ -2143,8 +2143,8 @@ initFrame:SetScript("OnEvent", function(self)
                 -- Scale (icons + texts scale together as a group). Micro menu:
                 -- alignment is meaningless (the button strip lays itself out), so its
                 -- slot hosts an Enable Text toggle instead -- a view over the existing
-                -- hideSocialText key (default enabled). Its Text Position cog
-                -- moves the counters (custom icon style only).
+                -- hideSocialText key (default enabled). The Text Position cog still
+                -- moves the counter texts.
                 local alignLeftCfg
                 if b.type == "micromenu" then
                     alignLeftCfg = { type = "toggle", text = "Enable Text",
@@ -2163,7 +2163,13 @@ initFrame:SetScript("OnEvent", function(self)
                           if a == nil then a = "CENTER" end
                           return a
                       end,
-                      setValue = function(v) b.align = v; Apply() end }
+                      setValue = function(v)
+                          b.align = v
+                          -- XP / Rep: a picked alignment also places the bar's
+                          -- label (unset keeps the label left, as it always was).
+                          if b.type == "xprep" then b.labelAlign = v end
+                          Apply()
+                      end }
                 end
                 local alignRow
                 alignRow, h = W:DualRow(parent, y,
@@ -2182,35 +2188,32 @@ initFrame:SetScript("OnEvent", function(self)
                 do
                     -- Text Position cog: offsets the TEXT only (factories
                     -- inject these into every text anchor; icons stay put).
-                    -- Blizzard-style micro menu counters sit beside their
-                    -- icons and ignore the offsets.
-                    if b.type ~= "micromenu" or s.iconStyle ~= "wow" then
-                        EllesmereUI.BuildInlineCog(alignRow._leftRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
-                            title = "Text Position",
-                            rows = {
-                                { type = "slider", label = "X Offset", min = -50, max = 50, step = 1,
-                                  get = function()
-                                      local v = b.textXOff
-                                      if v == nil then v = 0 end
-                                      return v
-                                  end,
-                                  set = function(v)
-                                      b.textXOff = v
-                                      if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
-                                  end },
-                                { type = "slider", label = "Y Offset", min = -50, max = 50, step = 1,
-                                  get = function()
-                                      local v = b.textYOff
-                                      if v == nil then v = 0 end
-                                      return v
-                                  end,
-                                  set = function(v)
-                                      b.textYOff = v
-                                      if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
-                                  end },
-                            },
-                        })
-                    end
+                    EllesmereUI.BuildInlineCog(alignRow._leftRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
+                        title = "Text Position",
+                        rows = {
+                            { type = "slider", label = "X Offset", min = -50, max = 50, step = 1,
+                              get = function()
+                                  local v = b.textXOff
+                                  if v == nil then v = 0 end
+                                  return v
+                              end,
+                              set = function(v)
+                                  b.textXOff = v
+                                  if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
+                              end },
+                            { type = "slider", label = "Y Offset", min = -50, max = 50, step = 1,
+                              get = function()
+                                  local v = b.textYOff
+                                  if v == nil then v = 0 end
+                                  return v
+                              end,
+                              set = function(v)
+                                  b.textYOff = v
+                                  if ns.ReflowBlocks then ns.ReflowBlocks(barId) end
+                              end },
+                        },
+                    })
+
                     -- Content Position cog (next to Content Scale): offsets
                     -- the WHOLE block content group, text included.
                     EllesmereUI.BuildInlineCog(alignRow._rightRegion, { icon = EllesmereUI.DIRECTIONS_ICON,
@@ -3233,8 +3236,7 @@ initFrame:SetScript("OnEvent", function(self)
                     setValue = function(v)
                         s.iconStyle = v
                         Apply()
-                        -- Rebuild: swatches and the micro menu Text Position
-                        -- cog depend on the style.
+                        -- Rebuild: the icon color swatches depend on the style.
                         EllesmereUI:RefreshPage(true)
                     end }
                 if b.type ~= "micromenu" then typeRows[#typeRows + 1] = iconStyleCfg end

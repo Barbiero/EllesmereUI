@@ -1448,7 +1448,7 @@ end
 
 -- Resolve a unit's effective health bar texture KEY. Main frames use their own key
 -- (falling back to the global default); mini frames (pet, ToT, focus target, boss)
--- inherit the donor frame's texture (focus > target > player) unless their own key is
+-- inherit their donor frame's texture (ns.GetMiniDonorSettings) unless their own key is
 -- non-nil/non-"inherit". Shared by the live frames and the options preview to match.
 ns.ResolveHealthBarTextureKey = function(ownSettings, donorSettings)
     local own = ownSettings and ownSettings.healthBarTexture
@@ -3855,17 +3855,28 @@ function ns.UF_CastIconPortrait(castbar, frame, s, unit)
     return bd
 end
 
--- Donor settings table for mini frames (focus > target > player); source of
--- inherited border, texture and font settings. A frame that is disabled, or that
--- Visibility keeps off screen entirely, is not a donor -- before Visibility and
--- enabledFrames were split, "never" cleared that flag and fell out here for free.
-function ns.GetMiniDonorSettings()
-    local ef = db.profile.enabledFrames
-    local focus = db.profile.focus
+-- Donor settings table for a mini frame, the source of its inherited border,
+-- bar texture and hover highlight: the main frame its Copy Look From picks
+-- (lookSource "target" / "focus" / "player"), else Automatic (focus > target >
+-- player; boss frames always). A frame that is disabled, or that Visibility
+-- keeps off screen entirely, is not a donor (a pick of one falls back to
+-- Automatic) -- before Visibility and enabledFrames were split, "never"
+-- cleared that flag and fell out here for free.
+function ns.GetMiniDonorSettings(unitKey)
+    local p = db.profile
+    local ef = p.enabledFrames
+    local own = unitKey and p[unitKey]
+    local pick = own and own.lookSource
+    if pick == "player" then return p.player end
+    if pick == "target" or pick == "focus" then
+        local s = p[pick]
+        if ef[pick] ~= false and s and ns.VisEffective(s) ~= "never" then return s end
+    end
+    local focus = p.focus
     if ef.focus ~= false and focus and ns.VisEffective(focus) ~= "never" then return focus end
-    local target = db.profile.target
+    local target = p.target
     if ef.target ~= false and target and ns.VisEffective(target) ~= "never" then return target end
-    return db.profile.player
+    return p.player
 end
 local GetMiniDonorSettings = ns.GetMiniDonorSettings
 
@@ -4156,16 +4167,78 @@ do
         return mirrorAngles[id]
     end
 
-    -- 2D textures have no model ID. Reuse their hidden, lazy 3D frame for the
-    -- lookup, then release the model. Missing IDs retry on portrait art events.
-    function ns.UF_CanMirrorPortrait2D(model, unit)
+    -- 2D textures have no model ID: the portrait's hidden, lazy 3D frame loads
+    -- the unit once per GUID and the answer is cached (ns.UF_ForgetPortraitMirror
+    -- drops it on UNIT_MODEL_CHANGED, so forms and transforms check again). A
+    -- model whose file is not resolved yet stays loaded until OnModelLoaded, then
+    -- onReady(guid) lets the portrait repaint its flip. Secret GUIDs are not
+    -- cached. The model is our own frame, so its fields are ours to use.
+    local verdict, verdictCount = {}, 0
+    local function Release(model)
+        model._mirPending, model._mirReady = nil, nil
+        -- Shown = a 3D portrait now owns the model: leave it loaded.
+        if not model:IsShown() then model:ClearModel() end
+        model:SetKeepModelOnHide(false)
+    end
+    local function Store(key, v)
+        if verdict[key] == nil then
+            if verdictCount >= 500 then wipe(verdict); verdictCount = 0 end
+            verdictCount = verdictCount + 1
+        end
+        verdict[key] = v
+    end
+    local function Resolve(model, key)
+        local v = GetMirrorAngle(model:GetModelFileID()) ~= nil
+        local ready = model._mirReady
+        Release(model)
+        Store(key, v)
+        if ready then ready(key) end
+        return v
+    end
+    local function OnModelLoaded(model)
+        local key = model._mirPending
+        if not key then return end
+        if model:IsShown() then Release(model); return end
+        Resolve(model, key)
+    end
+    function ns.UF_CanMirrorPortrait2D(model, unit, onReady)
+        -- IDs may be secret: only type() and issecretvalue() ever test them.
+        local guid = UnitGUID(unit)
+        local key = (not issecretvalue(guid)) and guid or nil
+        if key then
+            local v = verdict[key]
+            if v ~= nil then return v end
+            -- This unit's load is still in flight: take the answer if it is in.
+            if model._mirPending == key then
+                if type(model:GetModelFileID()) == "nil" then return false end
+                model._mirReady = nil
+                return Resolve(model, key)
+            end
+        end
+        if model._mirPending then Release(model) end
         model:SetKeepModelOnHide(true)
         model:ClearModel()
         model:SetUnit(unit)
-        local angle = GetMirrorAngle(model:GetModelFileID())
-        model:ClearModel()
-        model:SetKeepModelOnHide(false)
-        return angle ~= nil
+        local id = model:GetModelFileID()
+        if type(id) == "nil" and key and onReady then
+            model._mirPending, model._mirReady = key, onReady
+            if not model._mirHooked then
+                model._mirHooked = true
+                model:HookScript("OnModelLoaded", OnModelLoaded)
+            end
+            return false
+        end
+        local v = GetMirrorAngle(id) ~= nil
+        Release(model)
+        if key and type(id) ~= "nil" then Store(key, v) end
+        return v
+    end
+    function ns.UF_ForgetPortraitMirror(unit)
+        local guid = UnitGUID(unit)
+        if not issecretvalue(guid) and guid and verdict[guid] ~= nil then
+            verdict[guid] = nil
+            verdictCount = verdictCount - 1
+        end
     end
 
     function ns.UF_ApplyPortraitRotation(model, mirror)
@@ -4249,11 +4322,14 @@ function PortraitOverride(self, event, evtUnit, fallback)
         -- Models only: 2D textures survive Hide/Show.
         or (event == "Show" and isModel)
     -- A changed model can also change 2D mirror eligibility, including class
-    -- mode's NPC fallback. Reuse the existing appearance event only when opted in.
-    if not hasStateChanged and event == "UNIT_MODEL_CHANGED" then
+    -- mode's NPC fallback: drop the cached answer and repaint, only when opted in.
+    if event == "UNIT_MODEL_CHANGED" and not isModel then
         local uk = UnitToSettingsKey(self._euiBaseUnit or u)
         local us = uk and db.profile[uk]
-        hasStateChanged = us and us.portraitMirror and not ns.UF_Blizz()
+        if us and us.portraitMirror and not ns.UF_Blizz() then
+            ns.UF_ForgetPortraitMirror(u)
+            hasStateChanged = true
+        end
     end
     -- Blank-model recovery is only needed when no other change requires a paint.
     -- Show can run before assets stream in; PORTRAITS_UPDATED retries a still-
@@ -5619,7 +5695,8 @@ local function UpdateBordersForScale(frame, unit)
     if ns.UF_Blizz() and not ns._ufReloadSweep then ns.UF_ApplyBlizzardLayout(frame, unit) end
     if settings.portraitSeparator or frame._portraitSeparator then
         ns.UpdatePortraitSeparator(frame, frame.Portrait and frame.Portrait.backdrop,
-            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz())
+            settings, effectiveSide, showPortrait and isAttached, ns.UF_Blizz(), nil,
+            unit == "targettarget" and GetMiniDonorSettings(unit) or nil)
     end
 end
 
@@ -7345,14 +7422,17 @@ end
 -- Attached portrait divider: reuse the border style's vertical companion art.
 -- A sibling of the portrait avoids clipping the strip where it crosses into the
 -- bars. Built only on opt-in; layout and colour updates use existing passes.
-function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview)
+function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, preview, borderSettings)
     local seam = frame._portraitSeparator
     local power = frame.Power or frame._power
     local powerSeam = power and power._pbSeam
+    local sizeOverride = borderSettings and s.borderSizeOverride
+    local b = borderSettings or s
+    local size = sizeOverride or b.borderSize or 1
     local path
     if s.portraitSeparator and attached and portrait and portrait:IsShown()
-       and not stock and (s.borderSize or 1) > 0 then
-        path = EllesmereUI.GetBorderCompanion(s.borderTexture or "solid", "sepV")
+       and not stock and size > 0 then
+        path = EllesmereUI.GetBorderCompanion(b.borderTexture or "solid", "sepV")
     end
     if not path then
         if seam then
@@ -7372,11 +7452,12 @@ function ns.UpdatePortraitSeparator(frame, portrait, s, side, attached, stock, p
     local border = frame.unifiedBorder or frame._border
     seam:SetFrameLevel(math.max(frame:GetFrameLevel() + (preview and 4 or 9),
         border and border:GetFrameLevel() + 1 or 0))
-    seam._key, seam._step = s.borderTexture, s.borderSize or 1
-    seam._px = EllesmereUI.BorderPx(s.borderSizePx, seam._step, seam._key)
+    seam._key, seam._step = b.borderTexture, size
+    seam._px = nil
+    if not sizeOverride then seam._px = EllesmereUI.BorderPx(b.borderSizePx, size, seam._key) end
     seam._right = side == "right"
-    local c = s.borderColor
-    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, s.borderAlpha or 1)
+    local c = b.borderColor
+    seam._tex:SetVertexColor(c and c.r or 0, c and c.g or 0, c and c.b or 0, b.borderAlpha or 1)
     ns.UF_LayoutPortraitSeparator(seam)
     seam:Show()
     if powerSeam and powerSeam:IsShown() then ns.UF_LayoutPowerSeam(powerSeam) end
@@ -7986,6 +8067,15 @@ local function CreatePortrait(frame, side, frameHeight, unit)
     PP.Point(tex2D, "BOTTOMRIGHT", backdrop, "BOTTOMRIGHT", 0, 0)
     tex2D:SetTexCoord(0.15, 0.85, 0.15, 0.85)
     tex2D:Hide()
+    -- A 2D mirror lookup that finished loading after the paint: repaint the flip
+    -- when the frame still shows that unit.
+    local function MirrorReady(guid)
+        local u = frame._euiUnit
+        if not (u and UnitIsConnected(u) and UnitIsVisible(u)) then return end
+        local g = UnitGUID(u)
+        if issecretvalue(g) or g ~= guid then return end
+        tex2D:PostUpdate(u)
+    end
 
     -- Class theme icon: painted by the engine portrait painter's class lane
     -- (element.isClass); this creation-time paint only seeds art before the
@@ -8075,7 +8165,7 @@ local function CreatePortrait(frame, side, frameHeight, unit)
         -- stand), and the unavailable question mark always reads unflipped.
         local mir = (uS2 and uS2.portraitMirror and not ns.UF_Blizz()
             and not (hasStateChanged and self.state == false)
-            and ns.UF_CanMirrorPortrait2D(EnsureModel3D(), u)) and true or false
+            and ns.UF_CanMirrorPortrait2D(EnsureModel3D(), u, MirrorReady)) and true or false
         if mir ~= (self._mirrored or false) then
             self._mirrored = mir
             if mir then
@@ -9112,7 +9202,7 @@ local function FrameBorderEnter(self)
         return
     end
     local isMini = (unit == "pet" or unit == "targettarget" or unit == "focustarget")
-    local settings = isMini and GetMiniDonorSettings() or GetSettingsForUnit(unit)
+    local settings = isMini and GetMiniDonorSettings(unit) or GetSettingsForUnit(unit)
     -- Highlight defaults ON (nil == enabled); only an explicit false disables it.
     if settings.highlightEnabled == false then return end
     -- Per-mini-frame opt-out: with "Show Highlight Border" off, a mini frame never
@@ -9142,7 +9232,7 @@ local function FrameBorderLeave(self)
         return
     end
     local isMini = (unit == "pet" or unit == "targettarget" or unit == "focustarget")
-    local settings = isMini and GetMiniDonorSettings() or GetSettingsForUnit(unit)
+    local settings = isMini and GetMiniDonorSettings(unit) or GetSettingsForUnit(unit)
     local bc = settings.borderColor or { r = 0, g = 0, b = 0 }
     local ba = settings.borderAlpha or 1
     EllesmereUI.SetBorderStyleColor(self.unifiedBorder, bc.r, bc.g, bc.b, ba)
@@ -9294,10 +9384,14 @@ end
 --  SetThreatPctEnabled(true).
 -------------------------------------------------------------------------------
 if EllesmereUI.IS_FOREVER then
+    -- Inside spots sit on the health bar; outside spots sit beside the whole
+    -- frame (past an attached portrait), centred on its height.
     local POS = {
         RIGHT  = { point = "RIGHT",  x = -4 },
         LEFT   = { point = "LEFT",   x = 4 },
         CENTER = { point = "CENTER", x = 0 },
+        OUTRIGHT = { point = "LEFT",  rel = "RIGHT", x = 4,  outside = true },
+        OUTLEFT  = { point = "RIGHT", rel = "LEFT",  x = -4, outside = true },
     }
     local watcher = CreateFrame("Frame")
 
@@ -9317,7 +9411,7 @@ if EllesmereUI.IS_FOREVER then
         local pos = POS[posKey]
         SetFSFont(fs, size)
         fs:ClearAllPoints()
-        PP.Point(fs, pos.point, frame.Health, pos.point, pos.x + x, y)
+        PP.Point(fs, pos.point, pos.outside and frame or frame.Health, pos.rel or pos.point, pos.x + x, y)
         fs:SetJustifyH(pos.point)
     end
 
@@ -10152,10 +10246,10 @@ local function StyleSimpleFrame(frame, unit)
     health.colorDisconnected = true
     health._euiUnitKey = UnitToSettingsKey(unit)
 
-    -- Inherit health bar texture from donor frame (focus > target > player),
+    -- Inherit health bar texture from the donor frame (Copy Look From),
     -- unless this frame set its own override.
-    local donor = GetMiniDonorSettings()
     local unitKey = UnitToSettingsKey(unit)
+    local donor = GetMiniDonorSettings(unitKey)
     ApplyHealthBarTexture(health, unitKey, ns.ResolveHealthBarTextureKey(settings, donor))
     ApplyHealthBarAlpha(health, unitKey)
     health:SetReverseFill(settings.healthReverseFill and true or false)
@@ -14484,7 +14578,7 @@ ReloadFramesBody = function()
 
             -- Determine if this is a mini frame that inherits border/texture/font
             local isMiniFrame = (unit == "pet" or unit == "targettarget" or unit == "focustarget" or unit:match("^boss%d$"))
-            local donorSettings = isMiniFrame and GetMiniDonorSettings() or settings
+            local donorSettings = isMiniFrame and GetMiniDonorSettings(UnitToSettingsKey(unit)) or settings
 
             -- Apply health bar texture overlay (mini frames inherit the donor
             -- texture unless they set their own override).
@@ -14873,7 +14967,7 @@ function ns.UF_FrameBorderPad(k)
     local settings = GetSettingsForUnit(k)
     if not settings then return nil end
     local isMini = (k == "pet" or k == "targettarget" or k == "focustarget")
-    local d = isMini and GetMiniDonorSettings() or settings
+    local d = isMini and GetMiniDonorSettings(k) or settings
     local btex = d.borderTexture or "solid"
     if btex == "solid" then return nil end
     local bs = settings.borderSizeOverride or d.borderSize or 1
@@ -17299,10 +17393,13 @@ function InitializeFrames()
                 -- that used to leave the player frame unspawned and the bar with it,
                 -- and the other hiding modes have always kept their own bar visible.
                 -- Written only when it moves: this pass runs on every target change,
-                -- and for the "blizzard" style the bar is Blizzard's own frame.
+                -- and for the "blizzard" style the bar is Blizzard's own frame. A bar
+                -- locked to the frame is its child, so the Show When Health Missing
+                -- reveal makes its alpha read secret: it is written blind then.
                 if unitKey == "player" and frames._classPowerBar then
                     local cpWant = visNever and 0 or 1
-                    if frames._classPowerBar:GetAlpha() ~= cpWant then
+                    local cpHave = frames._classPowerBar:GetAlpha()
+                    if issecretvalue(cpHave) or cpHave ~= cpWant then
                         frames._classPowerBar:SetAlpha(cpWant)
                     end
                 end
@@ -18861,6 +18958,14 @@ local EllesmereUF = EllesmereUI.Lite.NewAddon("EllesmereUIUnitFrames")
 
 function EllesmereUF:OnInitialize()
     db = EllesmereUI.Lite.NewDB("EllesmereUIUnitFramesDB", defaults, true)
+
+    -- A fresh install starts Target of Target on the Target frame's look; a
+    -- profile from an earlier version keeps Automatic (no lookSource). Written
+    -- here, not a default: the logout strip drops a value equal to its default.
+    if EllesmereUI._firstInstallPending then
+        local tot = db.profile.targettarget
+        if tot and tot.lookSource == nil then tot.lookSource = "target" end
+    end
 
     ResolveFontPath()
 

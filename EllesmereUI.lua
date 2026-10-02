@@ -3,10 +3,23 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  EllesmereUI.lua  -  Custom Options Panel, shared across the whole EUI suite.
 --  Scaffold: background, sidebar, header, content area, controls.
 -------------------------------------------------------------------------------
-local EUI_HOST_ADDON = ...
+-- EUI_NS is this addon's private namespace (the TOC vararg): shared by the core
+-- files, unreachable from any other addon. Navigation state that must not be
+-- writable by third-party code (module registry, sidebar model, page cache)
+-- lives here instead of on the global EllesmereUI table.
+local EUI_HOST_ADDON, EUI_NS = ...
 -- Build renames "EllesmereUI" -> "EUICoreStandalone<Module>" but never the word
 -- "Standalone", so host name contains it iff standalone; false in the suite (branches inert).
 local IS_STANDALONE = type(EUI_HOST_ADDON) == "string" and EUI_HOST_ADDON:find("Standalone") ~= nil
+-- A standalone build is ONE addon: its module files share this vararg table
+-- and publish it through _ModuleNS. So there the core's private state lives in
+-- a table of its own, handed to the later core files through __euiCoreNS until
+-- the first module publish removes that slot (see _ModuleNS).
+if IS_STANDALONE then
+    local shared = EUI_NS
+    EUI_NS = {}
+    shared.__euiCoreNS = EUI_NS
+end
 -------------------------------------------------------------------------------
 --  Constants & Colours (BURNE STAY AWAY FROM THIS SECTION)
 -------------------------------------------------------------------------------
@@ -838,6 +851,106 @@ for _, info in ipairs(ADDON_ROSTER) do
     EllesmereUI._addonInfoByFolder[info.folder] = info
 end
 
+-------------------------------------------------------------------------------
+--  Private navigation model
+--  The sidebar is built ONLY from these copies, taken once the roster and groups
+--  above are final. ADDON_ROSTER / ADDON_GROUPS / _addonInfoByFolder stay public
+--  as read-only data for other files, but writes to them no longer reach the
+--  sidebar: third-party code cannot add rows to the suite's sections, reorder
+--  them, or relabel them. Plugin sections (see the Plugin API section) are held
+--  in separate lists and can only sit above or below the whole suite block.
+-------------------------------------------------------------------------------
+do
+    local navInfo = {}
+    for _, info in ipairs(ADDON_ROSTER) do
+        local copy = {}
+        for k, v in pairs(info) do copy[k] = v end
+        navInfo[info.folder] = copy
+    end
+    local coreGroups = {}
+    for _, group in ipairs(EllesmereUI.ADDON_GROUPS) do
+        local members = {}
+        for i, folder in ipairs(group.members) do members[i] = folder end
+        coreGroups[#coreGroups + 1] = { key = group.key, label = group.label, members = members }
+    end
+    EUI_NS.navInfo            = navInfo
+    EUI_NS.coreGroups         = coreGroups
+    EUI_NS.pluginGroupsTop    = {}
+    EUI_NS.pluginGroupsBottom = {}
+    EUI_NS.navGroups          = {}
+    -- Sidebar group header frames, keyed by group key.
+    EUI_NS.sidebarGroupButtons = {}
+
+    -- Final sidebar order: top plugin sections, the suite's own groups as one
+    -- contiguous block, then bottom plugin sections.
+    function EUI_NS.RebuildNavGroups()
+        local out = EUI_NS.navGroups
+        for i = #out, 1, -1 do out[i] = nil end
+        for _, g in ipairs(EUI_NS.pluginGroupsTop)    do out[#out + 1] = g end
+        for _, g in ipairs(coreGroups)                do out[#out + 1] = g end
+        for _, g in ipairs(EUI_NS.pluginGroupsBottom) do out[#out + 1] = g end
+    end
+    EUI_NS.RebuildNavGroups()
+
+    -- Module keys starting with this prefix belong to the plugin registry.
+    local PLUGIN_PREFIX = "plugin:"
+    EUI_NS.PLUGIN_PREFIX = PLUGIN_PREFIX
+    function EUI_NS.IsPluginKey(key)
+        return type(key) == "string" and key:sub(1, #PLUGIN_PREFIX) == PLUGIN_PREFIX
+    end
+
+    -- Suite registration window (see RegisterModule). Open while the core loads
+    -- the options addon or drains its deferred inits, and from a pre-login load
+    -- of the options addon until just after PLAYER_LOGIN (its files register
+    -- from their PLAYER_LOGIN handlers in that case).
+    local regDepth, loginWindow = 0, false
+    function EUI_NS.CoreRegistrationOpen()
+        return regDepth > 0 or loginWindow
+    end
+    -- Errors are reported through the error handler (keeping their traceback)
+    -- rather than rethrown, so a failing callee can never leave the window open.
+    local function ReportError(err) return geterrorhandler()(err) end
+    EUI_NS.ReportError = ReportError  -- shared with the plugin registry (EllesmereUI_Panel.lua)
+    function EUI_NS.RunCoreRegistration(fn, ...)
+        regDepth = regDepth + 1
+        local ok, a, b = xpcall(fn, ReportError, ...)
+        regDepth = regDepth - 1
+        if ok then return a, b end
+    end
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("ADDON_LOADED")
+    f:RegisterEvent("PLAYER_LOGIN")
+    f:SetScript("OnEvent", function(self, event, name)
+        if event == "PLAYER_LOGIN" then
+            self:UnregisterEvent("PLAYER_LOGIN")
+            if loginWindow then
+                C_Timer.After(0, function() loginWindow = false end)
+            end
+        elseif name == "EllesmereUIOptions" then
+            self:UnregisterEvent("ADDON_LOADED")
+            if not IsLoggedIn() then
+                loginWindow = true
+            elseif not EUI_NS.optionsLoadRequested then
+                -- Loaded after login by something other than the core: its files
+                -- ran outside the registration window and their pages were refused.
+                -- The loader is on the stack (LoadAddOn fires this before returning).
+                -- (Skips the suite's own folders and Blizzard's, which a load
+                -- can pass through on its way here.)
+                local loader
+                for folder in (debugstack(2, 30, 0) or ""):gmatch("AddOns/([^/]+)/") do
+                    if not (folder:find("^EllesmereUI") or folder:find("^Blizzard_")) then loader = folder; break end
+                end
+                if loader then
+                    EUI_NS.RecordLegacyOffender(loader, "loader")
+                    EllesmereUI.PrintError(EllesmereUI.Lf("%1$s loaded EllesmereUI Options too early, so its settings pages could not register. Type /reload; if this keeps happening, update or disable %1$s.", loader))
+                else
+                    EllesmereUI.PrintError("EllesmereUI Options was loaded by another addon, so its settings pages could not register. Type /reload to fix this.")
+                end
+            end
+        end
+    end)
+end
+
 local IsAddonLoaded = C_AddOns.IsAddOnLoaded
 
 -------------------------------------------------------------------------------
@@ -918,7 +1031,10 @@ function EllesmereUI.RunBudgeted(steps, msBudget, onDone)
 end
 
 local modules = {}
-EllesmereUI._modules = modules -- read-only alias so other files (e.g. global search) can iterate registered modules
+-- Private alias so other core files (the panel, global search) can reach the
+-- registered modules. Never published on EllesmereUI: a reference to a
+-- module's config table would let any addon rewrite that module's pages.
+EUI_NS.modules = modules
 
 -- Widget refresh registry: a Refresh callback per widget so RefreshPage updates values in-place without rebuilding frames.
 local _widgetRefreshList = {}
@@ -2678,6 +2794,16 @@ EllesmereUI._deferredLoaded = false
 -- module is absent/disabled -- reproducing the old "disabled child = no options
 -- page" behavior exactly.
 EllesmereUI._ModuleNS = {}
+if IS_STANDALONE then
+    -- Every core file has loaded by the first module publish: remove the
+    -- hand-off slot before the shared table is published (see the top).
+    local shared = select(2, ...)
+    setmetatable(EllesmereUI._ModuleNS, { __newindex = function(t, k, v)
+        shared.__euiCoreNS = nil
+        setmetatable(t, nil)
+        rawset(t, k, v)
+    end })
+end
 
 -- Login-critical deferred body: UnlockMode's position/anchor engine
 -- (_applySavedPositions, width/height matches, anchor propagation). It must run
@@ -2705,7 +2831,10 @@ function EllesmereUI.EnsureOptionsLoaded()
     -- does the rest, exactly like the pre-split resident options.
     if IS_STANDALONE then return true end
     if C_AddOns.IsAddOnLoaded("EllesmereUIOptions") then return true end
-    local ok, reason = C_AddOns.LoadAddOn("EllesmereUIOptions")
+    -- Inside the suite registration window: the options files register the
+    -- suite's module pages while they load (see RegisterModule).
+    EUI_NS.optionsLoadRequested = true
+    local ok, reason = EUI_NS.RunCoreRegistration(C_AddOns.LoadAddOn, "EllesmereUIOptions")
     if not ok then
         EllesmereUI.PrintError("Options could not load (" .. tostring(reason) .. "). Enable the \"EllesmereUI Options\" addon in the AddOn List.")
     end
@@ -2773,8 +2902,10 @@ function EllesmereUI:EnsureLoaded()
     -- open retries after the user re-enables the addon.
     if not EllesmereUI.EnsureOptionsLoaded() then return end
     self._deferredLoaded = true
+    -- Deferred inits run inside the suite registration window: some options
+    -- files register their module page from here (e.g. Party Mode).
     for i, fn in ipairs(self._deferredInits) do
-        fn()
+        EUI_NS.RunCoreRegistration(fn)
         self._deferredInits[i] = nil
     end
 end
@@ -3159,7 +3290,7 @@ SlashCmdList.EUIDEV = function()
     local current = GetCVar(cvars[1])
     local newVal = (current == "1") and "0" or "1"
     for _, cv in ipairs(cvars) do
-        SetCVar(cv, newVal)
+        EllesmereUI.SetCVar(cv, newVal)
     end
     local state = newVal == "1" and "ON" or "OFF"
     EllesmereUI.Print("|cff00ff00[EllesmereUI]|r Dev mode: all addon restriction CVars " .. state .. ".")
@@ -3913,7 +4044,7 @@ initFrame:SetScript("OnEvent", function(self, event)
             local db = EllesmereUIDB
             local on = db and db.showSpellID
                 and (db.spellIDModifier or "none") == "none"
-            pcall(C_CVar.SetCVar, "tooltipShowAuraSpellIDs", on and "1" or "0")
+            pcall(EllesmereUI.SetCVar, "tooltipShowAuraSpellIDs", on and "1" or "0")
         end
         do
             -- PLAYER_ENTERING_WORLD, not PLAYER_LOGIN: the engine settles its
@@ -3952,6 +4083,8 @@ initFrame:SetScript("OnEvent", function(self, event)
                     cancelText  = EllesmereUI.L("Ignore"),
                     reload      = true,
                     onConfirm   = function()
+                        -- The player's own fix, which Uninstall EUI must not
+                        -- undo: plain SetCVar, not EllesmereUI.SetCVar.
                         pcall(C_CVar.SetCVar, "taintLog", "0")
                         pcall(C_CVar.SetCVar, "scriptProfile", "0")
                     end,
@@ -4131,7 +4264,7 @@ initFrame:SetScript("OnEvent", function(self, event)
             dD[k] = { effect = "pulse", position = "center", style = "modern" }
             local dC = { showInRaid = true, showInDungeon = true, showInArena = false, showInBG = false, showInWorld = true, showWhileMounted = false }
 
-            EllesmereUI:RegisterModule(cfg.folder, {
+            EUI_NS.RegisterCoreModule(cfg.folder, {
                 title       = cfg.title,
                 description = cfg.desc,
                 pages       = cfg.pages,
@@ -4231,7 +4364,7 @@ initFrame:SetScript("OnEvent", function(self, event)
                     dD[k] = { effect = "pulse", position = "center", style = "modern" }
                     EllesmereUI:SelectPage(EllesmereUI:GetActivePage())
                 end,
-            })
+            }, false)
         end
     end
 end)

@@ -353,9 +353,10 @@ ns.BlockFactories.xprep = function(blockCfg, slot, content, barCtx)
             _dbFitBuf[1] = state.label
             local fitSize = textHeight
             ns.SetFont(nameText, fitSize, barCfg)
-            -- Text Align also places the label along the bar (the XP bar runs past
-            -- it); unset reads as Center, as the options dropdown shows.
-            local align = blockCfg.align or "CENTER"
+            -- The label's place along the bar (the XP bar runs past it). The Text
+            -- Align dropdown writes labelAlign beside align, so a block keeps its
+            -- left label until an alignment is picked there.
+            local align = blockCfg.labelAlign or "LEFT"
             local textPoint = align == "LEFT" and "TOPLEFT" or align == "RIGHT" and "TOPRIGHT" or "TOP"
             ns.ResetInlineText(nameText, align)
             nameText:SetText(state.label)

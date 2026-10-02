@@ -6,6 +6,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  register via EllesmereUI:RegisterUnlockElements().
 -------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
+ns = ns.__euiCoreNS or ns  -- standalone builds: the core's own table (EllesmereUI.lua)
 local EAB = ns.EAB  -- may be nil if loaded by a non-ActionBars addon
 
 -------------------------------------------------------------------------------
@@ -616,12 +617,13 @@ EllesmereUI._ELEMENT_SETTINGS_MAP = {
     ["Bar10"]     = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("Bar10"),     highlightText = "Icon Size" },
     ["StanceBar"] = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("StanceBar"), highlightText = "Icon Size" },
     ["PetBar"]    = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("PetBar"),    highlightText = "Icon Size" },
-    ["XPBar"]     = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("XPBar"),     highlightText = "Icon Size" },
-    ["RepBar"]    = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "LAYOUT",  preSelectFn = SelectActionBar("RepBar"),    highlightText = "Icon Size" },
 
-    -- Action Bars -- visibility-only (dropdown pre-selected, scroll to top)
-    ["MicroBar"] = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "GENERAL", preSelectFn = SelectActionBar("MicroBagBars") },
-    ["BagBar"]   = { module = "EllesmereUIActionBars",          page = "Bar Display",                  sectionName = "GENERAL", preSelectFn = SelectActionBar("MicroBagBars") },
+    -- Action Bars -- data bars, micro menu and bags (their own tabs, no bar dropdown)
+    ["XPBar"]    = { module = "EllesmereUIActionBars",          page = "XP Bar",                       sectionName = "CORE",              highlightText = "Width" },
+    ["RepBar"]   = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "REPUTATION BAR",    highlightText = "Width" },
+    ["FavorBar"] = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "HOUSE FAVOR BAR",   highlightText = "Width" },
+    ["MicroBar"] = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "MICRO MENU & BAGS" },
+    ["BagBar"]   = { module = "EllesmereUIActionBars",          page = "Menu, Bags & Rep Bars",        sectionName = "MICRO MENU & BAGS" },
 
     -- Aura Buff Reminders
     ["EABR_Reminders"] = { module = "EllesmereUIAuraBuffReminders", page = "Auras, Buffs & Consumables", sectionName = "DISPLAY" },
@@ -692,9 +694,11 @@ EllesmereUI._unlockHoverIntentDelay = 0.12 -- seconds to wait after settling bef
 
 -------------------------------------------------------------------------------
 --  Split parts (EUI_UnlockMode_*.lua): share the stable names above through
---  UM, then run the parts here, in their original order.
+--  UM, then run the parts here, in their original order. The parts sit in
+--  the addon's private namespace and take it from their own file, never
+--  through UM: a public slot would let another addon wrap a part and reach it.
 -------------------------------------------------------------------------------
-UM.ns, UM.EAB, UM.floor, UM.abs = ns, EAB, floor, abs
+UM.EAB, UM.floor, UM.abs = EAB, floor, abs
 UM.min, UM.max, UM.sqrt, UM.sin = min, max, sqrt, sin
 UM.round, UM.PP, UM.DeferMoverSync, UM.FONT_PATH = round, PP, DeferMoverSync, FONT_PATH
 UM.LOCK_INNER, UM.LOCK_OUTER, UM.LOCK_TOP, UM.GRID_SPACING = LOCK_INNER, LOCK_OUTER, LOCK_TOP, GRID_SPACING
@@ -706,16 +710,16 @@ UM.snapshotAnchors, UM.snapshotSizes, UM.snapshotWidthMatch, UM.snapshotHeightMa
 UM.snapshotGrowDirs, UM.GridBaseAlpha, UM.GridCenterAlpha, UM.GridHudAlpha = snapshotGrowDirs, GridBaseAlpha, GridCenterAlpha, GridHudAlpha
 UM.GridLabelText, UM.CycleGridMode, UM._blizzOwnedOverlays, UM.SELECT_ELEMENT_ALPHA = GridLabelText, CycleGridMode, _blizzOwnedOverlays, SELECT_ELEMENT_ALPHA
 UM.SELECT_ELEMENT_FADE = SELECT_ELEMENT_FADE
-EllesmereUI._unlockParts.Anchors(UM)
-EllesmereUI._unlockParts.Positions(UM)
-EllesmereUI._unlockParts.Tools(UM)
-EllesmereUI._unlockParts.Movers(UM)
-EllesmereUI._unlockParts.Session(UM)
+ns.unlockParts.Anchors(UM)
+ns.unlockParts.Positions(UM)
+ns.unlockParts.Tools(UM)
+ns.unlockParts.Movers(UM)
+ns.unlockParts.Session(UM)
 local HideAllGuidesAndHighlight, DeselectMover = UM.HideAllGuidesAndHighlight, UM.DeselectMover
 local SortMoverFrameLevels, HideBlizzOwnedOverlays = UM.SortMoverFrameLevels, UM.HideBlizzOwnedOverlays
 
 -------------------------------------------------------------------------------
---  Close Unlock Mode — routes through save/discard logic
+--  Close Unlock Mode -- routes through save/discard logic
 -------------------------------------------------------------------------------
 function ns.CloseUnlockMode(afterFn)
     if not UM.isUnlocked then
@@ -755,7 +759,7 @@ end
 if EllesmereUI and EllesmereUI.RegisterOnShow then
     EllesmereUI:RegisterOnShow(function()
         if UM.isUnlocked then
-            -- Hide the panel immediately — it shouldn't show during unlock mode
+            -- Hide the panel immediately -- it shouldn't show during unlock mode
             local panel = EllesmereUI._mainFrame
             if panel then panel:Hide() end
             -- Close unlock mode, then re-open the panel after

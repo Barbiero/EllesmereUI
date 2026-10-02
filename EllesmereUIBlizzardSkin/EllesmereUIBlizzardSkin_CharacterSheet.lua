@@ -837,6 +837,13 @@ local function PreSkinCharacterSheet()
 
     -- Scale fully owned by Blizzard (SetScale on secure panels taints UIParentPanelManager execution context).
     frame:SetFrameStrata("HIGH")
+    -- The equipment set icon picker inherits HIGH from PaperDollFrame, but its template
+    -- keeps the icon grid clickable only by sitting one strata above the rest of the popup.
+    -- Restore that gap, or the popup's BG and BorderBox cover the grid.
+    local gearPopup = _G.GearManagerPopupFrame
+    if gearPopup and gearPopup.IconSelector then
+        gearPopup.IconSelector:SetFrameStrata("DIALOG")
+    end
 
     -- Frame size is entirely Blizzard's -- no SetWidth/SetHeight or OnUpdate enforcers on the secure frame; our layout fits inside native dimensions.
     if CharacterFrameInset then
@@ -2027,8 +2034,11 @@ local function SkinCharacterSheet()
     local function GetCategoryColor(title)
         local blizz = ns.CharSheetBlizzColor()
         if blizz then return blizz end
-        local custom = EllesmereUIDB and EllesmereUIDB.statCategoryColors and EllesmereUIDB.statCategoryColors[title]
-        if custom then return custom end
+        local useCustom = EllesmereUIDB and EllesmereUIDB.statCategoryUseColor and EllesmereUIDB.statCategoryUseColor[title]
+        if useCustom then
+            local custom = EllesmereUIDB and EllesmereUIDB.statCategoryColors and EllesmereUIDB.statCategoryColors[title]
+            if custom then return custom end
+        end
         return DEFAULT_CATEGORY_COLORS[title] or { r = 1, g = 1, b = 1 }
     end
 

@@ -110,6 +110,15 @@ local EUI = EllesmereUI
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
+-- Uninstall EUI: Sort to Bottom flips Blizzard's own sort direction, so the
+-- player's is handed back, as turning the option off does.
+EUI.OnUninstall(function()
+    local p = BP()
+    if p.bagSortToBottom and p.bagSortBlizzRTLWas ~= nil then
+        C_Container.SetSortBagsRightToLeft(p.bagSortBlizzRTLWas)
+    end
+end)
+
 local layerUpdateFrame = CreateFrame("Frame")
 function EUI_Bags:ApplyWindowLayering()
     -- The bank's purchase buttons are secure, so defer layer changes in combat.
@@ -194,8 +203,7 @@ EUI._GetBagDefaultType = GetDefaultBagType
 local _listMode
 function EUI_Bags.IsListMode()
     if _listMode == nil then
-        local Lite = EUI.Lite
-        if Lite and Lite.IsDBReady and not Lite.IsDBReady() then return nil end
+        if not EUI.Lite.IsDBReady() then return nil end
         _listMode = BP().bagDisplayMode == "list"
     end
     return _listMode
@@ -1044,20 +1052,39 @@ local function CreateHeader()
     end)
 
     local sortLocked = false
-    -- Sort/randomize buttons are clickable only while no sort runs and out of combat
+    -- Sorts that move items (OneBag, MultiBag, Randomize) wait out combat; the
+    -- other views' sort only reorders the display.
+    local function SortMovesItems()
+        return selectedCategoryIndex == -1 or selectedCategoryIndex == -2
+    end
+    -- Sort/randomize buttons are clickable only while no sort runs, and those
+    -- that move items only out of combat.
     local function ApplySortEnabled()
-        local on = not sortLocked and not InCombatLockdown()
+        local combat = InCombatLockdown()
+        local on = not sortLocked and not (combat and SortMovesItems())
         sort:EnableMouse(on)
         sort.icon:SetAlpha(on and 0.9 or 0.2)
         if EUI_Bags._diceBtn then
-            EUI_Bags._diceBtn:EnableMouse(on)
-            EUI_Bags._diceBtn.icon:SetAlpha(on and 0.9 or 0.2)
+            local diceOn = not sortLocked and not combat
+            EUI_Bags._diceBtn:EnableMouse(diceOn)
+            EUI_Bags._diceBtn.icon:SetAlpha(diceOn and 0.9 or 0.2)
         end
     end
+    -- A view switch in combat re-runs it from the refresh (FinishRefresh).
+    EUI_Bags._applySortEnabled = ApplySortEnabled
+    -- Combat edges only matter while the bags are open; the show edge catches
+    -- up on any change while they were closed.
     local combatWatch = CreateFrame("Frame")
-    combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
-    combatWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
     combatWatch:SetScript("OnEvent", ApplySortEnabled)
+    EUI_Bags:HookScript("OnShow", function()
+        combatWatch:RegisterEvent("PLAYER_REGEN_DISABLED")
+        combatWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+        ApplySortEnabled()
+    end)
+    EUI_Bags:HookScript("OnHide", function()
+        combatWatch:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        combatWatch:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end)
     -- One reusable BAG_UPDATE listener per role. Both phases are strictly
     -- sequential, and a fresh CreateFrame per round leaked frames per click
     -- (frames are never collected). The run token keeps a second sort from
@@ -1091,7 +1118,7 @@ local function CreateHeader()
         if sfxWas == "1" and (tonumber(GetCVar("Sound_SFXVolume")) or 0) > 0 then
             PlaySound(SOUNDKIT.UI_BAG_SORTING_01, "Master")
         end
-        SetCVar("Sound_EnableSFX", "0")
+        EllesmereUI.HoldCVar("Sound_EnableSFX", "0", "EllesmereUIBags")
 
         -----------------------------------------------------------------------
         --  Phase 1: consolidate partial stacks (smallest onto largest of the same itemID; the engine performs the combine).
@@ -1297,7 +1324,7 @@ local function CreateHeader()
         end
 
         local function FinishSort()
-            SetCVar("Sound_EnableSFX", sfxWas)
+            EllesmereUI.ReleaseCVar("Sound_EnableSFX", sfxWas, "EllesmereUIBags")
             C_Timer.After(0.3, function()
                 EUI_Bags.refreshEnabled = true
                 EUI_Bags:RefreshInventory()
@@ -1423,7 +1450,7 @@ local function CreateHeader()
     end
 
     sort:SetScript("OnClick", function()
-        if sortLocked or InCombatLockdown() then return end
+        if sortLocked or (InCombatLockdown() and SortMovesItems()) then return end
         if selectedCategoryIndex == -1 then
             if EllesmereUIDB and EllesmereUIDB.bagSortWarningDismissed then
                 DoPhysicalSort()
@@ -1546,13 +1573,13 @@ local function CreateHeader()
         end
 
         local sfxWas = GetCVar("Sound_EnableSFX")
-        SetCVar("Sound_EnableSFX", "0")
+        EllesmereUI.HoldCVar("Sound_EnableSFX", "0", "EllesmereUIBags")
         for _, m in ipairs(moves) do
             C_Container.PickupContainerItem(m[1], m[2])
             C_Container.PickupContainerItem(m[3], m[4])
             ClearCursor()
         end
-        SetCVar("Sound_EnableSFX", sfxWas)
+        EllesmereUI.ReleaseCVar("Sound_EnableSFX", sfxWas, "EllesmereUIBags")
 
         C_Timer.After(0.5, function()
             EUI_Bags.refreshEnabled = true
@@ -3242,7 +3269,13 @@ function EUI_Bags:WarmSlotPool(msBudget)
     if listMode == nil then
         EUI_Bags._poolShort = true
     elseif listMode then
-        if not ns.WarmListRows(total) then return false end
+        -- Pinned and Recent repeat their items as extra rows
+        local pinned = EllesmereUIDB and EllesmereUIDB.bagPinnedItems
+        if pinned then for _ in pairs(pinned) do total = total + 1 end end
+        if EUI_Bags._recentItems then
+            for _ in pairs(EUI_Bags._recentItems) do total = total + 1 end
+        end
+        if not ns.WarmListRows(total, t0, msBudget) then return false end
     else
         for i = 1, total do
             if not itemSlots[i] then
@@ -3397,9 +3430,10 @@ end
 --  Third-party item overlay icons (opt-in extension point for compatibility bridges with addons like CanIMogIt)
 -------------------------------------------------------------------------------
 -- Public API (other addons call it): updateFn(btn, data) runs for every
--- painted slot in the bags, the reagent bag and the bank. btn is our secure
--- container item button: keep state off it (parent frames to btn._textOverlay
--- and track them in your own table), never touch it from a click handler.
+-- painted slot in the bags, the reagent bag and the bank, grid slots and List
+-- view rows alike. btn is our secure container item button: keep state off it
+-- (parent frames to btn._textOverlay, which covers the item icon, and track
+-- them in your own table), never touch it from a click handler.
 -- data = { bag, slot, info, itemLink }, valid during the call only (the bank
 -- reuses one table); placeholder slots pass bag 0 / slot 0 and no item. A
 -- painter error is reported and never stops our render.
@@ -5688,10 +5722,13 @@ end
 --  the height. While dragging, the edges follow the cursor; the content
 --  re-lays out every relayoutStep px (frame._resizing set meanwhile) and
 --  the width settles on release. OnUpdate only while a drag is held.
+--  Double-click resets the window to its default size. While the grip
+--  shows, the footer's right-edge text moves clear of it.
 --  cfg: step, relayoutStep (optional, default step), minCols, minH,
 --  getCols(), getHeight(), save(cols, h), finish(), savePos(left, top),
---  hidden() (optional)
+--  reset(), inset(shown), hidden() (optional)
 -------------------------------------------------------------------------------
+do
 local function GripStop(grip)
     grip:SetScript("OnUpdate", nil)
     grip:UnlockHighlight()
@@ -5750,29 +5787,48 @@ local function GripOnMouseDown(grip, button)
     grip:SetScript("OnUpdate", GripOnUpdate)
 end
 
+local function GripReset(grip)
+    GripStop(grip)
+    grip._cfg.reset()
+end
+
+local function GripOnEnter(grip)
+    EUI.ShowWidgetTooltip(grip, EllesmereUI.L("Drag to resize. Double-click to reset."))
+end
+
 function ns.UpdateResizeGrip(frame, cfg)
     local grip = frame._resizeGrip
-    if cfg.hidden and cfg.hidden() then
+    local hide = cfg.hidden and cfg.hidden()
+    if hide then
         if grip then grip:Hide() end
-        return
+    else
+        if not grip then
+            grip = CreateFrame("Button", nil, frame)
+            grip:SetSize(16, 16)
+            grip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
+            grip:SetFrameLevel(frame:GetFrameLevel() + 50)
+            grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+            grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+            grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+            grip:SetScript("OnMouseDown", GripOnMouseDown)
+            grip:SetScript("OnMouseUp", GripStop)
+            grip:SetScript("OnDoubleClick", GripReset)
+            grip:SetScript("OnEnter", GripOnEnter)
+            grip:SetScript("OnLeave", EUI.HideWidgetTooltip)
+            -- Window closed mid-drag: end the drag instead of resuming on reopen
+            grip:SetScript("OnHide", GripStop)
+            frame._resizeGrip = grip
+        end
+        if not grip._drag then grip._cfg = cfg end
+        grip:Show()
     end
-    if not grip then
-        grip = CreateFrame("Button", nil, frame)
-        grip:SetSize(16, 16)
-        grip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
-        grip:SetFrameLevel(frame:GetFrameLevel() + 50)
-        grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-        grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-        grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-        grip:SetScript("OnMouseDown", GripOnMouseDown)
-        grip:SetScript("OnMouseUp", GripStop)
-        -- Window closed mid-drag: end the drag instead of resuming on reopen
-        grip:SetScript("OnHide", GripStop)
-        frame._resizeGrip = grip
+    local shown = not hide
+    if frame._gripInset ~= shown then
+        frame._gripInset = shown
+        cfg.inset(shown)
     end
-    if not grip._drag then grip._cfg = cfg end
-    grip:Show()
 end
+end -- resize grip
 
 local _bagGripCfg = {
     step = SLOT_SIZE + SPACING, minCols = 8, minH = 300,
@@ -5785,6 +5841,18 @@ local _bagGripCfg = {
     finish = function() EUI_Bags:RefreshInventory() end,
     savePos = function(left, top)
         BP().bagsPosition = { point = "TOPLEFT", relativePoint = "BOTTOMLEFT", x = left, y = top }
+    end,
+    reset = function()
+        local p = BP()
+        p.bagColumns, p.bagHeight, p.bagListWidth = nil, nil, nil
+        EUI_Bags:RefreshInventory()
+    end,
+    -- The gold display sits in the footer's bottom-right corner
+    inset = function(shown)
+        local money = EUI_Bags.Money
+        if not money then return end
+        money:ClearAllPoints()
+        money:SetPoint("BOTTOMRIGHT", EUI_Bags.Footer, "BOTTOMRIGHT", shown and -18 or 0, 7)
     end,
     -- Auto-Size owns the window size
     hidden = function() return BP().bagAutoSize == true end,
@@ -5801,6 +5869,8 @@ local _bagListGripCfg = setmetatable({
 }, { __index = _bagGripCfg })
 
 local function FinishRefresh(curY, gridContentW, sidebarW, totalCount, numEmpty)
+    -- In combat the sort button's lock depends on the view just painted.
+    if InCombatLockdown() and EUI_Bags._applySortEnabled then EUI_Bags._applySortEnabled() end
     local sf, child = EUI_Bags._scrollFrame, EUI_Bags._scrollChild
     local contentH = math.abs(curY) + 10
     if child then child:SetHeight(contentH) end
@@ -5930,7 +6000,8 @@ function EUI_Bags:RefreshInventory()
                     -- Track rank + cooldown: only for types that need them
                     local isGear = IsGearItem(itemLink)
                     d._isGear = isGear
-                    d._giIlvl = isGear and BP().showItemlevelInBags ~= false
+                    -- The List view's iLvl column always needs the real level
+                    d._giIlvl = isGear and (BP().showItemlevelInBags ~= false or EUI_Bags.IsListMode())
                         and GetItemLevelAtLocation(loc, itemLink) or nil
                     if isGear and GetUpgradeTrack then
                         local rankText, trackColor = GetUpgradeTrack(itemLink)
@@ -6545,40 +6616,33 @@ local function StartAddon()
             end
         end
     end
-    -- Drop an item anywhere on the bag window except a slot (click or drag
-    -- release): an external item goes to the first empty bag slot, one
-    -- picked up from the bags goes back where it came from.
-    local function DropCursorItem()
-        if GetCursorInfo() ~= "item" then return end
-        if CursorItemIsExternal() then PlaceExternalCursorItem() else ClearCursor() end
-    end
+    -- Click or drag release on empty bag window space with an item from
+    -- outside the bags (bank, mail, ...) on the cursor: it goes to the first
+    -- empty bag slot. An item picked up from the bags stays on the cursor.
     EUI_Bags:HookScript("OnMouseUp", function(_, button)
-        if button == "LeftButton" then DropCursorItem() end
+        if button == "LeftButton" then PlaceExternalCursorItem() end
     end)
-    EUI_Bags:SetScript("OnReceiveDrag", DropCursorItem)
+    EUI_Bags:SetScript("OnReceiveDrag", PlaceExternalCursorItem)
 
-    -- Slots are real drop targets only where position means something: OneBag
-    -- / MultiBag, and All Items for an item from the bags (drag to reorder).
-    -- Elsewhere a catch layer over the item area takes the drop instead. In
-    -- the slot views the same layer sits UNDER the slots as dead space, so the
-    -- gaps between slots and sections neither blink the border nor take drops.
-    local function SlotMatters()
-        if selectedCategoryIndex == -1 or selectedCategoryIndex == -2 then return true end
-        return selectedCategoryIndex == 0 and not selectedGroupName and not CursorItemIsExternal()
-    end
-
-    -- Drop target border: shown while an item is on the cursor and the mouse
-    -- is on the window or the catch layer (a slot or other control takes the
-    -- focus and fires OnLeave). CURSOR_CHANGED is registered only while the
-    -- bags are open; everything is built on first use.
+    -- Drop target: while an item from outside the bags is on the cursor, a
+    -- catch layer over the item area's empty space takes the same drop and the
+    -- window lights its border. The layer sits UNDER the slots, so a drop on a
+    -- slot always reaches the slot (stack merges, gear swaps). Whether the
+    -- cursor item is from outside is a bag scan, cached until the cursor or an
+    -- item lock changes. The events are registered only while the bags are
+    -- open; everything is built on first use.
     local dropBorder, dropCatch
     local hoverFrame, hoverCatch = false, false
+    local extCache, extDirty = false, true
     local function SyncDropBorder()
-        local holding = GetCursorInfo() == "item"
-        local layer = holding and EUI_Bags:IsVisible()
-        local catch = layer and not SlotMatters()
+        if extDirty then
+            extCache = CursorItemIsExternal()
+            extDirty = false
+        end
+        local layer = extCache and EUI_Bags:IsVisible()
         if layer and not dropCatch then
             dropCatch = CreateFrame("Frame", nil, EUI_Bags)
+            dropCatch:Hide()
             dropCatch:EnableMouse(true)
             dropCatch:EnableMouseWheel(true)
             dropCatch:SetScript("OnMouseWheel", function(_, delta)
@@ -6586,28 +6650,24 @@ local function StartAddon()
                 local wheel = sf and sf:GetScript("OnMouseWheel")
                 if wheel then wheel(sf, delta) end
             end)
-            dropCatch:SetScript("OnMouseUp", function(self, button)
-                if self._catch and button == "LeftButton" then DropCursorItem() end
+            dropCatch:SetScript("OnMouseUp", function(_, button)
+                if button == "LeftButton" then PlaceExternalCursorItem() end
             end)
-            dropCatch:SetScript("OnReceiveDrag", function(self)
-                if self._catch then DropCursorItem() end
-            end)
-            dropCatch:SetScript("OnEnter", function(self) hoverCatch = self._catch; SyncDropBorder() end)
+            dropCatch:SetScript("OnReceiveDrag", PlaceExternalCursorItem)
+            dropCatch:SetScript("OnEnter", function() hoverCatch = true; SyncDropBorder() end)
             dropCatch:SetScript("OnLeave", function() hoverCatch = false; SyncDropBorder() end)
             dropCatch:SetScript("OnHide", function() hoverCatch = false end)
         end
         if dropCatch then
-            if layer then
-                -- Catch: above the slots. Dead space: just above the window, under the slots.
-                dropCatch._catch = catch and true or false
-                if not catch then hoverCatch = false end
-                dropCatch:SetFrameLevel(EUI_Bags:GetFrameLevel() + (catch and 50 or 1))
+            if layer and not dropCatch:IsShown() then
+                -- Just above the window, under the slots.
+                dropCatch:SetFrameLevel(EUI_Bags:GetFrameLevel() + 1)
                 dropCatch:ClearAllPoints()
                 dropCatch:SetAllPoints(EUI_Bags._scrollFrame)
             end
             dropCatch:SetShown(layer and true or false)
         end
-        local on = holding and (hoverFrame or hoverCatch)
+        local on = layer and (hoverFrame or hoverCatch)
         if on and not dropBorder then
             dropBorder = CreateFrame("Frame", nil, EUI_Bags)
             dropBorder:SetAllPoints()
@@ -6626,11 +6686,22 @@ local function StartAddon()
     EUI_Bags:HookScript("OnEnter", function() hoverFrame = true; SyncDropBorder() end)
     EUI_Bags:HookScript("OnLeave", function() hoverFrame = false; SyncDropBorder() end)
     local cursorWatch = CreateFrame("Frame")
-    cursorWatch:SetScript("OnEvent", SyncDropBorder)
-    EUI_Bags:HookScript("OnShow", function() cursorWatch:RegisterEvent("CURSOR_CHANGED") end)
+    cursorWatch:SetScript("OnEvent", function(_, event)
+        extDirty = true
+        -- A lock change only matters with an item on the cursor (the pickup's
+        -- source slot locks); sorts lock and unlock slots constantly.
+        if event == "CURSOR_CHANGED" or GetCursorInfo() == "item" then SyncDropBorder() end
+    end)
+    EUI_Bags:HookScript("OnShow", function()
+        cursorWatch:RegisterEvent("CURSOR_CHANGED")
+        cursorWatch:RegisterEvent("ITEM_LOCK_CHANGED")
+        extDirty = true
+    end)
     EUI_Bags:HookScript("OnHide", function()
         cursorWatch:UnregisterEvent("CURSOR_CHANGED")
+        cursorWatch:UnregisterEvent("ITEM_LOCK_CHANGED")
         hoverFrame = false
+        extDirty = true
         SyncDropBorder()
     end)
 
@@ -6696,6 +6767,9 @@ local function StartAddon()
     EUI_BagsWindow:SetPoint("BOTTOMRIGHT", EUI_Bags._bagsBtn, "TOPRIGHT", 0, 2)
     EUI_BagsWindow:SetFrameStrata(EUI_Bags:GetFrameStrata())
     EUI_BagsWindow:SetToplevel(true)
+    -- Toplevel only raises on a click: opening it brings it forward too, over
+    -- a panel (Auction House, bank) raised after the bags.
+    EUI_BagsWindow:HookScript("OnShow", EUI_BagsWindow.Raise)
     EUI_BagsWindow:EnableMouse(true)
     EUI_BagsWindow.bg = EUI_BagsWindow:CreateTexture(nil, "BACKGROUND")
     EUI_BagsWindow.bg:SetAllPoints()
@@ -6707,6 +6781,7 @@ local function StartAddon()
     EUI_BagsReagent:SetPoint("BOTTOMRIGHT", EUI_Bags, "BOTTOMLEFT", -10, 0)
     EUI_BagsReagent:SetFrameStrata(EUI_Bags:GetFrameStrata())
     EUI_BagsReagent:SetToplevel(true)
+    EUI_BagsReagent:HookScript("OnShow", EUI_BagsReagent.Raise)
     EUI_BagsReagent:EnableMouse(true)
     EUI_BagsReagent.bg = EUI_BagsReagent:CreateTexture(nil, "BACKGROUND")
     EUI_BagsReagent.bg:SetAllPoints()
@@ -7187,9 +7262,12 @@ local function StartAddon()
         end
         if not EUI_Bags:IsVisible() then return end
         if event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED" then
-            -- Equipped bag icons settle with the batch (bag equip / unequip)
-            if event == "BAG_UPDATE_DELAYED" and EUI_BagsWindow:IsVisible() then
-                EUI_BagsWindow:RefreshBags()
+            if event == "BAG_UPDATE_DELAYED" then
+                -- Equipped bag icons settle with the batch (bag equip / unequip)
+                if EUI_BagsWindow:IsVisible() then EUI_BagsWindow:RefreshBags() end
+                -- A refresh the batch's own BAG_UPDATE armed already lands after
+                -- it; re-arming would mark every single change as a burst.
+                if refreshPending then return end
             end
             if not EUI_Bags.refreshEnabled then return end
             if EUI_Bags._unlockSort then EUI_Bags._unlockSort() end

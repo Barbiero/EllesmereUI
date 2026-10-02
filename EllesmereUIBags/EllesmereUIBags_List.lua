@@ -24,6 +24,7 @@ local SECTION_H, SUBSECTION_H = 22, 18
 local ROUND_MASK = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask"
 local ROUND_ZOOM = 0.12
 local ARROW_TEX = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-left.png"
+local BAG_GLYPH_TEX = "Interface\\AddOns\\EllesmereUI\\media\\micromenu\\menu-bags.png"
 
 -- Column definitions. width nil = flexible (takes the leftover row width).
 -- field = the per-item sort value stamped in StampItem (nil = not
@@ -48,30 +49,30 @@ end
 
 -- Always writes a fresh copy so DEFAULT_COLUMNS is never mutated.
 local function SetColumns(list)
-    local copy = {}
-    for i, id in ipairs(list) do copy[i] = id end
-    BP().bagListColumns = copy
+    BP().bagListColumns = CopyTable(list)
 end
 
 -- List font: resolved once per layout pass, applied only when it changed
-local _lfPath, _lfSize
+local _lfPath, _lfSize, _lfFlag
 local function ResolveListFont()
     _lfPath = EUI.GetFontPath("bags")
     _lfSize = BP().bagListFontSize or 11
+    _lfFlag = EUI.GetFontOutlineFlag("bags")
 end
 local function SetListFont(fs, size)
     if not _lfPath then ResolveListFont() end
     size = size or _lfSize
-    if fs._lfPath == _lfPath and fs._lfSize == size then return end
-    fs._lfPath, fs._lfSize = _lfPath, size
+    if fs._lfPath == _lfPath and fs._lfSize == size and fs._lfFlag == _lfFlag then return end
+    fs._lfPath, fs._lfSize, fs._lfFlag = _lfPath, size, _lfFlag
     EUI.PrimeFontShadow(fs, true)
-    fs:SetFont(_lfPath, size, EUI.GetFontOutlineFlag("bags"))
+    fs:SetFont(_lfPath, size, _lfFlag)
 end
 
+-- Repaints both list views; the bank only while it shows its List View.
 local function Refresh()
     if EUI_Bags and EUI_Bags.RefreshInventory then EUI_Bags:RefreshInventory() end
     local bank = _G.EUI_BankFrame
-    if bank and bank.RefreshBank then bank:RefreshBank() end
+    if bank and bank.RefreshBank and bank.IsListMode and bank.IsListMode() then bank:RefreshBank() end
 end
 
 -------------------------------------------------------------------------------
@@ -104,6 +105,9 @@ local BIND_ABBR = {
 local BIND_SOULBOUND = {
     [IB.OnEquip] = true, [IB.OnUse] = true, [IB.ToBnetAccountUntilEquipped] = true,
 }
+-- Warbound until Equipped reads as OnEquip from GetItemInfo; the item's bag
+-- location tells them apart (one reused location, no per-row allocation).
+local _bindLoc = ItemLocation:CreateEmpty()
 
 -------------------------------------------------------------------------------
 --  Per-item values (stamped on the pooled slot tables, wiped on reuse)
@@ -120,6 +124,10 @@ local function StampItem(d)
     d._lvType = subType or ""
     d._lvCount = count
     d._lvSell = (not info.hasNoValue and sellPrice) and sellPrice * count or 0
+    if bindType == IB.OnEquip and not info.isBound and d.bag and d.slot then
+        _bindLoc:SetBagAndSlot(d.bag, d.slot)
+        if C_Item.IsBoundToAccountUntilEquip(_bindLoc) then bindType = IB.ToBnetAccountUntilEquipped end
+    end
     if info.isBound and BIND_SOULBOUND[bindType] then
         d._lvBind = L("SB")
     else
@@ -180,10 +188,12 @@ local function SkinRow(btn)
     if pt then pt:SetAtlas(nil); pt:SetTexture(nil); pt:SetColorTexture(1, 1, 1, 0.04); pt:ClearAllPoints(); pt:SetAllPoints(btn) end
 end
 
--- Bare secure container row (no click hooks) parented under host. Callers
--- must not call this in combat.
+-- Bare secure container row (no click hooks) parented under host. Returns
+-- nil in combat (a secure button born in lockdown is tainted); callers skip
+-- the row and fill it after combat.
 local _hostRows = {}  -- host -> rows created under it (live column reflow)
 function ns.CreateListRow(host)
+    if InCombatLockdown() then return nil end
     local slotParent = CreateFrame("Frame", nil, host)
     local btn = CreateFrame("ItemButton", nil, slotParent, "ContainerFrameItemButtonTemplate")
     btn:SetAllPoints(slotParent)
@@ -201,6 +211,12 @@ function ns.CreateListRow(host)
         btn.Cooldown:ClearAllPoints()
         btn.Cooldown:SetAllPoints(btn._lvIcon)
     end
+    -- Third-party overlay painters (EUI_Bags.RunItemOverlays) parent to this,
+    -- as on the grid slots: here it covers the row's icon.
+    local ov = CreateFrame("Frame", nil, btn)
+    ov:SetAllPoints(btn._lvIcon)
+    ov:SetFrameLevel((btn.Cooldown and btn.Cooldown:GetFrameLevel() or btn:GetFrameLevel()) + 2)
+    btn._textOverlay = ov
     btn._cells = {}
     local list = _hostRows[host]
     if not list then list = {}; _hostRows[host] = list end
@@ -227,13 +243,18 @@ local function GetOrCreateRow(idx)
 end
 
 -- Pre-build rows out of combat so a first open mid-fight has them.
--- Returns false when combat stopped it (GetOrCreateRow flags _poolShort).
-function ns.WarmListRows(total)
+-- Returns false when combat stopped it (GetOrCreateRow flags _poolShort) or
+-- the optional time budget (msBudget ms from t0) ran out.
+function ns.WarmListRows(total, t0, msBudget)
     for i = 1, total do
         if not _rows[i] then
             local b = GetOrCreateRow(i)
             if not b then return false end
             b:GetParent():Hide()
+            if t0 and debugprofilestop() - t0 > msBudget then
+                EUI_Bags._poolShort = true
+                return false
+            end
         end
     end
     return true
@@ -292,7 +313,7 @@ local function GetOrCreateSection(idx)
     f._count:SetPoint("LEFT", f._label, "RIGHT", 4, 0)
     f._count:SetTextColor(0.7, 0.7, 0.7, 0.9)
     f._line = f:CreateTexture(nil, "ARTWORK")
-    f._line:SetHeight((EUI.PP and EUI.PP.mult) or 1)
+    f._line:SetHeight(EUI.PP.mult)
     f._line:SetPoint("LEFT", f._count, "RIGHT", 6, 0)
     f._line:SetPoint("RIGHT", f, "RIGHT", 0, 0)
     f._line:SetColorTexture(0.7, 0.7, 0.7, 0.2)
@@ -354,9 +375,7 @@ local function MoveColumn(id, toIdx)
     Refresh()
 end
 
-local function IndexOf(list, id)
-    for i, v in ipairs(list) do if v == id then return i end end
-end
+local IndexOf = tIndexOf
 
 local function ToggleColumn(id)
     local cols = GetColumns()
@@ -538,13 +557,22 @@ local function GetOrCreateHeaderBtn(bar, id)
     b._arrow = b:CreateTexture(nil, "OVERLAY")
     b._arrow:SetSize(8, 8)
     b._arrow:SetTexture(ARROW_TEX)
+    if id == "icon" then
+        -- The icon column has no label: a bag glyph over the row icons,
+        -- tinted like the labels.
+        b._glyph = b:CreateTexture(nil, "OVERLAY")
+        b._glyph:SetSize(12, 12)
+        b._glyph:SetPoint("CENTER")
+        b._glyph:SetTexture(BAG_GLYPH_TEX)
+        b._glyph:SetVertexColor(0.6, 0.6, 0.6)
+    end
     b:SetScript("OnMouseDown", OnHeaderMouseDown)
     b:SetScript("OnMouseUp", OnHeaderMouseUp)
     if COLUMNS[id].width and id ~= "icon" then
         local g = CreateFrame("Button", nil, b)
         g:SetSize(COL_GAP, COLHDR_H)
         local line = g:CreateTexture(nil, "HIGHLIGHT")
-        line:SetWidth((EUI.PP and EUI.PP.mult) or 1)
+        line:SetWidth(EUI.PP.mult)
         line:SetPoint("TOP"); line:SetPoint("BOTTOM")
         line:SetColorTexture(1, 1, 1, 0.6)
         g:SetScript("OnMouseDown", SizerOnMouseDown)
@@ -554,12 +582,14 @@ local function GetOrCreateHeaderBtn(bar, id)
     end
     b:SetScript("OnEnter", function(self)
         self._label:SetTextColor(1, 1, 1)
+        if self._glyph then self._glyph:SetVertexColor(1, 1, 1) end
         EUI.ShowWidgetTooltip(self, COLUMNS[self._colId].field
             and L("Click to sort. Drag to reorder. Right-click to add or remove columns.")
             or L("Drag to reorder. Right-click to add or remove columns."))
     end)
     b:SetScript("OnLeave", function(self)
         self._label:SetTextColor(0.6, 0.6, 0.6)
+        if self._glyph then self._glyph:SetVertexColor(0.6, 0.6, 0.6) end
         EUI.HideWidgetTooltip()
     end)
     bar._btns[id] = b
@@ -574,7 +604,7 @@ function ns.UpdateListHeaderBar(host, cols, leftX, topY, startX, noSort)
         bar:SetHeight(COLHDR_H)
         bar._btns = {}
         local line = bar:CreateTexture(nil, "ARTWORK")
-        line:SetHeight((EUI.PP and EUI.PP.mult) or 1)
+        line:SetHeight(EUI.PP.mult)
         line:SetPoint("BOTTOMLEFT"); line:SetPoint("BOTTOMRIGHT")
         line:SetColorTexture(0.7, 0.7, 0.7, 0.2)
         _hdrBars[host] = bar
@@ -644,6 +674,9 @@ end
 --  Render
 -------------------------------------------------------------------------------
 local function RenderRow(btn, data, cols, rowW, x, y, stripe)
+    -- Bags and bank share the column tables at their own row widths: a bank
+    -- batch painted after a bags refresh re-lays them out for its width.
+    if rowW ~= _lastRowW then LayoutColumns(rowW) end
     local parent = btn:GetParent()
     parent:ClearAllPoints()
     parent:SetSize(rowW, ROW_H)
@@ -715,6 +748,8 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
             btn.Cooldown:Clear()
         end
     end
+    btn._textOverlay:SetShown(btn._lvIcon:IsShown())
+    EUI_Bags.RunItemOverlays(btn, data)
     -- Tooltip requery after the slot re-assignment (see RenderButton)
     if GameTooltip:IsOwned(btn) and btn.UpdateTooltip then btn:UpdateTooltip() end
 end
@@ -723,6 +758,7 @@ ns.RenderListRow = RenderRow
 -- Empty bag slot row (OneBag / MultiBag); clicking or dropping an item
 -- places it in that slot.
 local function RenderEmptyRow(btn, cols, d, rowW, x, y, stripe)
+    if rowW ~= _lastRowW then LayoutColumns(rowW) end
     local parent = btn:GetParent()
     parent:ClearAllPoints()
     parent:SetSize(rowW, ROW_H)
@@ -743,6 +779,9 @@ local function RenderEmptyRow(btn, cols, d, rowW, x, y, stripe)
     fs:SetTextColor(0.4, 0.4, 0.4)
     fs:SetText(L("Empty"))
     fs:Show()
+    -- No item: painters clear what they drew on this reused row
+    btn._textOverlay:Hide()
+    EUI_Bags.RunItemOverlays(btn, d)
     if GameTooltip:IsOwned(btn) and btn.UpdateTooltip then btn:UpdateTooltip() end
 end
 ns.LIST_ROW_H = ROW_H

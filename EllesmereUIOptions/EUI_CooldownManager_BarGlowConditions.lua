@@ -55,186 +55,251 @@ function ns.BarGlowSpellIcon(parent, size, spellID)
 end
 
 -------------------------------------------------------------------------------
---  Single-choice buff picker (the look of the Bar Glows add-glow menu):
---  tracked buffs, then untracked, then tracked bars.
+--  Bar Glows buff menu, shared by the add-glow picker (several buffs, stays
+--  open) and the glow's When / And pickers (one buff): tracked buffs, then
+--  untracked, then tracked bars. ONE menu frame and a row pool, reused by every
+--  open (none is built until the first open).
+--    opts.isChecked(spellID) -> bool    box state of a row
+--    opts.onClick(sp, refreshChecks)    a row click: call refreshChecks() to
+--                                       repaint the boxes, or hide the menu
+--    opts.emptyText                     shown when nothing is listed (nil: the
+--                                       menu does not open then)
+--  Returns the menu frame, or nil when it did not open.
 -------------------------------------------------------------------------------
-local picker
+local MENU_W, ITEM_H, MAX_H = 240, 26, 300
+local menu, scroll, inner, emptyText, menuOpts, menuAnchor
+local rows, divs = {}, {}
 
-local function ShowPicker(anchor, currentSid, onPick)
-    if picker then picker:Hide() end
-    local tracked, untracked = {}, {}
-    if ns.GetAllCDMBuffSpells then tracked, untracked = ns.GetAllCDMBuffSpells() end
-    local bars = ns.GetTrackedBarSpells and ns.GetTrackedBarSpells() or {}
-
-    local mBgR, mBgG, mBgB = EllesmereUI.DD_BG_R, EllesmereUI.DD_BG_G, EllesmereUI.DD_BG_B
-    local mBgA, mBrdA = EllesmereUI.DD_BG_HA, EllesmereUI.DD_BRD_A
-    local hlA = EllesmereUI.DD_ITEM_HL_A
-    local tR, tG, tB, tA = EllesmereUI.TEXT_DIM_R, EllesmereUI.TEXT_DIM_G, EllesmereUI.TEXT_DIM_B, EllesmereUI.TEXT_DIM_A
+local function RefreshChecks()
+    local opts = menuOpts
+    if not opts then return end
     local ACCENT = EllesmereUI.ELLESMERE_GREEN
-    local font = EllesmereUI.GetFontPath and EllesmereUI.GetFontPath() or STANDARD_TEXT_FONT
-    local MENU_W, ITEM_H, MAX_H = 240, 26, 300
+    for i = 1, #rows do
+        local r = rows[i]
+        if r:IsShown() then
+            if opts.isChecked(r.sp.spellID) then
+                r.fill:Show()
+                r.brd:SetColor(ACCENT.r, ACCENT.g, ACCENT.b, 0.8)
+            else
+                r.fill:Hide()
+                r.brd:SetColor(0.25, 0.25, 0.28, 0.6)
+            end
+        end
+    end
+end
 
-    local menu = CreateFrame("Frame", nil, UIParent)
+local function BuildMenu()
+    menu = CreateFrame("Frame", nil, UIParent)
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
     menu:SetFrameLevel(300)
     menu:SetClampedToScreen(true)
     menu:SetSize(MENU_W, 10)
+    menu:Hide()
     local bg = menu:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(mBgR, mBgG, mBgB, mBgA)
-    EllesmereUI.MakeBorder(menu, 1, 1, 1, mBrdA, EllesmereUI.PP)
+    bg:SetColorTexture(EllesmereUI.DD_BG_R, EllesmereUI.DD_BG_G, EllesmereUI.DD_BG_B, EllesmereUI.DD_BG_HA)
+    EllesmereUI.MakeBorder(menu, 1, 1, 1, EllesmereUI.DD_BRD_A, EllesmereUI.PP)
 
-    local inner = CreateFrame("Frame", nil, menu)
+    scroll = CreateFrame("ScrollFrame", nil, menu)
+    scroll:SetPoint("TOPLEFT")
+    scroll:SetPoint("BOTTOMRIGHT")
+    scroll:SetFrameLevel(menu:GetFrameLevel() + 1)
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local maxScroll = menu._maxScroll or 0
+        if maxScroll <= 0 then return end
+        self:SetVerticalScroll(math.max(0, math.min(maxScroll, self:GetVerticalScroll() - delta * 30)))
+    end)
+    inner = CreateFrame("Frame", nil, scroll)
     inner:SetWidth(MENU_W)
-    inner:SetPoint("TOPLEFT")
-    local mH = 4
+    scroll:SetScrollChild(inner)
 
-    local function Item(sp)
-        local sid = tonumber(sp.spellID)
-        if not sid or sid <= 0 then return end
-        local item = CreateFrame("Button", nil, inner)
-        item:SetHeight(ITEM_H)
-        item:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH)
-        item:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH)
-        item:SetFrameLevel(menu:GetFrameLevel() + 2)
+    emptyText = inner:CreateFontString(nil, "OVERLAY")
+    emptyText:SetPoint("TOPLEFT", inner, "TOPLEFT", 10, -8)
 
-        -- Selected marker: the same box + accent fill as the add-glow menu.
-        local cb = CreateFrame("Frame", nil, item)
-        cb:SetSize(14, 14)
-        cb:SetPoint("LEFT", item, "LEFT", 8, 0)
-        local cbBg = cb:CreateTexture(nil, "BACKGROUND")
-        cbBg:SetAllPoints()
-        cbBg:SetColorTexture(0.12, 0.12, 0.14, 1)
-        local selected = (sid == tonumber(currentSid))
-        EllesmereUI.MakeBorder(cb, selected and ACCENT.r or 0.25, selected and ACCENT.g or 0.25, selected and ACCENT.b or 0.28, selected and 0.8 or 0.6, EllesmereUI.PanelPP)
-        if selected then
-            local fill = cb:CreateTexture(nil, "ARTWORK")
-            fill:SetPoint("TOPLEFT", cb, "TOPLEFT", 3, -3)
-            fill:SetPoint("BOTTOMRIGHT", cb, "BOTTOMRIGHT", -3, 3)
-            fill:SetColorTexture(ACCENT.r, ACCENT.g, ACCENT.b, 1)
-        end
-
-        local ico = item:CreateTexture(nil, "ARTWORK")
-        ico:SetSize(ITEM_H - 4, ITEM_H - 4)
-        ico:SetPoint("RIGHT", item, "RIGHT", -6, 0)
-        ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        local name, icon = SpellLabel(sid)
-        if sp.icon then icon = sp.icon end
-        if icon then ico:SetTexture(icon) end
-
-        local lbl = item:CreateFontString(nil, "OVERLAY")
-        lbl:SetFont(font, 11, "")
-        lbl:SetPoint("LEFT", cb, "RIGHT", 6, 0)
-        lbl:SetPoint("RIGHT", ico, "LEFT", -4, 0)
-        lbl:SetJustifyH("LEFT")
-        lbl:SetWordWrap(false)
-        lbl:SetText(sp.name or name)
-        lbl:SetTextColor(tR, tG, tB, tA)
-
-        local hl = item:CreateTexture(nil, "ARTWORK", nil, -1)
-        hl:SetAllPoints()
-        hl:SetColorTexture(1, 1, 1, 0)
-        item:SetScript("OnEnter", function() lbl:SetTextColor(1, 1, 1, 1); hl:SetColorTexture(1, 1, 1, hlA) end)
-        item:SetScript("OnLeave", function() lbl:SetTextColor(tR, tG, tB, tA); hl:SetColorTexture(1, 1, 1, 0) end)
-        item:SetScript("OnClick", function()
-            menu:Hide()
-            onPick(sid)
-        end)
-        mH = mH + ITEM_H
-    end
-
-    local function Divider()
-        local div = inner:CreateTexture(nil, "ARTWORK")
-        div:SetHeight(1)
-        div:SetColorTexture(1, 1, 1, 0.10)
-        div:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH - 4)
-        div:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH - 4)
-        mH = mH + 9
-    end
-
-    for _, sp in ipairs(tracked or {}) do Item(sp) end
-    if #(tracked or {}) > 0 and #(untracked or {}) > 0 then Divider() end
-    for _, sp in ipairs(untracked or {}) do Item(sp) end
-    if #bars > 0 then
-        if #(tracked or {}) > 0 or #(untracked or {}) > 0 then Divider() end
-        for _, sp in ipairs(bars) do Item(sp) end
-    end
-    if mH <= 4 then
-        local none = inner:CreateFontString(nil, "OVERLAY")
-        none:SetFont(font, 11, "")
-        none:SetTextColor(tR, tG, tB, tA)
-        none:SetPoint("TOPLEFT", inner, "TOPLEFT", 10, -8)
-        none:SetText(EllesmereUI.L("No Cooldown Manager buffs to choose from."))
-        mH = 30
-    end
-
-    local totalH = mH + 4
-    inner:SetHeight(totalH)
-    if totalH > MAX_H then
-        menu:SetHeight(MAX_H)
-        local sf = CreateFrame("ScrollFrame", nil, menu)
-        sf:SetPoint("TOPLEFT")
-        sf:SetPoint("BOTTOMRIGHT")
-        sf:SetFrameLevel(menu:GetFrameLevel() + 1)
-        sf:EnableMouseWheel(true)
-        sf:SetScrollChild(inner)
-        local pos, maxScroll = 0, totalH - MAX_H
-        sf:SetScript("OnMouseWheel", function(_, delta)
-            pos = math.max(0, math.min(maxScroll, pos - delta * 30))
-            sf:SetVerticalScroll(pos)
-        end)
-    else
-        menu:SetHeight(totalH)
-    end
-
-    menu:SetPoint("TOP", anchor, "BOTTOM", 0, -2)
+    -- Closing: a click outside the menu and its anchor, or the options panel hiding.
     menu:SetScript("OnUpdate", function(m)
-        if not m:IsMouseOver() and not anchor:IsMouseOver() and IsMouseButtonDown("LeftButton") then
+        if IsMouseButtonDown("LeftButton") and not m:IsMouseOver()
+            and not (menuAnchor and menuAnchor:IsMouseOver()) then
             m:Hide()
         end
     end)
-    menu:HookScript("OnHide", function(m) m:SetScript("OnUpdate", nil) end)
-    menu:Show()
-    picker = menu
+    menu:SetScript("OnHide", function() menuOpts, menuAnchor = nil, nil end)
+    EllesmereUI:RegisterOnHide(function() menu:Hide() end)
 end
 
--- Compact inline dropdown for the Glow When row (the options dropdown look:
--- flat block, 1px border, pointing arrow, label left).
-local function InlineDrop(parent, w, h, font, size)
-    local b = CreateFrame("Button", nil, parent)
-    b:SetSize(w, h)
-    b:SetFrameLevel(parent:GetFrameLevel() + 3)
-    local bg = b:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(EllesmereUI.DD_BG_R, EllesmereUI.DD_BG_G, EllesmereUI.DD_BG_B, EllesmereUI.DD_BG_A or 0.9)
-    EllesmereUI.MakeBorder(b, 1, 1, 1, EllesmereUI.DD_BRD_A, EllesmereUI.PanelPP)
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+local function Row(i)
+    local r = rows[i]
+    if r then return r end
+    r = CreateFrame("Button", nil, inner)
+    r:SetHeight(ITEM_H)
+    r:SetFrameLevel(menu:GetFrameLevel() + 2)
+    local cb = CreateFrame("Frame", nil, r)
+    cb:SetSize(14, 14)
+    cb:SetPoint("LEFT", r, "LEFT", 8, 0)
+    cb:SetFrameLevel(r:GetFrameLevel() + 1)
+    local cbBg = cb:CreateTexture(nil, "BACKGROUND")
+    cbBg:SetAllPoints()
+    cbBg:SetColorTexture(0.12, 0.12, 0.14, 1)
+    r.brd = EllesmereUI.MakeBorder(cb, 0.25, 0.25, 0.28, 0.6, EllesmereUI.PanelPP)
+    local ACCENT = EllesmereUI.ELLESMERE_GREEN
+    r.fill = cb:CreateTexture(nil, "ARTWORK")
+    r.fill:SetSnapToPixelGrid(false)
+    r.fill:SetTexelSnappingBias(0)
+    r.fill:SetPoint("TOPLEFT", cb, "TOPLEFT", 3, -3)
+    r.fill:SetPoint("BOTTOMRIGHT", cb, "BOTTOMRIGHT", -3, 3)
+    r.fill:SetColorTexture(ACCENT.r, ACCENT.g, ACCENT.b, 1)
+    r.ico = r:CreateTexture(nil, "ARTWORK")
+    r.ico:SetSize(ITEM_H - 4, ITEM_H - 4)
+    r.ico:SetPoint("RIGHT", r, "RIGHT", -6, 0)
+    r.ico:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    r.lbl = r:CreateFontString(nil, "OVERLAY")
+    r.lbl:SetPoint("LEFT", cb, "RIGHT", 6, 0)
+    r.lbl:SetPoint("RIGHT", r.ico, "LEFT", -4, 0)
+    r.lbl:SetJustifyH("LEFT")
+    r.lbl:SetWordWrap(false)
+    r.lbl:SetMaxLines(1)
+    local hl = r:CreateTexture(nil, "ARTWORK", nil, -1)
     hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.05)
-    b.arrow = b:CreateTexture(nil, "OVERLAY")
-    b.arrow:SetAtlas("Azerite-PointingArrow")
-    b.arrow:SetSize(11, 8)
-    b.arrow:SetPoint("RIGHT", b, "RIGHT", -7, 0)
-    b.label = b:CreateFontString(nil, "OVERLAY")
-    b.label:SetFont(font, size, "")
-    b.label:SetPoint("LEFT", b, "LEFT", 8, 0)
-    b.label:SetPoint("RIGHT", b.arrow, "LEFT", -4, 0)
-    b.label:SetJustifyH("LEFT")
-    b.label:SetWordWrap(false)
-    return b
+    hl:SetColorTexture(1, 1, 1, 0)
+    r:SetScript("OnEnter", function()
+        r.lbl:SetTextColor(1, 1, 1, 1)
+        hl:SetColorTexture(1, 1, 1, EllesmereUI.DD_ITEM_HL_A)
+    end)
+    r:SetScript("OnLeave", function()
+        r.lbl:SetTextColor(EllesmereUI.TEXT_DIM_R, EllesmereUI.TEXT_DIM_G, EllesmereUI.TEXT_DIM_B, EllesmereUI.TEXT_DIM_A)
+        hl:SetColorTexture(1, 1, 1, 0)
+    end)
+    r:SetScript("OnClick", function(self)
+        local opts = menuOpts
+        if opts then opts.onClick(self.sp, RefreshChecks) end
+    end)
+    rows[i] = r
+    return r
 end
+
+function ns.ShowBarGlowBuffMenu(anchor, opts)
+    if menu then menu:Hide() end
+    local tracked, untracked = {}, {}
+    if ns.GetAllCDMBuffSpells then tracked, untracked = ns.GetAllCDMBuffSpells() end
+    tracked, untracked = tracked or {}, untracked or {}
+    local bars = ns.GetTrackedBarSpells and ns.GetTrackedBarSpells() or {}
+    if #tracked == 0 and #untracked == 0 and #bars == 0 and not opts.emptyText then return nil end
+    if not menu then BuildMenu() end
+    menuOpts, menuAnchor = opts, anchor
+    menu._btnIdx = nil
+
+    local env = ns._CDMO_OptEnv or {}
+    local font = env.FONT_PATH or STANDARD_TEXT_FONT
+    local outline = env.GetCDMOptOutline and env.GetCDMOptOutline() or ""
+    local n, nd, mH = 0, 0, 4
+    local function Add(sp)
+        local sid = tonumber(sp.spellID)
+        if not sid or sid <= 0 then return end
+        n = n + 1
+        local r = Row(n)
+        r.sp = sp
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH)
+        r:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH)
+        local name, icon = sp.name, sp.icon
+        if not (name and icon) then
+            local spellName, spellIcon = SpellLabel(sid)
+            name, icon = name or spellName, icon or spellIcon
+        end
+        r.ico:SetTexture(icon)
+        r.lbl:SetFont(font, 11, outline)
+        r.lbl:SetText(EllesmereUI.L(name))
+        r.lbl:SetTextColor(EllesmereUI.TEXT_DIM_R, EllesmereUI.TEXT_DIM_G, EllesmereUI.TEXT_DIM_B, EllesmereUI.TEXT_DIM_A)
+        r:Show()
+        mH = mH + ITEM_H
+    end
+    local function Divider()
+        nd = nd + 1
+        local d = divs[nd]
+        if not d then
+            d = inner:CreateTexture(nil, "ARTWORK")
+            d:SetHeight(1)
+            d:SetColorTexture(1, 1, 1, 0.10)
+            divs[nd] = d
+        end
+        d:ClearAllPoints()
+        d:SetPoint("TOPLEFT", inner, "TOPLEFT", 1, -mH - 4)
+        d:SetPoint("TOPRIGHT", inner, "TOPRIGHT", -1, -mH - 4)
+        d:Show()
+        mH = mH + 9
+    end
+
+    for _, sp in ipairs(tracked) do Add(sp) end
+    if #tracked > 0 and #untracked > 0 then Divider() end
+    for _, sp in ipairs(untracked) do Add(sp) end
+    if #bars > 0 then
+        if #tracked > 0 or #untracked > 0 then Divider() end
+        for _, sp in ipairs(bars) do Add(sp) end
+    end
+    for i = n + 1, #rows do rows[i]:Hide() end
+    for i = nd + 1, #divs do divs[i]:Hide() end
+    if n == 0 then
+        emptyText:SetFont(font, 11, outline)
+        emptyText:SetTextColor(EllesmereUI.TEXT_DIM_R, EllesmereUI.TEXT_DIM_G, EllesmereUI.TEXT_DIM_B, EllesmereUI.TEXT_DIM_A)
+        emptyText:SetText(EllesmereUI.L(opts.emptyText))
+        emptyText:Show()
+        mH = 30
+    else
+        emptyText:Hide()
+    end
+    RefreshChecks()
+
+    local totalH = mH + 4
+    inner:SetHeight(totalH)
+    menu:SetHeight(math.min(totalH, MAX_H))
+    menu._maxScroll = totalH - MAX_H
+    scroll:SetVerticalScroll(0)
+    menu:ClearAllPoints()
+    menu:SetPoint("TOP", anchor, "BOTTOM", 0, -2)
+    menu:Show()
+    return menu
+end
+
+-- Single choice for the When / And rows: closes on a pick.
+local function ShowPicker(anchor, currentSid, onPick)
+    local cur = tonumber(currentSid)
+    ns.ShowBarGlowBuffMenu(anchor, {
+        emptyText = "No Cooldown Manager buffs to choose from.",
+        isChecked = function(sid) return tonumber(sid) == cur end,
+        onClick = function(sp)
+            menu:Hide()
+            onPick(tonumber(sp.spellID))
+        end,
+    })
+end
+
+-- Active / Missing: the glow's own state (entry.mode) and the And buff's
+-- (c.state = "missing" | nil), both standard option dropdowns.
+local STATE_VALUES = { ACTIVE = "Active", MISSING = "Missing" }
+local STATE_ORDER = { "ACTIVE", "MISSING" }
 
 -- Row 1 of a glow, two columns:
---   left:  When (icon) Fingers of Frost is [Active v]
+--   left:  When Fingers of Frost Is                               [Active v]
 --   right: And [(icon) Brain Freeze v] is [Missing v]                [toggle]
--- The right column is a standard toggle row labelled "And"; while it is off
--- the buff picker and its state grey out. Returns the new y.
+-- The left column is a standard dropdown row (the glow's own Glow When); the
+-- right is a standard toggle row labelled "And"; while it is off the buff
+-- picker and its state grey out. Returns the new y.
 function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
     local c = Cond(entry)
     local Paint  -- forward: the toggle repaints the right column
+    local sid = tonumber(entry.spellID) or 0
+    local ownName = (sid > 0) and SpellLabel(sid) or "buff"
 
     local row, h = W:DualRow(parent, y,
-        { type = "label", text = "" },
+        { type = "dropdown", text = EllesmereUI.Lf("When %1$s Is", ownName),
+          values = STATE_VALUES, order = STATE_ORDER,
+          getValue = function() return entry.mode == "MISSING" and "MISSING" or "ACTIVE" end,
+          setValue = function(v)
+              entry.mode = v
+              if onChange then onChange() end
+              EllesmereUI:RefreshPage()
+          end },
         { type = "toggle", text = "And",
           tooltip = "Also require a second buff to be active (or missing) for this glow. For an \"or\", add another glow to the same button.",
           getValue = function() return entry.andMode == "and" end,
@@ -257,27 +322,6 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
     local r, g, b = 1, 1, 1
     if lRef and lRef.GetTextColor then r, g, b = lRef:GetTextColor() end
     local CTL_H = 30   -- the options dropdown height (Glow Type)
-
-    local function Menu(anchor, items)
-        EllesmereUI.ShowContextMenu(anchor, items, { below = true, minWidth = anchor:GetWidth() })
-    end
-
-    -- Left column ------------------------------------------------------------
-    local lx = CreateFrame("Frame", nil, left or row)
-    lx:SetAllPoints()
-    lx:SetFrameLevel((left or row):GetFrameLevel() + 2)
-    local prev
-    local function Place(w, gap)
-        w:ClearAllPoints()
-        if prev then
-            w:SetPoint("LEFT", prev, "RIGHT", gap or 8, 0)
-        elseif lRef then
-            w:SetPoint("LEFT", lRef, "LEFT", 0, 0)
-        else
-            w:SetPoint("LEFT", lx, "LEFT", 22, 0)
-        end
-        prev = w
-    end
     local function Word(host, text)
         local fs = host:CreateFontString(nil, "OVERLAY")
         fs:SetFont(font, size, "")
@@ -286,20 +330,14 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
         return fs
     end
 
-    local ownName, ownIcon = SpellLabel(entry.spellID)
-    Place(Word(lx, EllesmereUI.L("When")))
-    if ownIcon then
-        Place(ns.BarGlowSpellIcon(lx, 32, entry.spellID), 8)
-    end
-    Place(Word(lx, ((tonumber(entry.spellID) or 0) > 0 and ownName or "buff") .. " " .. EllesmereUI.L("is")))
-    local mainDrop = InlineDrop(lx, 96, CTL_H, font, size - 1)
-    Place(mainDrop)
-
     -- Right column: after the "And" label, before the toggle -----------------
     local rx = CreateFrame("Frame", nil, right or row)
     rx:SetAllPoints()
     rx:SetFrameLevel((right or row):GetFrameLevel() + 2)
-    local buffBtn = InlineDrop(rx, 170, CTL_H, font, size - 1)
+    -- The And buff: a standard dropdown face whose click opens the shared buff
+    -- menu (Paint writes its label and icon).
+    local buffBtn, buffLbl = EllesmereUI.BuildDropdownControl(rx, 170, rx:GetFrameLevel() + 3,
+        { _ = "", _noLoc = true }, { "_" }, function() return "_" end, function() end)
     buffBtn.icon = buffBtn:CreateTexture(nil, "ARTWORK")
     buffBtn.icon:SetSize(CTL_H - 6, CTL_H - 6)
     buffBtn.icon:SetPoint("LEFT", buffBtn, "LEFT", 3, 0)
@@ -311,25 +349,29 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
     end
     local isWord = Word(rx, EllesmereUI.L("is"))
     isWord:SetPoint("LEFT", buffBtn, "RIGHT", 8, 0)
-    local stateDrop = InlineDrop(rx, 96, CTL_H, font, size - 1)
+    local stateDrop = EllesmereUI.BuildDropdownControl(rx, 96, rx:GetFrameLevel() + 3,
+        STATE_VALUES, STATE_ORDER,
+        function() return c.state == "missing" and "MISSING" or "ACTIVE" end,
+        function(v)
+            c.state = (v == "MISSING") and "missing" or nil
+            Paint()
+            if onChange then onChange() end
+        end)
     stateDrop:SetPoint("LEFT", isWord, "RIGHT", 8, 0)
 
-    local ACTIVE, MISSING = EllesmereUI.L("Active"), EllesmereUI.L("Missing")
     Paint = function()
-        mainDrop.label:SetText((entry.mode == "MISSING") and MISSING or ACTIVE)
         local name, icon = SpellLabel(c.spellID)
-        buffBtn.label:SetText(name)
-        buffBtn.label:ClearAllPoints()
+        buffLbl:SetText(name)
+        -- Only the label's LEFT point moves; its RIGHT stays on the arrow.
         if icon then
             buffBtn.icon:SetTexture(icon)
             buffBtn.icon:Show()
-            buffBtn.label:SetPoint("LEFT", buffBtn.icon, "RIGHT", 6, 0)
+            buffLbl:SetPoint("LEFT", buffBtn.icon, "RIGHT", 6, 0)
         else
             buffBtn.icon:Hide()
-            buffBtn.label:SetPoint("LEFT", buffBtn, "LEFT", 8, 0)
+            buffLbl:SetPoint("LEFT", buffBtn, "LEFT", 12, 0)
         end
-        buffBtn.label:SetPoint("RIGHT", buffBtn.arrow, "LEFT", -4, 0)
-        stateDrop.label:SetText(c.state == "missing" and MISSING or ACTIVE)
+        stateDrop._refreshLabel()
         local on = entry.andMode == "and"
         for _, part in ipairs({ buffBtn, isWord, stateDrop }) do
             part:SetAlpha(on and 1 or 0.3)
@@ -339,22 +381,6 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
         if rRef then rRef:SetAlpha(on and 1 or 0.3) end
     end
 
-    mainDrop:SetScript("OnClick", function(self)
-        Menu(self, {
-            { text = ACTIVE, isActive = entry.mode ~= "MISSING",
-              onClick = function()
-                  entry.mode = "ACTIVE"; Paint()
-                  if onChange then onChange() end
-                  EllesmereUI:RefreshPage()
-              end },
-            { text = MISSING, isActive = entry.mode == "MISSING",
-              onClick = function()
-                  entry.mode = "MISSING"; Paint()
-                  if onChange then onChange() end
-                  EllesmereUI:RefreshPage()
-              end },
-        })
-    end)
     buffBtn:SetScript("OnClick", function(self)
         ShowPicker(self, c.spellID, function(sid)
             c.spellID = sid
@@ -362,32 +388,25 @@ function ns.BuildBarGlowWhenRow(W, parent, y, entry, onChange)
             if onChange then onChange() end
         end)
     end)
-    stateDrop:SetScript("OnClick", function(self)
-        Menu(self, {
-            { text = ACTIVE, isActive = c.state ~= "missing",
-              onClick = function() c.state = nil; Paint(); if onChange then onChange() end end },
-            { text = MISSING, isActive = c.state == "missing",
-              onClick = function() c.state = "missing"; Paint(); if onChange then onChange() end end },
-        })
-    end)
     Paint()
     return y
 end
 
--- Only In Combat | Hero Talent (the current spec's hero trees; glows are
--- saved per spec). WoW Forever has no hero talents: the Hero Talent half is
--- left empty there. Returns the new y.
-function ns.BuildBarGlowCombatRow(W, parent, y, entry, onChange)
-    local combatCfg = { type = "toggle", text = "Only In Combat",
+-- The Only In Combat toggle's row config.
+function ns.BarGlowCombatCfg(entry, onChange)
+    return { type = "toggle", text = "Only In Combat",
         getValue = function() return entry.onlyInCombat == true end,
         setValue = function(v)
             entry.onlyInCombat = v or nil
             if onChange then onChange() end
         end }
-    if EllesmereUI.IS_FOREVER then
-        local _, h = W:DualRow(parent, y, combatCfg, { type = "label", text = "" })
-        return y - h
-    end
+end
+
+-- Only In Combat | Hero Talent (the current spec's hero trees; glows are
+-- saved per spec). Retail only: WoW Forever has no hero talents, so the page
+-- pairs Only In Combat with Glow Color there instead. Returns the new y.
+function ns.BuildBarGlowCombatRow(W, parent, y, entry, onChange)
+    local combatCfg = ns.BarGlowCombatCfg(entry, onChange)
     local heroValues, heroOrder = { any = EllesmereUI.L("Any") }, { "any" }
     for _, t in ipairs(ns.BarGlowHeroTrees and ns.BarGlowHeroTrees() or {}) do
         local key = tostring(t.id)
@@ -458,10 +477,10 @@ function ns.BarGlowPreviewIconSize(icons, previewParent)
     return nil
 end
 
--- Collapse bar across the top of each glow, the same height either way.
--- Expanded: a down arrow above the glow's rows. Collapsed (entry.collapsed =
--- true, saved): a right arrow, the buff icon and its name, and the rows are
--- skipped. A click flips it and rebuilds the page. The hidden search pre-build
+-- Collapse bar across the top of each glow, the same height either way: the
+-- arrow, the buff icon and its name. Expanded: a down arrow above the glow's
+-- rows. Collapsed (entry.collapsed = true, saved): a right arrow, and the rows
+-- are skipped. A click flips it and rebuilds the page. The hidden search pre-build
 -- and an active search always build every row. Returns the new y and whether
 -- the caller should build the rows.
 local ARROW_DOWN  = "Interface\\AddOns\\EllesmereUI\\media\\icons\\eui-arrow-down3.png"
@@ -497,26 +516,22 @@ function ns.BuildBarGlowHeader(parent, y, entry, aIdx)
     end
     PaintArrow(1, 1, 1, 0.7)
 
-    local title
-    if collapsed then
-        local ico = ns.BarGlowSpellIcon(bar, 26, entry.spellID)
-        ico:SetPoint("LEFT", arrow, "RIGHT", 11, 0)
-        local name = SpellLabel(entry.spellID)
-        title = EllesmereUI.MakeFont(bar, 13, nil, 1, 1, 1)
-        title:SetPoint("LEFT", ico, "RIGHT", 10, 0)
-        title:SetText(name)
-    end
+    local ico = ns.BarGlowSpellIcon(bar, 26, entry.spellID)
+    ico:SetPoint("LEFT", arrow, "RIGHT", 11, 0)
+    local title = EllesmereUI.MakeFont(bar, 13, nil, 1, 1, 1)
+    title:SetPoint("LEFT", ico, "RIGHT", 10, 0)
+    title:SetText((SpellLabel(entry.spellID)))
 
     local EG = EllesmereUI.ELLESMERE_GREEN
     bar:SetScript("OnEnter", function()
         bg:SetColorTexture(1, 1, 1, 0.08)
         PaintArrow(EG.r, EG.g, EG.b, 1)
-        if title then title:SetTextColor(EG.r, EG.g, EG.b) end
+        title:SetTextColor(EG.r, EG.g, EG.b)
     end)
     bar:SetScript("OnLeave", function()
         bg:SetColorTexture(1, 1, 1, 0.04)
         PaintArrow(1, 1, 1, 0.7)
-        if title then title:SetTextColor(1, 1, 1) end
+        title:SetTextColor(1, 1, 1)
     end)
     bar:SetScript("OnClick", function()
         entry.collapsed = (not collapsed) and true or nil

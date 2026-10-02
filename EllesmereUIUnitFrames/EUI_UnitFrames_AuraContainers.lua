@@ -2456,10 +2456,10 @@ local GRADIENT_TEXTURE = "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradi
 local GRADIENT_SHARP_TEXTURE = "Interface\\AddOns\\EllesmereUI\\media\\textures\\gradient-sharp.tga"
 
 -- Copy the separator's actual texture rect, so width, pixel snapping and future
--- layout changes stay owned by the separator. Live copies belong to the aura
--- slot (engine visibility); the options preview uses the same drawing path.
+-- layout changes stay owned by the separator. Copies belong to the aura slot
+-- (engine visibility); the options preview tints its separators in place.
 -- Keep state outside the slot button, as with the border and outer ring copies.
-function ns.UF_ApplyDispelSeparatorCopy(parent, state, key, seam, color)
+local function ApplyDispelSeparatorCopy(parent, state, key, seam, color)
     local copy = state[key]
     local source = seam and seam._tex
     if not (source and seam:IsShown() and source:IsShown()) then
@@ -2621,8 +2621,8 @@ local function ApplyDispelSlotStyle(button, d, style)
     -- Only enabled, displayed separators get copies. The inactive by-me twin
     -- and disabled custom-border mode clear any copies they previously drew.
     if ub or d.ufPowerSeam or d.ufPortraitSeam then
-        ns.UF_ApplyDispelSeparatorCopy(button, d, "ufPowerSeam", ub and uf.Power and uf.Power._pbSeam, c)
-        ns.UF_ApplyDispelSeparatorCopy(button, d, "ufPortraitSeam", ub and uf._portraitSeparator, c)
+        ApplyDispelSeparatorCopy(button, d, "ufPowerSeam", ub and uf.Power and uf.Power._pbSeam, c)
+        ApplyDispelSeparatorCopy(button, d, "ufPortraitSeam", ub and uf._portraitSeparator, c)
     end
 end
 
