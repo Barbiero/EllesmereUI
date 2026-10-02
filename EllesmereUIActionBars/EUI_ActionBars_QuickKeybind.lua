@@ -3,7 +3,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  EUI_ActionBars_QuickKeybind.lua
 --
 --  Quick Keybind Mode support for the EAB buttons and the paging arrows, and
---  the Swiftmend brightness scan that closed the main file. Loads after
+--  the Swiftmend brightness scan over the action buttons. Loads after
 --  EUI_ActionBars_ExtraBars.lua and reads the main file through ns only.
 -------------------------------------------------------------------------------
 local _, ns = ...

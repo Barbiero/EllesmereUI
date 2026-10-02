@@ -13507,7 +13507,8 @@ function EAB:FinishSetup()
     end
 end
 
--- Main-chunk locals the other EUI_ActionBars_*.lua files re-import by name.
+-- Main-chunk locals the other EUI_ActionBars_*.lua files re-import by name
+-- (EUI_ActionBars_DataBars.lua adds SetupDataBars for the extra bars file).
 ns._internals = {
     BAR_CONFIG = BAR_CONFIG, BINDING_MAP = BINDING_MAP, BUTTON_EVENT_LISTS = BUTTON_EVENT_LISTS,
     ReRegisterButtonEvents = ReRegisterButtonEvents, barFrames = barFrames,
