@@ -232,7 +232,7 @@ local function UpdateFlipbook(btn)
 end
 
 -- Resolve the spellID for a button.
--- Stored on _procState to avoid adding a top-level local (200 limit).
+-- Stored on _procState rather than as a file-level local.
 _procState.GetButtonSpellID = function(btn)
     local slot = GetButtonActionSlot(btn)
     if not slot or not HasAction or not HasAction(slot) then return nil end
@@ -563,8 +563,7 @@ do
     -- outside the proc glow's edge, a negative one tucks it inside. Clamped
     -- above zero: SetScale(0) is invalid, and a large negative outset on a
     -- small button would otherwise reach it.
-    -- Stored on ns rather than as a local: this chunk is at the 200-local
-    -- ceiling (see _procState.GetButtonSpellID).
+    -- Stored on ns rather than as a local.
     ns._AssistScale = function(btn)
         local w = btn:GetWidth() or 45
         local p = EAB.db and EAB.db.profile
@@ -1133,7 +1132,8 @@ function EAB:ApplyMiscTextures()
         end
     end
 
-    -- ActionBarActionEventsFrame is killed at file-load time (top of file).
+    -- ActionBarActionEventsFrame is killed at file-load time (top of
+    -- EllesmereUIActionBars.lua).
     -- Spellcast events are no longer re-registered here -- our central
     -- dispatcher + ACTIONBAR_UPDATE_COOLDOWN handles cooldown/GCD swipes.
 end
