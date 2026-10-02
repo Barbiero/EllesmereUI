@@ -33,8 +33,8 @@ I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
 --  pointed at the latched style once per session (ns.UF_Style). An art entry
 --  is an atlas name (validated once per session; a missing one leaves that
 --  piece on the EUI look) or a file descriptor { key, file, l, r, t, b, w,
---  h, point, x, y }. Reload-gated per-profile flags. ns fields only: the
---  file is at the cap.
+--  h, point, x, y }. Reload-gated per-profile flags. ns fields only:
+--  written under the main file's local cap.
 -------------------------------------------------------------------------------
 ns.UF_BLIZZ = {
     player = {
@@ -563,8 +563,8 @@ end
 -- Anchor-target edges for the unlock anchor system under the style: the
 -- visible art's edges rather than the stock box. Static insets only -- the
 -- aura stack below is never read (see the block). Chained in front of any
--- provider installed before this file loaded (ns fields: the file is at the
--- local cap).
+-- provider installed before this file loaded (ns fields, like the rest of
+-- this file).
 ns._ufPrevAnchorExtent = EllesmereUI._GetAnchorTargetExtent
 ns._ufAnchorKeys = { player = true, target = true, focus = true, pet = true, targettarget = true, focustarget = true, boss = true }
 EllesmereUI._GetAnchorTargetExtent = function(targetKey, side)
