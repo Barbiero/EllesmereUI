@@ -1480,9 +1480,11 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
                 return "Custom Non-Player Portrait"
             end }
     end
-    if unitKey == "targettarget" then
+    if unitKey == "targettarget" or unitKey == "boss" then
         rows[#rows + 1] = { type="toggle", label="Mirror Portrait",
-            tooltip="Mirrors playable-race portraits in 2D. Always flips class art horizontally.",
+            tooltip=unitKey == "boss"
+                and "Mirrors playable-race portraits in 2D and 3D. Always flips class art horizontally."
+                or "Mirrors playable-race portraits in 2D. Always flips class art horizontally.",
             disabled=function() return EllesmereUI.BlizzStyle.Get("unitframes") end,
             disabledTooltip=function() return EllesmereUI.BlizzStyle.Label("unitframes") end,
             requireState="disabled",
@@ -1493,7 +1495,8 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
                     ns.UF_RefreshPortraitMirror(unitKey)
                     UpdatePreview()
                 end
-                if v and not settingsTable.portraitMirror and settingsTable.portraitMode ~= "class"
+                if v and not settingsTable.portraitMirror and settingsTable.portraitMode ~= "3d"
+                    and settingsTable.portraitMode ~= "class"
                     and ns.UF_Ask2DMirroredPortraits(function()
                         ApplyMirror()
                         EllesmereUI:RefreshPage()
@@ -1506,7 +1509,7 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
         rows[#rows + 1] = { type="toggle", label="Vertical Border Separator",
             tooltip="Draws the selected border style between the attached portrait and the bars.",
             disabled=function()
-                local donor = GetMiniDonorSettings(unitKey)
+                local donor = unitKey == "boss" and ns.UF_BossBorderSettings() or GetMiniDonorSettings(unitKey)
                 return EllesmereUI.BlizzStyle.Get("unitframes") or (settingsTable.borderSizeOverride or donor.borderSize or 1) <= 0
                     or not EllesmereUI.GetBorderCompanion(donor.borderTexture or "solid", "sepV")
             end,
@@ -1813,7 +1816,7 @@ function ns.UFO_BuildBossOptions(W, parent, y)
                 EllesmereUI:RefreshPage()
               end }) or { type="label", text="" })
         if isEUI and not EllesmereUI._prebuilding then
-            AttachPortraitSideCog(portraitRow._rightRegion, db.profile.boss)
+            AttachPortraitSideCog(portraitRow._rightRegion, db.profile.boss, false, "boss")
         end
         AttachFrameSourceCog(portraitRow._leftRegion, "boss", {
             onBeforeSet = function(v)
@@ -2543,6 +2546,17 @@ function ns.UFO_BuildBossOptions(W, parent, y)
                           set=function(v) B.auraBorderTextureShiftY=v==0 and nil or v;ReloadAndUpdate() end },
                         { type="toggle",label="Show Behind",get=function() return B.auraBorderBehind or false end,set=function(v) B.auraBorderBehind=v;ReloadAndUpdate() end },
                         { type="toggle",label="Behind Unit Frame",get=function() return B.auraBorderBehindUnitFrame or false end,set=function(v) B.auraBorderBehindUnitFrame=v;ReloadAndUpdate() end },
+                        { type="toggle",label="Border Above Effects",
+                          tooltip="Draws boss aura icon borders over their cooldown swipes and glows. Duration and stack text stay above the borders.",
+                          disabled=function()
+                              local tex = B.auraBorderTexture or "solid"
+                              return B.auraBorderBehind or B.auraBorderBehindUnitFrame
+                                  or tex == "solid" or tex == "" or (B.auraBorderSize or 1) <= 0
+                          end,
+                          disabledTooltip="This option requires a textured Aura Border with a size above 0, and its Show Behind and Behind Unit Frame options disabled.",
+                          rawTooltip=true,
+                          get=function() return B.auraBorderAboveEffects == true end,
+                          set=function(v) B.auraBorderAboveEffects=v;ReloadAndUpdate() end },
                     } })
                     local function vis() if (B.auraBorderTexture or "solid")=="solid" then btn:Hide() else btn:Show() end end
                     EllesmereUI.RegisterWidgetRefresh(vis);vis()
