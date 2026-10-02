@@ -1571,7 +1571,7 @@ initFrame:SetScript("OnEvent", function(self)
                 end
                 EllesmereUI:RefreshPage()
               end },
-            { type="toggle", text="Target Distance Text",
+            { type="toggle", text="Target Distance (Range) Text",
               tooltip="Shows the approximate distance to your current target as movable on-screen text (default 30-35). Use the cog for format, alignment, and text size; use Unlock Mode to position or Anchor to your Player Frame.",
               getValue=function()
                   return EllesmereUIDB and EllesmereUIDB.targetDistanceEnabled or false
@@ -1693,7 +1693,7 @@ initFrame:SetScript("OnEvent", function(self)
                       end },
                 },
                 footer = { unlockKey = "EUI_TargetDistance" },
-                gap = 9, disabled = tdOff, disabledTooltip = "Target Distance Text",
+                gap = 9, disabled = tdOff, disabledTooltip = "Target Distance (Range) Text",
             })
         end
 
