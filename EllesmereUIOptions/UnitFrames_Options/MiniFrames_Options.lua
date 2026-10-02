@@ -10,14 +10,15 @@ if not ns then return end  -- module disabled: no options page
 
 ---------------------------------------------------------------------------
 --  Mini frame donor settings helper
---  Returns the settings table from target (if usable) focus player. Routed
---  through the runtime resolver so the options preview and the live frames
---  can never disagree about which frame is on screen to inherit from.
+--  Returns the settings table unitKey copies its look from (its Copy Look
+--  From pick, else focus, target, player). Routed through the runtime
+--  resolver so the options preview and the live frames can never disagree
+--  about which frame is on screen to inherit from.
 ---------------------------------------------------------------------------
-local function GetMiniDonorSettings()
+local function GetMiniDonorSettings(unitKey)
     local env = ns._UFO_OptEnv
     local db = env.db
-    return ns.GetMiniDonorSettings and ns.GetMiniDonorSettings() or db.profile.player
+    return ns.GetMiniDonorSettings and ns.GetMiniDonorSettings(unitKey) or db.profile.player
 end
 
 ---------------------------------------------------------------------------
@@ -61,7 +62,7 @@ local function BuildMiniTextAndSize(W, parent, y, settingsTable, unitKey, enable
     end
 
     -- Bar Texture override. Mini frames inherit the main frames' donor texture
-    -- (target > focus > player) by default; a specific pick here overrides it for
+    -- (Copy Look From) by default; a specific pick here overrides it for
     -- this frame only. Lands as the last DISPLAY row: Row 2 for ToT/Focus Target/Pet, Row 3 for Boss.
     do
         local mtVals, mtOrder = BuildBarTexDropdown()
@@ -73,7 +74,7 @@ local function BuildMiniTextAndSize(W, parent, y, settingsTable, unitKey, enable
             local baseBg = mo.background
             mo.background = function(key)
                 if key == "inherit" then
-                    local donor = GetMiniDonorSettings()
+                    local donor = GetMiniDonorSettings(unitKey)
                     local dk = donor and donor.healthBarTexture
                     if dk == "inherit" then dk = nil end
                     dk = dk or db.profile.healthBarTexture
@@ -232,7 +233,7 @@ local function BuildMiniTextAndSize(W, parent, y, settingsTable, unitKey, enable
             EllesmereUI.BlizzStyle.Gate("unitframes", { type="slider", text="Border Size", min=0, max=4, step=1,
               tooltip="Overrides the border size from the main frames for this frame only. Border color and texture still follow the main frames.",
               getValue=function()
-                  local donor = GetMiniDonorSettings()
+                  local donor = GetMiniDonorSettings(unitKey)
                   return settingsTable.borderSizeOverride or (donor and donor.borderSize) or 1
               end,
               setValue=function(v) settingsTable.borderSizeOverride = v; ReloadAndUpdate() end }),
@@ -1505,7 +1506,7 @@ local function AttachPortraitSideCog(rgn, settingsTable, withArtStyle, unitKey)
         rows[#rows + 1] = { type="toggle", label="Vertical Border Separator",
             tooltip="Draws the selected border style between the attached portrait and the bars.",
             disabled=function()
-                local donor = GetMiniDonorSettings()
+                local donor = GetMiniDonorSettings(unitKey)
                 return EllesmereUI.BlizzStyle.Get("unitframes") or (settingsTable.borderSizeOverride or donor.borderSize or 1) <= 0
                     or not EllesmereUI.GetBorderCompanion(donor.borderTexture or "solid", "sepV")
             end,
@@ -1545,7 +1546,9 @@ function ns.UFO_BuildFoTToTOptions(W, parent, y, settingsTable, unitKey)
     local enableText = (unitKey == "focustarget") and "Enable Focus Target" or "Enable Target of Target"
     local _, h
 
-    _, h = BuildApplyAllRow(parent, y, MINI_GROUP_ORDER, unitKey); y = y - h
+    local applyDD
+    _, h, applyDD = BuildApplyAllRow(parent, y, MINI_GROUP_ORDER, unitKey); y = y - h
+    _, h = env.BuildLookSourceRow(parent, y, settingsTable, applyDD); y = y - h
 
     local portraitRow
     local function enableRow(Ww, pp, yy)
@@ -1608,7 +1611,9 @@ function ns.UFO_BuildPetOptions(W, parent, y)
     local ReloadAndUpdate, UpdatePreview, abs, db = env.ReloadAndUpdate, env.UpdatePreview, env.abs, env.db
     local _, h
 
-    _, h = BuildApplyAllRow(parent, y, MINI_GROUP_ORDER, "pet"); y = y - h
+    local applyDD
+    _, h, applyDD = BuildApplyAllRow(parent, y, MINI_GROUP_ORDER, "pet"); y = y - h
+    _, h = env.BuildLookSourceRow(parent, y, db.profile.pet, applyDD); y = y - h
 
     local portraitRow
     local function enableRow(Ww, pp, yy)

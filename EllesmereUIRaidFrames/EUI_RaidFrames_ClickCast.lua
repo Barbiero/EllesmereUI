@@ -613,10 +613,12 @@ local function GetModifierPrefix()
     if IsAltKeyDown() then p = p .. "ALT-" end
     if IsControlKeyDown() then p = p .. "CTRL-" end
     if IsShiftKeyDown() then p = p .. "SHIFT-" end
+    -- Command uses META; the Mac-only API is optional on other platforms.
+    if IsMetaKeyDown and IsMetaKeyDown() then p = p .. "META-" end
     return p
 end
 -- Exposed so the keybind-capture button uses this SAME canonical order (WoW matches
--- bindings/clicks in ALT-CTRL-SHIFT order). A non-canonical order silently fails to
+-- bindings/clicks in ALT-CTRL-SHIFT-META order). A non-canonical order silently fails to
 -- match on double-modifier binds (single-modifier binds are order-independent).
 ns.CC_GetModifierPrefix = GetModifierPrefix
 
@@ -660,12 +662,18 @@ function ns.CC_FormatKey(keyStr)
     local parsed = ParseKeyString(keyStr)
     local display = {}
     for m in parsed.modifiers:gmatch("([^-]+)") do
-        display[#display + 1] = m == "SHIFT" and "Shift" or m == "CTRL" and "Ctrl" or m == "ALT" and "Alt" or m
+        display[#display + 1] = m == "SHIFT" and "Shift" or m == "CTRL" and "Ctrl" or m == "ALT" and "Alt" or m == "META" and "Cmd" or m
     end
     display[#display + 1] = KEY_DISPLAY[parsed.key] or parsed.key
     return table.concat(display, " + ")
 end
 ns.CC_ParseKeyString = ParseKeyString
+
+-- Native click prefixes omit META, so Command-clicks need virtual buttons.
+local function UsesDirectClickAttributes(parsed)
+    return parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5
+        and not parsed.modifiers:find("META-", 1, true)
+end
 
 -- Heals saved keys with non-canonical modifier order (WoW matches ALT-CTRL-SHIFT; other
 -- orders silently fail double-modifier binds). Rewrites DB tables in place. Called once
@@ -1542,6 +1550,72 @@ local function ResolveBinding(b)
     return nil, nil, nil
 end
 
+-- Route physical Command-clicks through the original secure action handler.
+local function IsCommandClick(parsed)
+    return parsed.buttonNum and parsed.modifiers:find("META-", 1, true)
+end
+
+local COMMAND_CLICK_BODY = [[
+    -- Restricted snippets expose the macro parser, but not IsMetaKeyDown.
+    if not SecureCmdOptionParse("[mod:meta] yes") then return end
+    local p = ""
+    if IsAltKeyDown() then p = p .. "ALT-" end
+    if IsControlKeyDown() then p = p .. "CTRL-" end
+    if IsShiftKeyDown() then p = p .. "SHIFT-" end
+    local n = button == "LeftButton" and "1"
+        or button == "RightButton" and "2"
+        or button == "MiddleButton" and "3"
+        or button:match("^Button(%d+)$")
+    if n then
+        local route = self:GetAttribute("eui_cmdclick_" .. p .. "META-BUTTON" .. n)
+        if route then return route end
+    end
+]]
+
+local commandClickAttrs
+
+local function ConfigureCommandClicks(frame, bindings)
+    local previous = commandClickAttrs and commandClickAttrs[frame]
+    if previous then
+        for _, attr in ipairs(previous) do
+            frame:SetAttribute(attr, nil)
+        end
+    end
+    local attrs
+    -- Match override precedence: hover bindings win over frame bindings.
+    for pass = 1, 2 do
+        for i, b in ipairs(bindings) do
+            if b.key and b.key:find("META-", 1, true) then
+                local parsed = ParseKeyString(b.key)
+                if IsCommandClick(parsed) and (pass == 1 and IsFrameBinding(b)
+                    or pass == 2 and IsHoverBinding(b)) then
+                    local aType, spellName, macrotext = ResolveBinding(b)
+                    if aType then
+                        SetKeyAttr(frame, i, aType, spellName, macrotext, b.oocOnly)
+                        local attr = "eui_cmdclick_" .. b.key
+                        frame:SetAttribute(attr, "eui_" .. i)
+                        if not attrs then attrs = {} end
+                        attrs[#attrs + 1] = attr
+                    end
+                end
+            end
+        end
+    end
+    if attrs then
+        if not previous then
+            header:WrapScript(frame, "OnClick", COMMAND_CLICK_BODY)
+        end
+        if not commandClickAttrs then
+            commandClickAttrs = setmetatable({}, { __mode = "k" })
+        end
+        commandClickAttrs[frame] = attrs
+    elseif previous then
+        header:UnwrapScript(frame, "OnClick")
+        commandClickAttrs[frame] = nil
+        if not next(commandClickAttrs) then commandClickAttrs = nil end
+    end
+end
+
 -- OnEnter/OnLeave secure script generation (frame-based keyboard bindings).
 -- Returns enterScript, leaveScript, kbClearLines. kbClearLines uses
 -- self:ClearBinding (state-driver context, self=header); leaveScript uses
@@ -1552,7 +1626,7 @@ local function GenerateKeyBindSnippets(bindings)
     for i, b in ipairs(bindings) do
         if IsFrameBinding(b) then
             local parsed = ParseKeyString(b.key)
-            if not parsed.isMouseButton or not parsed.buttonNum or parsed.buttonNum > 5 then
+            if not UsesDirectClickAttributes(parsed) then
                 kbBindings[#kbBindings + 1] = { binding = b, index = i, parsed = parsed }
             end
         end
@@ -1704,7 +1778,7 @@ local function DoRegisterFrame(frame)
             local parsed = ParseKeyString(b.key)
             local aType, spellName, macrotext = ResolveBinding(b)
             if aType then
-                if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
+                if UsesDirectClickAttributes(parsed) then
                     SetClickAttr(frame, parsed, aType, spellName, macrotext, b.oocOnly)
                 else
                     SetKeyAttr(frame, i, aType, spellName, macrotext, b.oocOnly)
@@ -1712,6 +1786,8 @@ local function DoRegisterFrame(frame)
             end
         end
     end
+
+    ConfigureCommandClicks(frame, bindings)
 
     -- Neutralize unbound left-click target / right-click menu defaults (see
     -- NeutralizeDefaultClicks); restored in DoUnregisterFrame on disable.
@@ -1727,11 +1803,12 @@ local function DoUnregisterFrame(frame)
     for i, b in ipairs(bindings) do
         if IsFrameBinding(b) and b.key then
             local parsed = ParseKeyString(b.key)
-            if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
+            if UsesDirectClickAttributes(parsed) then
                 ClearClickAttr(frame, parsed)
             end
         end
     end
+    ConfigureCommandClicks(frame, {})
     ClearKeyAttrs(frame, lastBindingCount)
 
     -- Restores the frame's NATIVE left-click target attrs captured at register
@@ -2035,7 +2112,7 @@ function ns.CC_ApplyBindings()
         for _, pb in ipairs(prevBindings) do
             if IsFrameBinding(pb.b) then
                 local parsed = ParseKeyString(pb.b.key)
-                if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
+                if UsesDirectClickAttributes(parsed) then
                     ClearClickAttr(frame, parsed)
                 end
             end
@@ -2049,7 +2126,7 @@ function ns.CC_ApplyBindings()
             local parsed = ParseKeyString(fb.b.key)
             local aType, spellName, macrotext = ResolveBinding(fb.b)
             if aType then
-                if parsed.isMouseButton and parsed.buttonNum and parsed.buttonNum <= 5 then
+                if UsesDirectClickAttributes(parsed) then
                     SetClickAttr(frame, parsed, aType, spellName, macrotext, fb.b.oocOnly)
                 else
                     SetKeyAttr(frame, fb.idx, aType, spellName, macrotext, fb.b.oocOnly)
@@ -2057,6 +2134,7 @@ function ns.CC_ApplyBindings()
             else
             end
         end
+        ConfigureCommandClicks(frame, bindings)
         -- Re-neutralize unbound left/right defaults (the clear pass above may
         -- have stripped a previous binding's type<N>).
         NeutralizeDefaultClicks(frame, bindings)
@@ -2065,7 +2143,7 @@ function ns.CC_ApplyBindings()
     for _, fb in ipairs(frameBindings) do
         local parsed = ParseKeyString(fb.b.key)
         local aType, spellName, macrotext = ResolveBinding(fb.b)
-        if aType and (not parsed.isMouseButton or not parsed.buttonNum or parsed.buttonNum > 5) then
+        if aType and (not UsesDirectClickAttributes(parsed)) then
             SetKeyAttr(bindProxy, fb.idx, aType, spellName, macrotext, fb.b.oocOnly)
         end
     end
@@ -2715,16 +2793,16 @@ function ns.CC_BuildPage(pageName, parent, yOffset)
 
         kbBtn:SetScript("OnKeyDown", function(self, key)
             if not listening then self:SetPropagateKeyboardInput(true); return end
-            if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL"
-               or key == "LALT" or key == "RALT" then
+            if MODIFIER_KEYS[key] then
                 self:SetPropagateKeyboardInput(true); return
             end
             self:SetPropagateKeyboardInput(false)
             if key == "ESCAPE" then
                 StopListening(); return
             end
-            local mods = ns.CC_GetModifierPrefix()
-            if onKeySet then onKeySet(mods .. key) end
+            local captured = ns.CC_CaptureKey(key)
+            if not captured then return end
+            if onKeySet then onKeySet(captured) end
             StopListening()
         end)
 
