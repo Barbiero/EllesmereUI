@@ -802,6 +802,10 @@ local function PlaceSection(key, label, count, x, y, w, sub)
     local collapsed = (BP().bagListCollapsed or _emptyP)[key] == true
     -- Arrow points right when collapsed, down when open
     s._arrow:SetRotation(collapsed and math.pi or math.pi / 2)
+    if s._clearBtn then
+        s._clearBtn:Hide()
+        s._line:SetPoint("RIGHT", s, "RIGHT", 0, 0)
+    end
     s:Show()
     return sub and SUBSECTION_H or SECTION_H, collapsed
 end
@@ -941,6 +945,10 @@ function ns.RenderListView(items, opts)
             count = "(" .. b.n .. " / " .. C_Container.GetContainerNumSlots(b.key) .. ")"
         else label, secKey = cats[b.key].name, cats[b.key]._defaultName end
         local h, collapsed = PlaceSection(secKey, label, count or ("(" .. b.n .. ")"), x, y, rowW, false)
+        if secKey == "recent" and BP().bagShowRecentClear == true then
+            local s = _sections[_sectionsUsed]
+            s._line:SetPoint("RIGHT", ns.ShowRecentClearButton(s), "LEFT", -6, 0)
+        end
         y = y - h
         table.sort(b.subList, SubCompare)
         for _, sl in ipairs(b.subList) do

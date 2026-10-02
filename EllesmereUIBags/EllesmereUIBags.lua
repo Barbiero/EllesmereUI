@@ -5674,7 +5674,8 @@ local function GetOrCreateCatHeader(idx)
     return f
 end
 
--- "Clear" link on a Recent Items header, sitting just left of its "Hide" link.
+-- "Clear" link on a Recent Items header, sitting just left of its "Hide" link
+-- (or at the header's right edge when there is none, as in the list).
 -- Opt-in (bagShowRecentClear, default off): callers gate on the setting, so a
 -- user who never enables it never has the button built. Pooled on the header
 -- like _hideBtn; hidden by the per-refresh header reset.
@@ -5701,7 +5702,11 @@ local function ShowRecentClearButton(hdr, hideBtn)
         hdr._clearBtn = cb
     end
     hdr._clearBtn:ClearAllPoints()
-    hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    if hideBtn then
+        hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    else
+        hdr._clearBtn:SetPoint("RIGHT", hdr, "RIGHT", 0, 0)
+    end
     hdr._clearBtn:Show()
     return hdr._clearBtn
 end
