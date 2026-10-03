@@ -1,3 +1,19 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Visibility.lua
+--
+--  Frame alpha and visibility helpers (fade out of combat, resting alpha,
+--  show on missing health) and the frame hover handlers, published as
+--  I.UnitFrame_OnEnter / I.UnitFrame_OnLeave for EUI_UnitFrames_Init.lua.
+--  Reads the main file through ns and ns._internals; db via I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local I = ns._internals
+local frames = I.frames
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Effective whole-frame alpha for a unit frame. When "Fade Out of Combat" is enabled
 -- and the player is out of combat, shows at oocAlpha; otherwise full opacity (off by
 -- default, existing setups unchanged). Every "shown" SetAlpha site (visibility loop +
@@ -241,3 +257,5 @@ local function UnitFrame_OnLeave(self)
     end
 end
 
+I.UnitFrame_OnEnter = UnitFrame_OnEnter
+I.UnitFrame_OnLeave = UnitFrame_OnLeave

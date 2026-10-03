@@ -13232,6 +13232,11 @@ ns._internals = {
     defaults = defaults, healthBarTextures = healthBarTextures,
     healthBarTextureNames = healthBarTextureNames, healthBarTextureOrder = healthBarTextureOrder,
     GetSelectedFont = GetSelectedFont, SetFSFont = SetFSFont,
+    ApplyAbsorbStyle = ApplyAbsorbStyle, ApplyClassColor = ApplyClassColor,
+    ApplyDetachedPortraitShape = ApplyDetachedPortraitShape, IsKickCastbarUnit = IsKickCastbarUnit,
+    CreateCustomClassPower = CreateCustomClassPower, DestroyCustomClassPower = DestroyCustomClassPower,
+    StyleFullFrame = StyleFullFrame, StyleFocusFrame = StyleFocusFrame,
+    StyleSimpleFrame = StyleSimpleFrame, StyleBossFrame = StyleBossFrame,
     dbSetters = { function(v) db = v end },
 }
 -- A re-import of a name this table lacks fails where the part file loads,

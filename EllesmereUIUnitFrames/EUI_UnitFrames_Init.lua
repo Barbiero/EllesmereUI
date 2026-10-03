@@ -1,3 +1,31 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Init.lua
+--
+--  InitializeFrames, a global that EnableBody (EUI_UnitFrames_Lifecycle.lua)
+--  calls once: spawns the unit frames, takes over the Blizzard ones and builds
+--  the visibility pass. Reads the main file and EUI_UnitFrames_Visibility.lua
+--  through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+local CLASS_FULL_COORDS = EllesmereUI.CLASS_ICON_SPRITE_COORDS
+
+local I = ns._internals
+local frames, GetSettingsForUnit, UnsnapTex, SetFSFont = I.frames, I.GetSettingsForUnit, I.UnsnapTex, I.SetFSFont
+local ApplyFramePosition, ReloadFrames, ApplyBlizzCastbarState = I.ApplyFramePosition, I.ReloadFrames, I.ApplyBlizzCastbarState
+local ApplyAbsorbStyle, ApplyClassColor, ApplyDetachedPortraitShape =
+    I.ApplyAbsorbStyle, I.ApplyClassColor, I.ApplyDetachedPortraitShape
+local CreateCustomClassPower, DestroyCustomClassPower, IsKickCastbarUnit =
+    I.CreateCustomClassPower, I.DestroyCustomClassPower, I.IsKickCastbarUnit
+local StyleFullFrame, StyleFocusFrame, StyleSimpleFrame, StyleBossFrame =
+    I.StyleFullFrame, I.StyleFocusFrame, I.StyleSimpleFrame, I.StyleBossFrame
+local UnitFrame_OnEnter, UnitFrame_OnLeave = I.UnitFrame_OnEnter, I.UnitFrame_OnLeave
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 function InitializeFrames()
     -- Sync EUI global power colors into oUF at init
     EllesmereUI.ApplyColorsToOUF()
@@ -2150,4 +2178,3 @@ function InitializeFrames()
     -- frames are spawned and anchored.
     ReloadFrames()
 end
-
