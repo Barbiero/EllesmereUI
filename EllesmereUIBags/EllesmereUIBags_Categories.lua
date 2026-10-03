@@ -46,12 +46,6 @@ local DEFAULT_CATEGORIES = {
     { name = "Gear Enhancements",  types = { IC_GEM, IC_ITEM_ENHANCE },     icon = 7549094 },
     { name = "Professions",        types = { IC_PROFESSION, IC_RECIPE },     icon = 7548925 },
     { name = "Housing",            types = { IC_HOUSING },                   icon = 7726459 },
-    -- Junk sits just above the catch-all so it reads as the "bottom" group.
-    -- types = {} means it never auto-matches by item class: membership comes
-    -- only from the quality==Poor rule in ClassifyItem and from explicit user
-    -- assignments. The whole category is gated behind bagJunkMarker (see
-    -- InitCategories), so it does not exist unless the feature is enabled.
-    { name = "Junk",               types = {}, isJunk = true, icon = 133784 },
     { name = "Miscellaneous",      types = { IC_MISC, IC_CONTAINER }, isCatchAll = true, icon = 5524917 },
 }
 
@@ -124,6 +118,20 @@ if EUI_CLIENT_FOREVER then
         end
     end
 end
+
+-- Junk is the very LAST default, appended after the Forever block so it lands
+-- after Special Bags there too. appendLast keeps it out of a profile's saved
+-- category order until it is new, so turning the feature on/off never shifts
+-- any other category's index -- bagVisualOrder (each category's saved drag
+-- order) is keyed by index, and an insert before the catch-all would move
+-- Miscellaneous and everything after it. types = {} means it never auto-matches
+-- by item class: membership comes only from the quality==Poor rule in
+-- ClassifyItem and from explicit user assignments. The whole category is gated
+-- behind bagJunkMarker (see InitCategories), so it does not exist unless the
+-- feature is enabled.
+DEFAULT_CATEGORIES[#DEFAULT_CATEGORIES + 1] = {
+    name = "Junk", types = {}, isJunk = true, appendLast = true, icon = 133784,
+}
 
 -------------------------------------------------------------------------------
 --  Init
