@@ -906,7 +906,10 @@ function ns.RenderListView(items, opts)
             if slotView then
                 Add(BagKey(d.bag), "", d)
             elseif cat and not hidden[cat._defaultName] and not (cat.groupName and hidden[cat.groupName]) then
-                local key = d._lvQuality == 0 and "junk" or ci
+                -- Grey items already fold into the list's own "Junk" section; send
+                -- the Junk Marker category's items (grey + player-marked) there too
+                -- so there is a single Junk section, not two.
+                local key = (d._lvQuality == 0 or cat.isJunk) and "junk" or ci
                 Add(key, key == "junk" and "" or d._lvSub, d)
             end
         end
