@@ -1054,75 +1054,6 @@ initFrame:SetScript("OnEvent", function(self)
         UpdatePreviewHeader()
     end
 
-    -- Cog + popup for simple per-bar hash lines (Health/Power). cfg = { parentRgn, getBarData, refreshFn, popupTitle, anchorTo }; returns cogBtn.
-    local function BuildHashCog(cfg)
-        local getBarData = cfg.getBarData
-        local refreshFn  = cfg.refreshFn or function() end
-
-        local function SanitizePositions(str)
-            if not str or str == "" then return "" end
-            local out = {}
-            for token in tostring(str):gmatch("[^,]+") do
-                local n = tonumber((token:gsub("%s", "")))
-                if n and n >= 0 then out[#out + 1] = tostring(n) end
-            end
-            return table.concat(out, ", ")
-        end
-
-        local function HashOff()
-            local c = getBarData()
-            return not (c and c.hashEnabled)
-        end
-
-        local DIS_TIP = EllesmereUI.L("Enable hash lines first")
-        local rows = {
-            { type = "toggle", label = EllesmereUI.L("Show Hash Lines"),
-              tooltip = EllesmereUI.L("Draw tick lines across the bar at positions you choose."),
-              get = function() local c = getBarData(); return c and c.hashEnabled or false end,
-              set = function(v) local c = getBarData(); if not c then return end
-                  c.hashEnabled = v and true or false; refreshFn() end },
-            { type = "input", label = EllesmereUI.L("Positions"), inputWidth = 130,
-              commitOnBlur = true,
-              disabled = HashOff,
-              disabledTooltip = DIS_TIP,
-              get = function() local c = getBarData(); return c and c.hashValues or "" end,
-              set = function(v) local c = getBarData(); if not c then return end
-                  c.hashValues = SanitizePositions(v); refreshFn() end },
-            { type = "segmented", label = EllesmereUI.L("Mode"),
-              disabled = HashOff,
-              disabledTooltip = DIS_TIP,
-              keys = { "percent", "value" }, labels = { percent = "%", value = "Value" },
-              get = function() local c = getBarData(); return (c and c.hashMode) or "percent" end,
-              set = function(k) local c = getBarData(); if not c then return end
-                  c.hashMode = k; refreshFn() end },
-            { type = "slider", label = EllesmereUI.L("Thickness"), min = 1, max = 5, step = 1,
-              disabled = HashOff,
-              disabledTooltip = DIS_TIP,
-              get = function() local c = getBarData(); return c and c.hashWidth or 1 end,
-              set = function(v) local c = getBarData(); if not c then return end
-                  c.hashWidth = v; refreshFn() end },
-            { type = "colorpicker", label = EllesmereUI.L("Color"), hasAlpha = true,
-              disabled = HashOff,
-              disabledTooltip = DIS_TIP,
-              get = function()
-                  local c = getBarData()
-                  if not c then return 1, 1, 1, 0.7 end
-                  return c.hashColorR or 1, c.hashColorG or 1, c.hashColorB or 1, c.hashColorA or 0.7
-              end,
-              set = function(r, g, b, a)
-                  local c = getBarData(); if not c then return end
-                  c.hashColorR, c.hashColorG, c.hashColorB, c.hashColorA = r, g, b, a
-                  refreshFn()
-              end },
-        }
-
-        return EllesmereUI.BuildInlineCog(cfg.parentRgn, {
-            anchorTo = cfg.anchorTo, tip = EllesmereUI.L("Hash Lines"),
-            title = cfg.popupTitle or EllesmereUI.L("Hash Lines"), bgAlpha = 1,
-            frameStrata = "FULLSCREEN_DIALOG", frameLevel = 500,
-            rows = rows,
-        })
-    end
     -- Druid-only per-form popup button. `field` picks the map the toggles write: "textDisabledForms" (text rows) or "barDisabledForms" (whole-bar rows).
     local function AddFormDisableBtn(rgn, leftOf, cfgFn, refreshFn, field, title, tooltip)
         local _, classFile = UnitClass("player")
@@ -1915,9 +1846,8 @@ initFrame:SetScript("OnEvent", function(self)
     --    rebuildFn      -- fn() called for structural changes (hash lines)
     --    disabledFn     -- fn() returns true when the parent bar is disabled
     --    disabledTip    -- string for disabled tooltip
-    --    showHash       -- bool: include hash line row + hash cog
+    --    showHash       -- bool: include the per-entry hash line row + style cog
     --    showPartialCog -- bool: include "Only Color At/Above Threshold" cog
-    --    isBarTypeFn    -- fn(specID) returns true for bar-type specs (only for showHash)
     --    thresholdLabel -- string: threshold input label ("Threshold" / "Threshold %")
     --    threshMin/Max  -- slider bounds (default 1/99)
     --    popupTitle     -- string: popup title
@@ -1934,17 +1864,6 @@ initFrame:SetScript("OnEvent", function(self)
         local EG = EllesmereUI.ELLESMERE_GREEN
         local CLASS_COLORS_L = CLASS_COLORS
 
-        local barTypeSpecs = _G._ERB_BAR_TYPE_SPECS or {}
-        local function IsSpecBarType_L(specID)
-            if not cfg.isBarTypeFn then return false end
-            if specID == 0 then return cfg.isBarTypeFn() end
-            return barTypeSpecs[specID] or false
-        end
-        local function IsEntryBarType_L(entry)
-            if not cfg.showHash then return false end
-            if not entry or not entry.specIDs or #entry.specIDs == 0 then return false end
-            return IsSpecBarType_L(entry.specIDs[1])
-        end
         local function SpecName_L(specID)
             if specID == 0 then return "All Specs" end
             -- The by-id lookup has no namespaced form and is absent on WoW Forever.
@@ -2345,13 +2264,10 @@ initFrame:SetScript("OnEvent", function(self)
                     thresholdR = defR, thresholdG = defG, thresholdB = defB, thresholdA = defA,
                 }
                 if cfg.showHash then
-                    local isBar = IsSpecBarType_L(ids[1])
                     newEntry.hashValues = ""
+                    newEntry.hashMode = "percent"
                     newEntry.hashWidth = 1
                     newEntry.hashColorR = 1; newEntry.hashColorG = 1; newEntry.hashColorB = 1; newEntry.hashColorA = 0.7
-                    newEntry.thresholdCount = isBar and 30 or 3
-                else
-                    newEntry.thresholdPct = 30
                 end
                 -- Default for the power bar's "Threshold color below value": spenders (mana/energy/focus)
                 -- start ON (warn when low), builders (rage/runic/fury) OFF (warn when high). Only when
@@ -2507,8 +2423,11 @@ initFrame:SetScript("OnEvent", function(self)
             local scrollChild = popup._scrollChild
             local curY = 0
             local ENTRY_W = POPUP_W - POPUP_PAD * 2
-            local ENTRY_H = (cfg.singleSpec and not formMode) and 40 or (cfg.showHash and 89 or 60)
-            local effThreshY = (cfg.singleSpec and not formMode) and -8 or (cfg.showHash and -61 or -33)
+            -- No spec-label row when the spec is implied; the hash row, if any, sits above the threshold row
+            local noSpecRow = cfg.singleSpec and not formMode
+            local effHashY = noSpecRow and -8 or -33
+            local effThreshY = noSpecRow and (cfg.showHash and -36 or -8) or (cfg.showHash and -61 or -33)
+            local ENTRY_H = noSpecRow and (cfg.showHash and 68 or 40) or (cfg.showHash and 89 or 60)
 
             for i = 1, #_entryFrames do
                 if _entryFrames[i] then _entryFrames[i]:Hide() end
@@ -2545,14 +2464,15 @@ initFrame:SetScript("OnEvent", function(self)
                     specLbl:SetWordWrap(false)
                     ef._specLbl = specLbl
 
-                    -- Threshold row Y depends on whether a hash row exists; singleSpec has no spec-label row so it sits at the top
-                    local threshY = cfg.singleSpec and -8 or (cfg.showHash and -61 or -33)
+                    -- Rows are placed for real in the refresh pass below; singleSpec has no spec-label row so it sits at the top
+                    local hashY = cfg.singleSpec and -8 or -33
+                    local threshY = cfg.singleSpec and (cfg.showHash and -36 or -8) or (cfg.showHash and -61 or -33)
 
-                    -- Hash row: class resource only
+                    -- Hash row: positions, plus a style cog (mode, width, color)
                     if cfg.showHash then
                         local hashLbl = EllesmereUI.MakeFont(ef, 13, nil, 1, 1, 1)
                         hashLbl:SetAlpha(0.6)
-                        hashLbl:SetPoint("TOPLEFT", ef, "TOPLEFT", 8, -33)
+                        hashLbl:SetPoint("LEFT", ef, "TOPLEFT", 8, hashY - 11)
                         ef._hashLbl = hashLbl
 
                         local hashHint = EllesmereUI.MakeFont(ef, 10, nil, 1, 1, 1)
@@ -2580,7 +2500,24 @@ initFrame:SetScript("OnEvent", function(self)
                             title = "Hash Line Style", bgAlpha = 1,
                             frameStrata = "FULLSCREEN_DIALOG", frameLevel = 500,
                             rows = {
-                                { type = "slider", label = "Hash Width", min = 1, max = 4, step = 1,
+                                { type = "segmented", label = "Mode",
+                                  keys = { "percent", "value" }, labels = { percent = "%", value = "Value" },
+                                  get = function()
+                                      if not ef._entryIdx then return "percent" end
+                                      local bd2 = cfg.getBarData(); if not bd2 then return "percent" end
+                                      local ent = bd2.thresholdSpecs and bd2.thresholdSpecs[ef._entryIdx]
+                                      return ent and ent.hashMode or "percent"
+                                  end,
+                                  set = function(k)
+                                      if not ef._entryIdx then return end
+                                      local bd2 = cfg.getBarData(); if not bd2 then return end
+                                      local ent = bd2.thresholdSpecs and bd2.thresholdSpecs[ef._entryIdx]
+                                      if ent then
+                                          ent.hashMode = k; cfg.rebuildFn()
+                                          if RefreshPopupEntries_L then RefreshPopupEntries_L() end
+                                      end
+                                  end },
+                                { type = "slider", label = "Hash Width", min = 1, max = 5, step = 1,
                                   get = function()
                                       if not ef._entryIdx then return 1 end
                                       local bd2 = cfg.getBarData(); if not bd2 then return 1 end
@@ -2883,10 +2820,11 @@ initFrame:SetScript("OnEvent", function(self)
                 end
 
                 if cfg.showHash and ef._hashLbl then
-                    local isBar = IsEntryBarType_L(entry)
-                    local hashWord = isBar and "Percent" or "Stack"
-                    ef._hashLbl:SetText(EllesmereUI.Lf("Hash at %1$s", hashWord))
-                    ef._hashHint:SetText(isBar and EllesmereUI.L("(Ex: 25,50,75)") or EllesmereUI.L("(Ex: 2,4)"))
+                    local isPct = (entry.hashMode or "percent") == "percent"
+                    ef._hashLbl:ClearAllPoints()
+                    ef._hashLbl:SetPoint("LEFT", ef, "TOPLEFT", 8, effHashY - 11)
+                    ef._hashLbl:SetText(EllesmereUI.Lf("Hash at %1$s", isPct and "Percent" or "Value"))
+                    ef._hashHint:SetText(isPct and EllesmereUI.L("(Ex: 25,50,75)") or EllesmereUI.L("(Ex: 50000)"))
                     ef._hashInput:SetText(entry.hashValues or "")
                     -- Commit on focus loss; Enter clears focus, Escape discards
                     ef._hashInput:SetScript("OnEditFocusLost", function(self)
@@ -2904,12 +2842,9 @@ initFrame:SetScript("OnEvent", function(self)
                     end)
                 end
 
-                local threshKey = cfg.showHash and "thresholdCount" or "thresholdPct"
-                local threshDef = cfg.showHash and (IsEntryBarType_L(entry) and 30 or 3) or 30
+                local threshKey = "thresholdPct"
+                local threshDef = 30
                 local threshMaxVal = cfg.threshMax or 99
-                if cfg.showHash then
-                    threshMaxVal = IsEntryBarType_L(entry) and 100 or 10
-                end
                 ef._threshInput:SetText(tostring(entry[threshKey] or threshDef))
                 -- Commit on focus loss; Enter clears focus, Escape discards
                 ef._threshInput:SetScript("OnEditFocusLost", function(self)
@@ -3736,7 +3671,7 @@ initFrame:SetScript("OnEvent", function(self)
         DB = DB, PP = PP, Refresh = Refresh,
         SmoothRefresh = SmoothRefresh, RefreshHealth = RefreshHealth, RebuildHealth = RebuildHealth,
         AddFormBarBtn = AddFormBarBtn, AddFormTextBtn = AddFormTextBtn, AttachThresholdNotice = AttachThresholdNotice,
-        BuildHashCog = BuildHashCog, BuildThresholdSettingsButton = BuildThresholdSettingsButton, RefreshPower = RefreshPower,
+        BuildThresholdSettingsButton = BuildThresholdSettingsButton, RefreshPower = RefreshPower,
         RebuildPower = RebuildPower, RefreshClass = RefreshClass, RebuildClass = RebuildClass,
         ShowBandEditor = ShowBandEditor, ShowBuffEditor = ShowBuffEditor, ShowSpenderEditor = ShowSpenderEditor,
         BAND_HELP_TIP = BAND_HELP_TIP, BAND_REPLACES_TIP = BAND_REPLACES_TIP, BUFF_HELP_TIP = BUFF_HELP_TIP,
