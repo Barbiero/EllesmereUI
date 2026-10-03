@@ -1405,6 +1405,8 @@ local REFRESH_ADDON_STEPS = {
     function() if _G._EQT_RefreshAll then _G._EQT_RefreshAll() end end,
     -- Chat (sidebar icons, borders, fonts, visibility)
     function() if _G._ECHAT_RefreshAll then _G._ECHAT_RefreshAll() end end,
+    -- Chat Bubbles (Blizz UI Enhanced; settings on the profile root)
+    function() if _G._EBS_RefreshChatBubbles then _G._EBS_RefreshChatBubbles() end end,
     -- Bags (window order follows the selected profile immediately)
     function()
         if _G.EUI_Bags and _G.EUI_Bags.ApplyWindowLayering then

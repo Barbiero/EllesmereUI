@@ -7,6 +7,7 @@ if not ns then return end  -- module disabled: no options page
 local PAGE_WINDOWSKINS   = "Blizzard Window Skins"
 local PAGE_TOOLTIPS      = "Tooltips, Menus & Popups"
 local PAGE_DRAGONRIDING  = "Dragon Riding"
+local PAGE_CHATBUBBLES   = "Chat Bubbles"
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
@@ -2969,6 +2970,365 @@ initFrame:SetScript("OnEvent", function(self)
     local _, EDR_BAR_TEXTURE_NAMES, EDR_BAR_TEXTURE_ORDER =
         EllesmereUI.BuildBarTextureTables()
 
+    -- Live sample bubble in the content header; sized to the bubble plus margin.
+    local function ChatBubblesHeaderBuilder(header)
+        local building = true
+        local function HeightFor(bubbleH) return math.max(80, math.floor(bubbleH + 40)) end
+        local bubble = EllesmereUI.ChatBubbles.ShowPreview(header, function(bubbleH)
+            local want = HeightFor(bubbleH)
+            if not building and header:IsVisible() and math.abs(header:GetHeight() - want) > 1 then
+                EllesmereUI:SetContentHeaderHeightSilent(want)
+            end
+        end)
+        building = false
+        return HeightFor(bubble:GetHeight())
+    end
+
+    local function BuildChatBubblesPage(pageName, parent, yOffset)
+        local W  = EllesmereUI.Widgets
+        local PP = EllesmereUI.PP
+        local y  = yOffset
+        local _, h
+
+        parent._showRowDivider = true
+        if not EllesmereUI._prebuilding then
+            EllesmereUI:SetContentHeader(ChatBubblesHeaderBuilder)
+        elseif EllesmereUI.ClearContentHeader then
+            EllesmereUI:ClearContentHeader()
+        end
+
+
+        local CBM = EllesmereUI.ChatBubbles
+        -- Reads never create the profile table; writes do.
+        local function BBDB() return CBM.DB(true) end
+        -- Same defaults table the renderer reads, so a widget can never offer a value the
+        -- bubble would not actually draw.
+        local function CBVal(key)
+            local db = CBM.DB(false)
+            local v = db and db[key]
+            if v ~= nil then return v end
+            return CBM.Defaults()[key]
+        end
+        -- Structural write: can change whether we draw at all, or which of Blizzard's
+        -- CVars we hold down, so it runs the renderer's full pass.
+        local function CBSet(key, v)
+            local db = BBDB()
+            if not db then return end
+            db[key] = v
+            CBM.Refresh()
+        end
+        -- Appearance write: nothing here can move a channel or one of Blizzard's CVars, so
+        -- it only re-styles what is already on screen. Worth the split because a slider
+        -- fires this per STEP while it is dragged, and the full pass re-diffs every event
+        -- registration and round-trips Blizzard's three switches every time.
+        local function CBSetStyle(key, v)
+            local db = BBDB()
+            if not db then return end
+            db[key] = v
+            CBM.RefreshStyle()
+        end
+        local function CBColor(key)
+            local c = CBVal(key)
+            if not c then return 1, 1, 1, 1 end
+            return c.r, c.g, c.b, c.a or 1
+        end
+        local function Off() return CBVal("enabled") ~= true end
+        local GATE = "Enable Chat Bubbles Customization"
+        -- The toggle's own label reads as an instruction; DisabledTooltip wraps whatever it
+        -- is handed in "This option requires %1$s to be enabled", which needs a plain noun.
+        local GATE_REQ = "Chat Bubbles"
+
+        -- Red warning banner: NOT a section header for what follows -- our own bubbles
+        -- never show inside instances, unconditionally, and that has to be visible before
+        -- the player reads any option below it, not styled as their category label.
+        -- Skipped while the search index prebuilds the page off screen: the banner carries
+        -- no setting to index and parent:GetWidth() is not meaningful there. The height
+        -- still comes off y in both passes, so everything below lands identically.
+        if not EllesmereUI._prebuilding then
+            local warnFrame = CreateFrame("Frame", nil, parent)
+            PP.Size(warnFrame, parent:GetWidth() - EllesmereUI.CONTENT_PAD * 2, 30)
+            PP.Point(warnFrame, "TOPLEFT", parent, "TOPLEFT", EllesmereUI.CONTENT_PAD, y)
+            local warnFS = EllesmereUI.MakeFont(warnFrame, 14, "", 1, 0.25, 0.25, 1)
+            warnFS:SetPoint("LEFT", warnFrame, "LEFT", 0, 0)
+            warnFS:SetText(EllesmereUI.L("Only works outside of Instances"))
+        end
+        y = y - 30
+
+        _, h = W:SectionHeader(parent, "DISPLAY", y);  y = y - h
+
+        local channelsRow
+        channelsRow, h = W:DualRow(parent, y,
+            { type="toggle", text=GATE,
+              tooltip="Restyle Blizzard's chat bubbles for the channels you pick beside this.\n\nEllesmereUI keeps Blizzard's bubbles switched on and draws over them, so every bubble stays where the game put it, including the one over your own head. Nameplates are not involved and do not need to be visible.\n\nChannels you leave off keep Blizzard's own look.",
+              getValue=function() return CBVal("enabled") == true end,
+              setValue=function(v)
+                if not v then
+                    CBSet("enabled", false)
+                    EllesmereUI:RefreshPage()
+                    return
+                end
+                local message = "EllesmereUI restyles Blizzard's chat bubbles and turns on the switches it needs. Party and Raid keep your current setting, and everything is put back when you turn this off."
+                EllesmereUI:ShowConfirmPopup({
+                    title = GATE,
+                    message = message,
+                    confirmText = "Enable",
+                    cancelText = "Cancel",
+                    onConfirm = function()
+                        CBSet("enabled", true)
+                        EllesmereUI:RefreshPage()
+                    end,
+                    onCancel = function() EllesmereUI:RefreshPage() end,
+                })
+              end },
+            { type="dropdown", text="Channels",
+              rawTooltip = true,
+              tooltip="Choose which channels get a bubble.\n\nSay, Yell, NPCs and Emotes share one Blizzard switch. It is turned on while at least one of the four is ticked, and put back the way you had it once you clear the last one. Party and Raid have switches of their own and start out matching what you already had, so no group bubbles turn up in a chat that had none.\n\nGuild is not offered: Blizzard draws no bubble for guild chat, and there is nothing for us to restyle.",
+              disabled = Off, disabledTooltip = GATE_REQ,
+              values={ __placeholder = "..." }, order={ "__placeholder" },
+              getValue=function() return "__placeholder" end,
+              setValue=function() end });  y = y - h
+
+        if not EllesmereUI._prebuilding then
+            local rgn = channelsRow._rightRegion
+            if rgn._control then rgn._control:Hide() end
+            local channelItems = {
+                { key="say",   label="Say" },
+                { key="yell",  label="Yell" },
+                { key="party", label="Party",
+                  tooltip="Uses Blizzard's own party switch, independent of the other channels. Instance chat, the one an LFG or LFR group talks in, is covered here too." },
+                { key="raid",  label="Raid",
+                  tooltip="Uses Blizzard's own raid switch, which it ships off. Ticking this turns that switch on, and it is put back the way you had it when you untick it or switch the feature off." },
+                { key="npc",   label="NPCs" },
+                { key="emote", label="Emotes" },
+            }
+            local chDD, chDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                rgn, 240, rgn:GetFrameLevel() + 2,
+                channelItems,
+                function(k) return CBVal(k) == true end,
+                function(k, v) CBSet(k, v) end)
+            PP.Point(chDD, "RIGHT", rgn, "RIGHT", -20, 0)
+            rgn._control = chDD
+            rgn._lastInline = nil
+
+            local chBlock = CreateFrame("Frame", nil, chDD)
+            chBlock:SetAllPoints()
+            chBlock:SetFrameLevel(chDD:GetFrameLevel() + 20)
+            chBlock:EnableMouse(true)
+            chBlock:SetScript("OnEnter", function()
+                EllesmereUI.ShowWidgetTooltip(chDD, EllesmereUI.DisabledTooltip(GATE_REQ))
+            end)
+            chBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            local function chUpdateDisabled()
+                if Off() then chDD:SetAlpha(0.4); chBlock:Show()
+                else chDD:SetAlpha(1); chBlock:Hide() end
+            end
+            EllesmereUI.RegisterWidgetRefresh(chDDRefresh)
+            EllesmereUI.RegisterWidgetRefresh(chUpdateDisabled)
+            chUpdateDisabled()
+        end
+
+        -- Structural, not appearance: it decides which of Blizzard's switches we hold and at
+        -- what value, so it takes the full pass. Half-empty right slot is allowed here because
+        -- this is the last row of its section.
+        _, h = W:DualRow(parent, y,
+            { type="toggle", text="Hide Chat Bubbles in Instances",
+              tooltip="Switch Blizzard's chat bubbles off for as long as you are inside a dungeon, raid, scenario or battleground, and back on the way out.\n\nEllesmereUI never restyles bubbles inside an instance: the game's bubble frames are off limits to addons there. This decides whether Blizzard's own are visible at all.",
+              getValue=function() return CBVal("hideInInstances") == true end,
+              setValue=function(v) CBSet("hideInInstances", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ },
+            { type="label", text="" });  y = y - h
+
+        _, h = W:SectionHeader(parent, "APPEARANCE", y);  y = y - h
+
+        _, h = W:DualRow(parent, y,
+            { type="slider", text="Padding", min=2, max=24, step=1,
+              tooltip="Space between the text and the edge of the bubble.",
+              getValue=function() return CBVal("padding") end,
+              setValue=function(v) CBSetStyle("padding", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ },
+            { type="slider", text="Maximum Width", min=120, max=500, step=10,
+              getValue=function() return CBVal("maxWidth") end,
+              setValue=function(v) CBSetStyle("maxWidth", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ });  y = y - h
+
+        local fontValues, fontOrder = EllesmereUI.BuildFontDropdownData()
+        local fontBorderRow
+        fontBorderRow, h = W:DualRow(parent, y,
+            { type="dropdown", text="Font",
+              values=fontValues, order=fontOrder,
+              getValue=function() return CBVal("font") end,
+              setValue=function(v) CBSetStyle("font", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ },
+            { type="slider", text="Border", min=0, max=4, step=1,
+              tooltip="Border size. Set to 0 for no border.",
+              getValue=function() return CBVal("borderSize") end,
+              setValue=function(v) CBSetStyle("borderSize", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ });  y = y - h
+
+        -- BuildInlineSwatches, not a hand-rolled BuildColorSwatch: it is the house form for
+        -- a swatch riding on a control half. It anchors through PP.Point, registers the
+        -- swatch's refresh so a profile switch repaints it, and builds the greyed-out block
+        -- plus tooltip from opts.disabled.
+        if not EllesmereUI._prebuilding then
+            EllesmereUI.BuildInlineSwatches(fontBorderRow._leftRegion, {
+                { getValue = function() local r, g, b = CBColor("textColor"); return r, g, b, 1 end,
+                  setValue = function(r, g, b) CBSetStyle("textColor", { r=r, g=g, b=b }) end,
+                  -- Two reasons this swatch can be dead, so the tip is resolved per reason:
+                  -- the wrapper sentence fits the gate, but not "something else owns this".
+                  disabled = function() return Off() or CBVal("followBlizzardColor") == true end,
+                  disabledTooltip = function()
+                      if Off() then return GATE_REQ end
+                      return "Blizzard's own color is in use. Turn Follow Blizzard Default Color off in the cog to pick your own."
+                  end,
+                  rawTooltip = function() return not Off() end },
+            }, { disabled = Off, disabledTooltip = GATE_REQ })
+
+            -- Built AFTER the swatch on purpose: BuildInlineSwatches chains _lastInline, so a
+            -- cog made afterwards lands to its left rather than on top of it.
+            EllesmereUI.BuildInlineCog(fontBorderRow._leftRegion, {
+                disabled = Off,
+                disabledTooltip = GATE_REQ,
+                title = "Font",
+                rows = {
+                    { type = "slider", label = "Font Size", min = 8, max = 24, step = 1,
+                      get = function() return CBVal("fontSize") end,
+                      set = function(v) CBSetStyle("fontSize", v) end },
+                    { type = "toggle", label = "Follow Blizzard Default Color",
+                      get = function() return CBVal("followBlizzardColor") == true end,
+                      set = function(v)
+                          CBSetStyle("followBlizzardColor", v)
+                          EllesmereUI:RefreshPage()
+                      end },
+                },
+            })
+
+            EllesmereUI.BuildInlineSwatches(fontBorderRow._rightRegion, {
+                { getValue = function() return CBColor("borderColor") end,
+                  setValue = function(r, g, b, a) CBSetStyle("borderColor", { r=r, g=g, b=b, a=a }) end,
+                  hasAlpha = true },
+            }, { disabled = Off, disabledTooltip = GATE_REQ })
+        end
+
+        local nameRow
+        nameRow, h = W:DualRow(parent, y,
+            { type="dropdown", text="Show Speaker Name",
+              rawTooltip = true,
+              tooltip="Choose which channels show the name of whoever is speaking on the bubble. Position and size are in the cog.",
+              disabled = Off, disabledTooltip = GATE_REQ,
+              values={ __placeholder = "..." }, order={ "__placeholder" },
+              getValue=function() return "__placeholder" end,
+              setValue=function() end },
+            { type="slider", text="Vertical Offset", min=-80, max=80, step=2,
+              tooltip="Nudge the bubble up or down from where the game put it. Zero sits exactly on Blizzard's own position, which is already over the speaker's head.",
+              getValue=function() return CBVal("offsetY") end,
+              setValue=function(v) CBSetStyle("offsetY", v) end,
+              disabled = Off, disabledTooltip = GATE_REQ });  y = y - h
+
+        -- Same build as the Channels dropdown above.
+        if not EllesmereUI._prebuilding then
+            local rgn = nameRow._leftRegion
+            if rgn._control then rgn._control:Hide() end
+            local nameItems = {
+                { key="say",   label="Say" },
+                { key="yell",  label="Yell" },
+                { key="party", label="Party" },
+                { key="raid",  label="Raid" },
+                { key="npc",   label="NPCs" },
+                { key="emote", label="Emotes" },
+            }
+            local nmDD, nmDDRefresh = EllesmereUI.BuildVisOptsCBDropdown(
+                rgn, 240, rgn:GetFrameLevel() + 2,
+                nameItems,
+                function(k)
+                    local t = CBVal("showName")
+                    return type(t) == "table" and t[k] == true
+                end,
+                function(k, v)
+                    local db = BBDB(); if not db then return end
+                    if type(db.showName) ~= "table" then db.showName = {} end
+                    db.showName[k] = v or nil
+                    CBM.RefreshStyle()
+                end)
+            PP.Point(nmDD, "RIGHT", rgn, "RIGHT", -20, 0)
+            rgn._control = nmDD
+            rgn._lastInline = nil
+
+            local nmBlock = CreateFrame("Frame", nil, nmDD)
+            nmBlock:SetAllPoints()
+            nmBlock:SetFrameLevel(nmDD:GetFrameLevel() + 20)
+            nmBlock:EnableMouse(true)
+            nmBlock:SetScript("OnEnter", function()
+                EllesmereUI.ShowWidgetTooltip(nmDD, EllesmereUI.DisabledTooltip(GATE_REQ))
+            end)
+            nmBlock:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            local function nmUpdateDisabled()
+                if Off() then nmDD:SetAlpha(0.4); nmBlock:Show()
+                else nmDD:SetAlpha(1); nmBlock:Hide() end
+            end
+            EllesmereUI.RegisterWidgetRefresh(nmDDRefresh)
+            EllesmereUI.RegisterWidgetRefresh(nmUpdateDisabled)
+            nmUpdateDisabled()
+
+            EllesmereUI.BuildInlineCog(rgn, {
+                disabled = Off,
+                disabledTooltip = GATE_REQ,
+                title = "Speaker Name",
+                rows = {
+                    { type = "dropdown", label = "Anchor",
+                      values = { TOPLEFT = "Top Left", TOP = "Top", TOPRIGHT = "Top Right",
+                                 BOTTOMLEFT = "Bottom Left", BOTTOM = "Bottom", BOTTOMRIGHT = "Bottom Right" },
+                      order = { "TOPLEFT", "TOP", "TOPRIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT" },
+                      get = function() return CBVal("nameAnchor") end,
+                      set = function(v) CBSetStyle("nameAnchor", v) end },
+                    { type = "slider", label = "Font Size", min = 6, max = 24, step = 1,
+                      get = function() return CBVal("nameFontSize") end,
+                      set = function(v) CBSetStyle("nameFontSize", v) end },
+                    { type = "slider", label = "X Offset", min = -50, max = 50, step = 1,
+                      get = function() return CBVal("nameOffsetX") end,
+                      set = function(v) CBSetStyle("nameOffsetX", v) end },
+                    { type = "slider", label = "Y Offset", min = -50, max = 50, step = 1,
+                      get = function() return CBVal("nameOffsetY") end,
+                      set = function(v) CBSetStyle("nameOffsetY", v) end },
+                },
+            })
+        end
+
+        -- Last row of the section, so the empty right slot is allowed.
+        local bgRow
+        bgRow, h = W:DualRow(parent, y,
+            { type="toggle", text="Background",
+              tooltip="Draw a filled background behind the text and border. Off draws the text and border on their own.",
+              getValue=function() return CBVal("background") ~= false end,
+              setValue=function(v) CBSetStyle("background", v); EllesmereUI:RefreshPage() end,
+              disabled = Off, disabledTooltip = GATE_REQ },
+            { type="label", text="" });  y = y - h
+
+        -- Colour and opacity are one swatch but two stored keys, so the write goes straight
+        -- to the DB rather than through CBSetStyle. rawTooltip keeps the sentence as written
+        -- instead of running it through DisabledTooltip's "This option requires" wrapper:
+        -- there is nothing to colour while the background is off, or the feature is.
+        if not EllesmereUI._prebuilding then
+            EllesmereUI.BuildInlineSwatches(bgRow._leftRegion, {
+                { getValue = function()
+                      local r, g, b = CBColor("bgColor")
+                      return r, g, b, CBVal("bgAlpha")
+                  end,
+                  setValue = function(r, g, b, a)
+                      local db = BBDB(); if not db then return end
+                      db.bgColor = { r=r, g=g, b=b }
+                      db.bgAlpha = a
+                      CBM.RefreshStyle()
+                  end,
+                  hasAlpha = true,
+                  disabled = function() return Off() or CBVal("background") == false end,
+                  disabledTooltip = "Turn Background on to set a color.",
+                  rawTooltip = true },
+            })
+        end
+
+        return math.abs(y)
+    end
+
     local function BuildDragonRidingPage(pageName, parent, yOffset)
         local W = EllesmereUI.Widgets
         local y = yOffset
@@ -3310,11 +3670,11 @@ initFrame:SetScript("OnEvent", function(self)
         title       = "Blizz UI Enhanced",
         -- WoW Forever has no skyriding: the Dragon Riding tab is not registered there
         -- (its resident file returns at load, so the page would have no DB to read).
-        description = EllesmereUI.IS_FOREVER and "Themed Blizzard frames: window skins, tooltips, menus, popups."
-            or "Themed Blizzard frames: window skins, tooltips, menus, popups, Dragon Riding HUD.",
-        searchTerms = "blizzard skin character sheet tooltip menu popup dragon riding skyriding window skins lfg group finder premade queue pause game menu great vault inspect collections mounts pets toys spellbook talents adventure guide encounter journal professions guild communities calendar achievements mail catalyst gem socket item upgrade upgrades crest loot window loot toast you received popup micro menu modern delves companion brann loot roll need greed pass disenchant loot rolls pending rolls group invite invited to a group role",
-        pages       = EllesmereUI.IS_FOREVER and { PAGE_WINDOWSKINS, PAGE_TOOLTIPS }
-            or { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_DRAGONRIDING },
+        description = EllesmereUI.IS_FOREVER and "Themed Blizzard frames: window skins, tooltips, menus, popups, chat bubbles."
+            or "Themed Blizzard frames: window skins, tooltips, menus, popups, chat bubbles, Dragon Riding HUD.",
+        searchTerms = "blizzard skin character sheet tooltip menu popup dragon riding skyriding window skins lfg group finder premade queue pause game menu great vault inspect collections mounts pets toys spellbook talents adventure guide encounter journal professions guild communities calendar achievements mail catalyst gem socket item upgrade upgrades crest loot window loot toast you received popup micro menu modern delves companion brann loot roll need greed pass disenchant loot rolls pending rolls group invite invited to a group role chat bubbles bubble speech balloon",
+        pages       = EllesmereUI.IS_FOREVER and { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES }
+            or { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES, PAGE_DRAGONRIDING },
         buildPage   = function(pageName, parent, yOffset)
             if pageName == PAGE_WINDOWSKINS then
                 return BuildWindowSkinsPage(pageName, parent, yOffset)
@@ -3322,9 +3682,17 @@ initFrame:SetScript("OnEvent", function(self)
             if pageName == PAGE_TOOLTIPS then
                 return BuildTooltipsPage(pageName, parent, yOffset)
             end
+            if pageName == PAGE_CHATBUBBLES then
+                return BuildChatBubblesPage(pageName, parent, yOffset)
+            end
             if pageName == PAGE_DRAGONRIDING then
                 return BuildDragonRidingPage(pageName, parent, yOffset)
             end
+        end,
+        -- Chat Bubbles preview lives in the content header; a cached page whose header was
+        -- dropped rebuilds with it.
+        getHeaderBuilder = function(pageName)
+            if pageName == PAGE_CHATBUBBLES then return ChatBubblesHeaderBuilder end
         end,
         onReset = function()
             if EllesmereUIDragonRidingDB then
@@ -3336,6 +3704,9 @@ initFrame:SetScript("OnEvent", function(self)
             do
                 local prof = EllesmereUI.GetActiveProfileData()
                 if prof then prof.disableWindowSkins = nil end
+                -- Per-profile Chat Bubbles; Refresh hands back any CVars it held.
+                if prof then prof.chatBubbles = nil end
+                if EllesmereUI.ChatBubbles then EllesmereUI.ChatBubbles.Refresh() end
             end
             if EllesmereUIDB then
                 -- NOTE: these account-global keys also travel in profile exports via
