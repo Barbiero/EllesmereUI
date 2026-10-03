@@ -6382,7 +6382,7 @@ end
 --  Lifecycle
 -------------------------------------------------------------------------------
 
--- Login build: EllesmereUIUnitFrames.lua's SetupOptionsPanel() calls this once it
+-- Login build: EUI_UnitFrames_OptionsSetup.lua's SetupOptionsPanel() calls this once it
 -- has set ns.db. A PLAYER_LOGIN listener here needed EnableBody's handler to run
 -- first and stood down silently otherwise (field: Blizzard buffs up, no custom
 -- bars until an options change). A disabled Unit Frames module never runs
