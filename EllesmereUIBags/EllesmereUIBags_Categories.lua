@@ -663,8 +663,18 @@ function CategoryManager:ClassifyAll(items)
         end
     end
     self._setCatIdxBySetID = setCatIdx
+    -- Rebuild the Junk category index every pass too (same reason as setCatIdx:
+    -- ReorderCategory / AddCustomCategory / RemoveCustomCategory mutate cats in
+    -- place without InitCategories, shifting indices). Stays nil when the Junk
+    -- Marker feature is off, which skips the grey-item rule in ClassifyItem.
+    -- Folded into the counts reset below so it is a single pass over cats.
+    local junkIdx
     wipe(_claCounts)
-    for i = 1, #cats do _claCounts[i] = 0 end
+    for i = 1, #cats do
+        _claCounts[i] = 0
+        if cats[i].isJunk then junkIdx = i end
+    end
+    self._junkCatIdx = junkIdx
     local counts = _claCounts
     local total = 0
 
