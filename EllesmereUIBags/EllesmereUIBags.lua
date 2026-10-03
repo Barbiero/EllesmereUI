@@ -3962,16 +3962,33 @@ end
 -- merchant is open, so no secure handler is needed. The client only keeps the
 -- last 12 sold items for buyback (surfaced in the button tooltip); this sells
 -- everything regardless -- a deliberate "clear my junk" action.
+-- Still-refundable purchases are skipped: Blizzard's own right-click never sells
+-- them (it pops the refund confirmation instead), and marks are account-wide per
+-- itemID -- so a freshly bought copy of a marked item would otherwise auto-sell
+-- at the next merchant without asking. GetContainerItemPurchaseInfo reports a
+-- refundSeconds while the item is inside its refund window. Capability-guarded.
+local function IsRefundable(bag, slot)
+    local getInfo = C_Container and C_Container.GetContainerItemPurchaseInfo
+    if not getInfo then return false end
+    -- Modern ContainerItemPurchaseInfo table carries refundSeconds. Type-guard
+    -- the read so a non-table return can never error mid-sell -- a non-refundable
+    -- or unbought slot returns nil here, which is simply treated as sellable.
+    local purchase = getInfo(bag, slot, false)
+    if type(purchase) ~= "table" then return false end
+    return (purchase.refundSeconds and purchase.refundSeconds > 0) or false
+end
+
 -- Find the first sellable junk slot: grey or player-marked, with vendor value
--- (hasNoValue items can't be sold), not locked. Re-scanned each step because
--- slots empty as they sell.
+-- (hasNoValue items can't be sold), not locked, and not still refundable.
+-- Re-scanned each step because slots empty as they sell.
 local function NextJunkSlot()
     for bag = 0, 5 do
         local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.itemID and not info.isLocked and not info.hasNoValue
-               and EUI_CategoryManager and EUI_CategoryManager:IsJunk(info.itemID, info.quality) then
+               and EUI_CategoryManager and EUI_CategoryManager:IsJunk(info.itemID, info.quality)
+               and not IsRefundable(bag, slot) then
                 return bag, slot, info
             end
         end
