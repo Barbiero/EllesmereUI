@@ -347,7 +347,7 @@ initFrame:SetScript("OnEvent", function(self)
                         local cats = _G.EUI_CategoryManager:GetCategories()
                         for ci, cat in ipairs(cats) do
                             -- isEquipSet excluded: per-character keys, governed by the split toggle instead
-                            if not cat.isCatchAll and not cat.isPinned and not cat.isRecent and not cat.isReagentBag and not cat.isEquipSet then
+                            if not cat.isCatchAll and not cat.isPinned and not cat.isRecent and not cat.isReagentBag and not cat.isSpecialBag and not cat.isEquipSet then
                                 catItems[#catItems + 1] = { key = cat._defaultName, label = cat.name }
                             end
                         end
@@ -580,7 +580,7 @@ initFrame:SetScript("OnEvent", function(self)
                     local setNameRow
                     setNameRow, h = W:DualRow(parent, y,
                         { type="toggle", text="Merge Duplicate Items",
-                          tooltip="Show copies of the same item that sit in separate bag slots as one icon with their counts added together. Turn this off to keep every slot separate, for example when you deliberately split stacks. Merging is always paused while the mail, trade, auction house, bank or guild bank window is open, since those take one bag slot at a time.",
+                          tooltip="Show copies of the same item that sit in separate bag slots as one icon with their counts added together. Turn this off to keep every slot separate, for example when you deliberately split stacks. Merging is always paused while the mail, trade, auction house, vendor, bank or guild bank window is open, since those take one bag slot at a time.",
                           getValue=function() return db.profile.bagMergeDuplicates ~= false end,
                           setValue=function(v)
                               db.profile.bagMergeDuplicates = v
@@ -750,6 +750,48 @@ initFrame:SetScript("OnEvent", function(self)
                       end }
                 ); y = y - h
 
+                -- Row Height | Quality Icon Border
+                _, h = W:DualRow(parent, y,
+                    { type="slider", text="Row Height", min=16, max=32, step=1,
+                      tooltip="Height of each row in the bag and bank lists. Icons shrink to fit short rows.",
+                      getValue=function() return db.profile.bagListRowHeight or 24 end,
+                      setValue=function(v)
+                          db.profile.bagListRowHeight = v
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end },
+                    { type="toggle", text="Quality Icon Border",
+                      tooltip="Draw a border in the item's quality color around square icons in the bag and bank lists.",
+                      getValue=function() return db.profile.bagListQualityBorder == true end,
+                      setValue=function(v)
+                          db.profile.bagListQualityBorder = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end }
+                ); y = y - h
+
+                -- Hide Row Stripes | Show Section Value (bags list only)
+                _, h = W:DualRow(parent, y,
+                    { type="toggle", text="Hide Row Stripes",
+                      tooltip="Remove the shading on every other row in the bag and bank lists.",
+                      getValue=function() return db.profile.bagListHideStripes == true end,
+                      setValue=function(v)
+                          db.profile.bagListHideStripes = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          local bank = _G.EUI_BankFrame
+                          if bank and bank.RefreshBank then bank:RefreshBank() end
+                      end },
+                    bagList and { type="toggle", text="Show Section Value",
+                      tooltip="Show the total vendor sell price of each section's items next to its count in the bag list.",
+                      getValue=function() return db.profile.bagListSectionValue == true end,
+                      setValue=function(v)
+                          db.profile.bagListSectionValue = v and true or false
+                          if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                      end } or EllesmereUI.BlankRowCfg()
+                ); y = y - h
+
                 if bagList then
                     -- Split Armor by Type | Split Weapons by Type
                     _, h = W:DualRow(parent, y,
@@ -769,7 +811,7 @@ initFrame:SetScript("OnEvent", function(self)
                           end }
                     ); y = y - h
 
-                    -- Split Professions by Type | (empty)
+                    -- Split Professions by Type | Merge Duplicate Items
                     _, h = W:DualRow(parent, y,
                         { type="toggle", text="Split Professions by Type",
                           tooltip="In the list, group profession items, recipes and trade goods under sub-headers by profession or material (Tailoring, Enchanting, Herb, Cloth, ...).",
@@ -778,7 +820,13 @@ initFrame:SetScript("OnEvent", function(self)
                               db.profile.bagListSplitProfessions = v and true or false
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
-                        EllesmereUI.BlankRowCfg()
+                        { type="toggle", text="Merge Duplicate Items",
+                          tooltip="In the list, show copies of the same item that sit in separate bag slots, including unstackable items, as one row with their counts added together. Gear is never merged, and OneBag and MultiBag always show every slot. Merging is paused while the mail, trade, auction house, vendor, bank or guild bank window is open.",
+                          getValue=function() return db.profile.bagListMergeDuplicates == true end,
+                          setValue=function(v)
+                              db.profile.bagListMergeDuplicates = v and true or false
+                              if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          end }
                     ); y = y - h
                 end
             end

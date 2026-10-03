@@ -1368,15 +1368,17 @@ local REFRESH_ADDON_STEPS = {
             if _G._ECME_Apply then _G._ECME_Apply() end
         end
     end,
-    -- Cursor (style + position), Crosshair, and the QoL extras (FPS counter +
-    -- Secondary Stats -- one call for both: the FPS readout may be drawn by
-    -- the Secondary Stats block, so the two owners re-evaluate together).
+    -- Cursor (style + position), Crosshair, Self Combat Text, and the QoL
+    -- extras (FPS counter + Secondary Stats -- one call for both: the FPS
+    -- readout may be drawn by the Secondary Stats block, so the two owners
+    -- re-evaluate together).
     function()
         if _G._ECL_Apply then _G._ECL_Apply() end
         if _G._ECL_ApplyTrail then _G._ECL_ApplyTrail() end
         if _G._ECL_ApplyGCDCircle then _G._ECL_ApplyGCDCircle() end
         if _G._ECL_ApplyCastCircle then _G._ECL_ApplyCastCircle() end
         if EllesmereUI._applyCrosshair then EllesmereUI._applyCrosshair() end
+        if EllesmereUI._applySelfCombatText then EllesmereUI._applySelfCombatText() end
         if EllesmereUI._applyFPSDisplay then
             EllesmereUI._applyFPSDisplay()
         elseif EllesmereUI._applySecondaryStats then
@@ -1403,6 +1405,8 @@ local REFRESH_ADDON_STEPS = {
     function() if _G._EQT_RefreshAll then _G._EQT_RefreshAll() end end,
     -- Chat (sidebar icons, borders, fonts, visibility)
     function() if _G._ECHAT_RefreshAll then _G._ECHAT_RefreshAll() end end,
+    -- Chat Bubbles (Blizz UI Enhanced; settings on the profile root)
+    function() if _G._EBS_RefreshChatBubbles then _G._EBS_RefreshChatBubbles() end end,
     -- Bags (window order follows the selected profile immediately)
     function()
         if _G.EUI_Bags and _G.EUI_Bags.ApplyWindowLayering then
@@ -2365,8 +2369,9 @@ end
 --  Excluded by design -- per-character data that is nobody else's:
 --    dataBarsGold         cross-character gold ledger
 --    qolUpgradeCalcChars  Upgrade Calculator per-character cache
---  (The same two blobs PRIVATE_ADDON_KEYS strips from normal strings, at
---  their current top-level homes.) And the game settings this client had
+--    xpBarChars           XP bar session clock, XP rate and time this level
+--  (The first two are the blobs PRIVATE_ADDON_KEYS strips from normal strings,
+--  at their current top-level homes.) And the game settings this client had
 --  before EllesmereUI, which Uninstall EUI puts back, with the values modules
 --  hand back to this client's CVars later:
 --    restoreOnUninstall     (EllesmereUI_Uninstall.lua)
@@ -2378,6 +2383,7 @@ local FULL_EXPORT_TYPE = "fullaccount"
 local FULL_EXPORT_EXCLUDED = {
     dataBarsGold          = true,
     qolUpgradeCalcChars   = true,
+    xpBarChars            = true,
     restoreOnUninstall    = true,
     gfxBackup             = true,
     friendlyPlateVisSaved = true,

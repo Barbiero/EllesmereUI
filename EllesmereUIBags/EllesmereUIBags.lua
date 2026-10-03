@@ -101,6 +101,40 @@ do
     f:RegisterEvent("PLAYER_LEVEL_CHANGED")
     f:SetScript("OnEvent", function() wipe(_canUseCache) end)
 end
+-- WoW Forever: the player's bags (1-4) that hold one kind of item only --
+-- quivers, ammo pouches, soul, herb and enchanting bags, by their non-zero bag
+-- family. Like the reagent bag they get their own category and sections and
+-- stay out of Main Bags, the header count, OneBag's sort, Randomize, Auto
+-- Split and drop placement. nil on retail or with none equipped; the next
+-- call reuses the set, so read it right away.
+do
+    local special = {}
+    function ns.SpecialBags()
+        if not EllesmereUI.IS_FOREVER then return nil end
+        wipe(special)
+        local any = false
+        for bag = 1, 4 do
+            local _, family = C_Container.GetContainerNumFreeSlots(bag)
+            if family and family ~= 0 then special[bag] = true; any = true end
+        end
+        return any and special or nil
+    end
+
+    -- Auto Split's target bags for a stack in bag, in order: the reagent bag
+    -- and a special bag split into themselves first, and no other bag's stack
+    -- goes into a special bag.
+    function ns.SplitTargetBags(bag)
+        local sp = ns.SpecialBags()
+        if not sp then
+            return bag == 5 and { 5, 0, 1, 2, 3, 4 } or { 0, 1, 2, 3, 4 }
+        end
+        local t = (sp[bag] or bag == 5) and { bag } or {}
+        for b = 0, 4 do
+            if not sp[b] then t[#t + 1] = b end
+        end
+        return t
+    end
+end
 -- Weak-keyed bank-deposit routing state: custom keys written onto a ContainerFrameItemButtonTemplate
 -- in PreClick taint the secure execution chain -> UseContainerItem() ADDON_ACTION_FORBIDDEN.
 local _bankRouted = setmetatable({}, { __mode = "k" })
@@ -394,7 +428,7 @@ local function IsGearCategory(catIdx)
     return _gearCatSet[catIdx]
 end
 
--- Item panels (mail/trade/AH/bank/guildbank) take one bag slot at a time; a merged button
+-- Item panels (mail/trade/AH/vendor/bank/guildbank) take one bag slot at a time; a merged button
 -- only hands over the slot behind it (3 merged mails would mail 1), so duplicates stay unmerged while any panel is open. bagMergeDuplicates disables merging outright.
 local _openItemPanels = {}
 local _anyItemPanelOpen = false
@@ -727,6 +761,7 @@ end
 
 -- Merge duplicate non-gear items by itemLink within an already-ordered list.
 -- itemLink encodes stats/bonuses, so items with different stats stay separate.
+-- force: skip the bagMergeDuplicates check (list view has its own setting).
 -- Must run AFTER ApplySavedOrder so the first occurrence in visual order wins.
 -- Returns a new list; the caller's tables are NEVER modified. A merged winner is
 -- replaced in the returned list by a pooled, display-only shallow copy carrying
@@ -735,11 +770,11 @@ end
 -- writes _mergedCount back onto a canonical slot table, both break.
 -- The result must not outlive the render pass that produced it: the copies come
 -- from the slot pool and are recycled by ReleaseAllSlotTables on the next refresh.
-local function MergeDuplicates(items)
+local function MergeDuplicates(items, force)
     -- Record what this paint was built with, so the bags OnShow can tell that
     -- the state changed while they were hidden and repaint (see OnShow).
     _paintedPanelOpen = _anyItemPanelOpen
-    if _anyItemPanelOpen or BP().bagMergeDuplicates == false then return items end
+    if _anyItemPanelOpen or (not force and BP().bagMergeDuplicates == false) then return items end
     -- Session-only unmerge marks (EUI_Bags._unmergedLinks: set by the split
     -- dialog, wiped when the bags close, never persisted): a marked item keeps
     -- its real stacks apart so a split's pieces are visible in these views.
@@ -1134,6 +1169,9 @@ local function CreateHeader()
             local function DoOnePass()
                 if InCombatLockdown() then return false end  -- combat started: stop moving items
                 local stacks = {}  -- itemID -> { {bag,slot,count}, ... }
+                -- A WoW Forever special bag's stacks merge only with each other
+                -- (a key of their own), so nothing leaves or enters the bag.
+                local special = ns.SpecialBags()
                 for bag = 0, 5 do
                     local numSlots = C_Container.GetContainerNumSlots(bag)
                     for slot = 1, numSlots do
@@ -1148,8 +1186,10 @@ local function CreateHeader()
                                 else maxStack = 1 end
                             end
                             if maxStack > 1 and info.stackCount < maxStack then
-                                if not stacks[info.itemID] then stacks[info.itemID] = {} end
-                                stacks[info.itemID][#stacks[info.itemID] + 1] = {
+                                local key = info.itemID
+                                if special and special[bag] then key = bag .. ":" .. key end
+                                if not stacks[key] then stacks[key] = {} end
+                                stacks[key][#stacks[key] + 1] = {
                                     bag = bag, slot = slot, count = info.stackCount,
                                 }
                             end
@@ -1225,8 +1265,11 @@ local function CreateHeader()
             local sBag, sSlot, sKey, sID = {}, {}, {}, {}
 
             local items = {}
+            -- A WoW Forever special bag adds no slots: its items stay put and
+            -- nothing is moved into it.
+            local special = ns.SpecialBags()
             for bag = bagMin, bagMax do
-                local numSlots = C_Container.GetContainerNumSlots(bag)
+                local numSlots = (special and special[bag]) and 0 or C_Container.GetContainerNumSlots(bag)
                 for slot = 1, numSlots do
                     total = total + 1
                     sBag[total] = bag
@@ -1526,8 +1569,9 @@ local function CreateHeader()
 
         local slots = {}
         local items = {}
+        local special = ns.SpecialBags()  -- WoW Forever: special bags keep their items
         for bag = 0, 4 do
-            local numSlots = C_Container.GetContainerNumSlots(bag)
+            local numSlots = (special and special[bag]) and 0 or C_Container.GetContainerNumSlots(bag)
             for slot = 1, numSlots do
                 slots[#slots + 1] = { bag = bag, slot = slot }
                 local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -3244,7 +3288,7 @@ local function GetOrCreateReagentSlot(idx)
     btn.ItemLevelText:SetText("")
 
     btn:HookScript("PostClick", function(self)
-        EUI_Bags.ShowStackSplitter(self, { 5, 0, 1, 2, 3, 4 }, EUI_BagsReagent)
+        EUI_Bags.ShowStackSplitter(self, ns.SplitTargetBags(5), EUI_BagsReagent)
     end)
 
     reagentSlots[idx] = btn
@@ -5630,7 +5674,8 @@ local function GetOrCreateCatHeader(idx)
     return f
 end
 
--- "Clear" link on a Recent Items header, sitting just left of its "Hide" link.
+-- "Clear" link on a Recent Items header, sitting just left of its "Hide" link
+-- (or at the header's right edge when there is none, as in the list).
 -- Opt-in (bagShowRecentClear, default off): callers gate on the setting, so a
 -- user who never enables it never has the button built. Pooled on the header
 -- like _hideBtn; hidden by the per-refresh header reset.
@@ -5657,7 +5702,11 @@ local function ShowRecentClearButton(hdr, hideBtn)
         hdr._clearBtn = cb
     end
     hdr._clearBtn:ClearAllPoints()
-    hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    if hideBtn then
+        hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    else
+        hdr._clearBtn:SetPoint("RIGHT", hdr, "RIGHT", 0, 0)
+    end
     hdr._clearBtn:Show()
     return hdr._clearBtn
 end
@@ -5868,7 +5917,7 @@ local _bagListGripCfg = setmetatable({
     end,
 }, { __index = _bagGripCfg })
 
-local function FinishRefresh(curY, gridContentW, sidebarW, totalCount, numEmpty)
+local function FinishRefresh(curY, gridContentW, sidebarW, totalCount, numEmpty, spItems, spEmpty)
     -- In combat the sort button's lock depends on the view just painted.
     if InCombatLockdown() and EUI_Bags._applySortEnabled then EUI_Bags._applySortEnabled() end
     local sf, child = EUI_Bags._scrollFrame, EUI_Bags._scrollChild
@@ -5931,8 +5980,10 @@ local function FinishRefresh(curY, gridContentW, sidebarW, totalCount, numEmpty)
 
     if EUI_Bags.Header and EUI_Bags.Header.itemCount then
         if selectedCategoryIndex == 0 or selectedCategoryIndex == -1 or selectedCategoryIndex == -2 then
-            local totalSlots = totalCount + numEmpty
-            EUI_Bags.Header.itemCount:SetText(EllesmereUI.Lf("%d / %d Items", totalCount, totalSlots))
+            -- WoW Forever's special bags stay out of this count (spItems/spEmpty)
+            local items = totalCount - (spItems or 0)
+            local totalSlots = items + numEmpty - (spEmpty or 0)
+            EUI_Bags.Header.itemCount:SetText(EllesmereUI.Lf("%d / %d Items", items, totalSlots))
         else
             EUI_Bags.Header.itemCount:SetText(EllesmereUI.Lf("%d Items", totalCount))
         end
@@ -6197,6 +6248,19 @@ function EUI_Bags:RefreshInventory()
         wipe(_pendingResortGroups)
     end
 
+    -- WoW Forever: special bags (ns.SpecialBags) stay out of the header's item
+    -- and slot count; OneBag gives each one a section of its own.
+    local special = ns.SpecialBags()
+    local spItems, spEmpty, spBags = 0, 0, 0
+    if special then
+        for _ in pairs(special) do spBags = spBags + 1 end
+        for _, d in ipairs(tempItems) do
+            if special[d.bag] and d.itemLink then spItems = spItems + 1 end
+        end
+        for _, d in ipairs(emptySlots) do
+            if special[d.bag] then spEmpty = spEmpty + 1 end
+        end
+    end
 
     -- Auto-size: pick a column count keeping the window near its base shape (columns grow
     -- ~sqrt of slot count) while fitting the active tab. Grows only, never shrinks while open
@@ -6245,9 +6309,10 @@ function EUI_Bags:RefreshInventory()
             for bag = 0, 5 do if C_Container.GetContainerNumSlots(bag) > 0 then S = S + 1 end end
             if S < 1 then S = 1 end
         else
-            -- OneBag / group view: a few sections (pinned/recent/main/reagent)
+            -- OneBag / group view: a few sections (pinned/recent/main/reagent,
+            -- plus OneBag's special bags)
             n = #tempItems + #emptySlots
-            S = 3
+            S = 3 + (selectedCategoryIndex == -1 and spBags or 0)
         end
         n = math.max(n, 1)
         local ideal = baseCols
@@ -6300,7 +6365,8 @@ function EUI_Bags:RefreshInventory()
             leftX = sidebarW, topY = -(HEADER_H + 1),
             allItems = isAllItems,
             slotView = (selectedCategoryIndex == -1 and "one") or (selectedCategoryIndex == -2 and "multi") or nil,
-            recent = (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true and showRecent)
+            -- Same rule as the grid's Recent Items section
+            recent = (showRecent and (isAllItems or (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true)))
                 and EUI_Bags._recentItems or nil,
             -- Empty rows only when nothing is search-filtered out
             emptySlots = (#displayItems == #tempItems) and emptySlots or nil,
@@ -6309,13 +6375,13 @@ function EUI_Bags:RefreshInventory()
                 and pinnedSet or nil,
         })
         sf:SetPoint("TOPLEFT", EUI_Bags, "TOPLEFT", sidebarW, -(HEADER_H + 1 + colHdrH))
-        FinishRefresh(-(listH + colHdrH), gridW + gridPadX * 2 + scrollbarPad + 2, sidebarW, totalCount, #emptySlots)
+        FinishRefresh(-(listH + colHdrH), gridW + gridPadX * 2 + scrollbarPad + 2, sidebarW, totalCount, #emptySlots, spItems, spEmpty)
         return
     end
 
     local curY = ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, gridW, gridPadX, showPinned, pinnedSet)
 
-    FinishRefresh(curY, gridW + gridPadX * 2 + scrollbarPad + 2, sidebarW, totalCount, #emptySlots)
+    FinishRefresh(curY, gridW + gridPadX * 2 + scrollbarPad + 2, sidebarW, totalCount, #emptySlots, spItems, spEmpty)
 end
 
 -------------------------------------------------------------------------------
@@ -6603,11 +6669,13 @@ local function StartAddon()
         end
         return true
     end
-    -- External item: place in first empty bag slot (same as looting).
+    -- External item: place in first empty bag slot (same as looting), never in
+    -- a WoW Forever special bag.
     local function PlaceExternalCursorItem()
         if not CursorItemIsExternal() then return end
+        local special = ns.SpecialBags()
         for bag = 0, 4 do
-            local numSlots = C_Container.GetContainerNumSlots(bag)
+            local numSlots = (special and special[bag]) and 0 or C_Container.GetContainerNumSlots(bag)
             for slot = 1, numSlots do
                 if not C_Container.GetContainerItemInfo(bag, slot) then
                     C_Container.PickupContainerItem(bag, slot)
@@ -7084,6 +7152,8 @@ local function StartAddon()
         TRADE_CLOSED          = { "trade",     false },
         AUCTION_HOUSE_SHOW    = { "auction",   true  },
         AUCTION_HOUSE_CLOSED  = { "auction",   false },
+        MERCHANT_SHOW         = { "merchant",  true  },
+        MERCHANT_CLOSED       = { "merchant",  false },
         BANKFRAME_OPENED      = { "bank",      true  },
         BANKFRAME_CLOSED      = { "bank",      false },
         GUILDBANKFRAME_OPENED = { "guildbank", true  },

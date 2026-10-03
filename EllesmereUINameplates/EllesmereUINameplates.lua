@@ -152,6 +152,18 @@ function ns._appendDisplayPresetKeys(t)
 end
 
 local defaults = {
+    -- EUI_DEBUFF_COLORS: optional player-debuff tinting (Colors page).
+    debuffColorsEnabled = false,
+    debuffColorsPlayerOnly = true,
+    debuffColorSpell1 = "703",
+    debuffColorSpell2 = "1943",
+    debuffColorCustomSpell1 = 0,
+    debuffColorCustomSpell2 = 0,
+    debuffColor1 = { r = 1.00, g = 0.43, b = 0.04 },
+    debuffColor2 = { r = 1.00, g = 0.43, b = 0.04 },
+    debuffColorBothEnabled = true,
+    debuffColorPriority = 2,
+    debuffColorBoth = { r = 0.10, g = 0.88, b = 0.32 },
     -- Blizzard Style (Global Settings > Style): the stock nameplate's bar,
     -- background, selection and cast bar art on our plates with every feature
     -- intact. Default OFF; reload-gated.
@@ -636,6 +648,9 @@ function ns.ApplyCustomBorderStyle(plate, szOverride)
         p and p.customBorderOffset, p and p.customBorderOffsetY,
         p and p.customBorderShiftX, p and p.customBorderShiftY,
         "nameplates", sz, nil, px)
+    -- Solid strips need the scaleGuard the Basic border has, or Scale Target/Casting
+    -- Nameplate leaves them sub-pixel and their sides vanish as the plate moves.
+    if PP.GetBorders(bf) then PP.CreateBorder(bf, nil, nil, nil, nil, nil, nil, nil, true) end
     -- The size it is drawn at (a target/hover effect size included): the cast bar
     -- wrap's lower piece and seam copy it (ns.NP_UpdateCustomBorderWrap).
     bf._cbTex, bf._cbSz, bf._cbPx = tex, sz, px
@@ -721,6 +736,7 @@ function ns.NP_UpdateCustomBorderWrap(plate)
             or lower._sOX ~= offX or lower._sOY ~= offY or lower._sSX ~= shX or lower._sSY ~= shY then
             lower:SetFrameLevel(lvl)
             EUI.ApplyBorderStyle(lower, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
+            if PP.GetBorders(lower) then PP.CreateBorder(lower, nil, nil, nil, nil, nil, nil, nil, true) end
             lower._sTex, lower._sSz, lower._sPx = tex, sz, px
             lower._sOX, lower._sOY, lower._sSX, lower._sSY = offX, offY, shX, shY
         else
@@ -1918,13 +1934,19 @@ end
 --   _absMissClip: health fill edge -> bar's right end (the empty health).
 --   _absCurClip:  bar's left end -> health fill edge (the filled health), or
 --                 the whole bar in the edge placements.
---   absorbForward: in the missing clip, fills right from the health edge, so
---                  it shows min(absorb, missing). Overlay placement only.
+--   absorbForward: in the missing clip, overlay placements only:
+--     overlay        = fills right from the health edge, so it shows
+--                      min(absorb, missing)
+--     overlayReverse = fills right from the bar's left end, so it shows only
+--                      what exceeds current health, past the health edge
 --   absorb: in the filled clip, placed per absorbEdgeMode:
 --     overlay        = fills left from the bar's right end; the clip shows
 --                      only what exceeds empty health, over the health fill
---     overlayReverse = the whole shield fills left from the health edge
+--     overlayReverse = fills left from the health edge, over current health
 --     right / left   = the whole shield from that end of the bar
+-- Overlay Reverse thus draws the shield back over health, and a shield
+-- larger than current health spans from the bar's left end instead of
+-- losing its excess.
 -- Shared with the options preview (owner is any table holding the bars).
 function ns.NP_BuildAbsorbBars(owner, health, mask)
     local lvl = health:GetFrameLevel() + 1
@@ -1960,12 +1982,21 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
     local fillTex = health:GetStatusBarTexture()
     local curClip, missClip = owner._absCurClip, owner._absMissClip
     local ab, fw = owner.absorb, owner.absorbForward
+    local fromLeft = mode == "overlayReverse"
     missClip:ClearAllPoints()
-    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", -1, 0)
+    -- 1px into the fill seals the seam behind a forward bar that starts at
+    -- the health edge; one from the bar's left end would double that pixel
+    -- over the main bar.
+    missClip:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", fromLeft and 0 or -1, 0)
     missClip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     fw:ClearAllPoints()
-    fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
-    fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
+    if fromLeft then
+        fw:SetPoint("TOPLEFT", health, "TOPLEFT", 0, 0)
+        fw:SetPoint("BOTTOMLEFT", health, "BOTTOMLEFT", 0, 0)
+    else
+        fw:SetPoint("TOPLEFT", fillTex, "TOPRIGHT", 0, 0)
+        fw:SetPoint("BOTTOMLEFT", fillTex, "BOTTOMRIGHT", 0, 0)
+    end
     curClip:ClearAllPoints()
     ab:ClearAllPoints()
     if mode == "right" or mode == "left" then
@@ -1987,7 +2018,8 @@ function ns.NP_LayoutAbsorbBars(owner, health, mode)
         ab:SetPoint("TOPRIGHT", health, "TOPRIGHT", 0, 0)
         ab:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", 0, 0)
     end
-    if mode ~= "overlay" then missClip:Hide() end
+    owner._absFwOn = mode == "overlay" or fromLeft
+    if not owner._absFwOn then missClip:Hide() end
     owner._absEdge, owner._absFill = mode, fillTex
 end
 
@@ -3111,6 +3143,7 @@ function ns.ApplyCastIconBorder(plate)
         bf:SetFrameStrata(strata)
         bf:SetFrameLevel(lvl)
         EllesmereUI.ApplyBorderStyle(bf, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
+        if PP.GetBorders(bf) then PP.CreateBorder(bf, nil, nil, nil, nil, nil, nil, nil, true) end
         bf._sTex, bf._sSz, bf._sPx = tex, sz, px
         bf._sOX, bf._sOY, bf._sSX, bf._sSY = offX, offY, shX, shY
     else
@@ -5194,6 +5227,7 @@ function ns.RefreshAllSettings()
     if ns.NT_RefreshSetting then ns.NT_RefreshSetting() end
     if ns.RangeText_Apply then ns.RangeText_Apply() end
     if ns.ApplyClassPowerSetting then ns.ApplyClassPowerSetting() end
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Aura containers: fingerprint-guarded, near-free when no aura setting changed.
     if ns.NPC_ReloadAll then ns.NPC_ReloadAll() end
     -- Hide Enemy Nameplates OOC is CVar + event driven, and its options setter plus
@@ -8409,6 +8443,7 @@ function NameplateFrame:SetUnit(unit, nameplate)
     self:SyncToT(unit)
     -- Attach a pooled aura-container bundle for this unit.
     if ns.NPC_AttachPlate then ns.NPC_AttachPlate(self, unit) end
+    if ns.DebuffColors_Attach then ns.DebuffColors_Attach(self, unit) end
     -- Non-Target Opacity (zero cost while off: one numeric compare).
     if ns._ntAlpha < 1 then ns.NT_Apply(self) end
     -- Execute glow is per-spawn state, not appearance: ApplyAppearance is generation-cached
@@ -8579,6 +8614,7 @@ function NameplateFrame:ClearUnit()
     end
     -- Release this plate's aura-container bundle back to the pool.
     if ns.NPC_DetachPlate then ns.NPC_DetachPlate(self) end
+    if ns.DebuffColors_Detach then ns.DebuffColors_Detach(self) end
     self.unit = nil
     self.nameplate = nil
     self._absorbHidden = nil
@@ -8772,10 +8808,11 @@ function NameplateFrame:UpdateHealthValues()
         self.absorb:SetMinMaxValues(0, maxHealth)
         self.absorb:SetValue(absorbAmt)
         self._absCurClip:Show()
-        -- The forward bar fills empty health in the Overlay placement only;
-        -- the others draw the whole shield through the main bar.
+        -- The forward bar draws only in the overlay placements (stamped by
+        -- the layout); the edge placements draw the whole shield through the
+        -- main bar.
         local fw = self.absorbForward
-        if self._absEdge == "overlay" then
+        if self._absFwOn then
             fw:SetMinMaxValues(0, maxHealth)
             fw:SetValue(absorbAmt)
             self._absMissClip:Show()
@@ -11517,6 +11554,7 @@ function npAddon:OnInitialize()
     )
 end
 function npAddon:OnEnable()
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
     p = ENP.db.profile
     -- A profile already on a stock style gets its one-time bar texture seed

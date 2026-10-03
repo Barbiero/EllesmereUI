@@ -1525,7 +1525,7 @@ end
 -- Rows start at listX; headers keep their indent from startX.
 -- Returns the new layout and its bottom y.
 local function ToListLayout(layout, startX, listX)
-    local ROW_H = ns.LIST_ROW_H
+    local ROW_H = ns.ListRowH()
     ns.ListSortSetup()
     local out, run = {}, {}
     local function Flush()
@@ -1546,6 +1546,15 @@ local function ToListLayout(layout, startX, listX)
             d._isGear = IsGearItem(link)
             if d._isGear then
                 d._giIlvl = GetItemLevelAtLocation(ItemLocation:CreateFromBagAndSlot(e.bagID, e.slot), link)
+                -- Track column, same rule as the bags scan
+                if GetUpgradeTrack then
+                    local rankText, trackColor = GetUpgradeTrack(link)
+                    if rankText ~= "" then
+                        d._giTrackRank, d._giTrackColor = rankText, trackColor
+                    else
+                        d._giTrackColor = EUI.GetCraftedTrackColor(link)
+                    end
+                end
             end
             local cdS, cdD, cdE = C_Container.GetContainerItemCooldown(e.bagID, e.slot)
             if cdE and cdE ~= 0 and cdS > 0 and cdD > 0 then d._cdStart, d._cdDuration = cdS, cdD end
@@ -2953,9 +2962,9 @@ function BuildBankSidebar()
         local anyCat = false
         local renderedGroups = {}
         for _, cat in ipairs(cats) do
-            -- Pinned / Recent / Reagent Bag are bag-side concepts with no bank
-            -- equivalent; ClassifyItem never routes bank items to them anyway.
-            if not (cat.isPinned or cat.isRecent or cat.isReagentBag) then
+            -- Pinned / Recent / Reagent Bag / Special Bags are bag-side concepts with
+            -- no bank equivalent; ClassifyItem never routes bank items to them anyway.
+            if not (cat.isPinned or cat.isRecent or cat.isReagentBag or cat.isSpecialBag) then
                 if cat.groupName then
                     if not renderedGroups[cat.groupName] then
                         renderedGroups[cat.groupName] = true

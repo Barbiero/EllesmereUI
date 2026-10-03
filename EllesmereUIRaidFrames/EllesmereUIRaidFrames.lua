@@ -2871,6 +2871,13 @@ local function CreateAbsorbBar(button, healthBar)
         backfillBar._axisVert = isVert  -- read by the Blizzard Glow Line (hidden on a vertical fill)
         -- The fill's two HP-edge corners: every fill anchor below is on one of these.
         local hpA, hpB = ns.RF_HpEdge(isVert, isInvert)
+        -- Overlay Reverse (Full): Overlay Reverse, plus the forward bar filling from the bar's
+        -- ORIGIN edge (left; bottom when vertical -- frame edges, so Inverted Fill leaves them
+        -- alone), so missClip shows the absorb exceeding current health past the seam instead
+        -- of losing it. Its clip starts exactly at the seam: the 1px seal into the fill would
+        -- double that pixel over the backfill. Default Blizz Frames keeps Overlay Reverse.
+        local orFull = db.profile.absorbEdgeMode == "overlayReverseFull"
+            and db.profile.absorbStyle ~= "blizzardModern"
 
         -- Health Bar Color overlays track this bar's fill, so they follow the swap
         -- for the same reason the absorb cluster below does. After the orientation
@@ -2893,11 +2900,16 @@ local function CreateAbsorbBar(button, healthBar)
             curClip:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 0, 0)
             curClip:SetPoint("TOPRIGHT", fill, hpB, 0, 0)
             missClip:ClearAllPoints()
-            missClip:SetPoint("BOTTOMLEFT", fill, hpA, 0, -1)
+            missClip:SetPoint("BOTTOMLEFT", fill, hpA, 0, orFull and 0 or -1)
             missClip:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
             forwardBar:ClearAllPoints()
-            forwardBar:SetPoint("BOTTOMLEFT", fill, hpA, 0, 0)
-            forwardBar:SetPoint("BOTTOMRIGHT", fill, hpB, 0, 0)
+            if orFull then
+                forwardBar:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 0, 0)
+                forwardBar:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 0, 0)
+            else
+                forwardBar:SetPoint("BOTTOMLEFT", fill, hpA, 0, 0)
+                forwardBar:SetPoint("BOTTOMRIGHT", fill, hpB, 0, 0)
+            end
             if healPredBar then
                 healPredBar:ClearAllPoints()
                 healPredBar:SetPoint("BOTTOMLEFT", fill, hpA, 0, 0)
@@ -2919,10 +2931,11 @@ local function CreateAbsorbBar(button, healthBar)
                     backfillBar:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
                     backfillBar:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
                 end
-            elseif vAbsorbMode == "overlayReverse" then
+            elseif vAbsorbMode == "overlayReverse" or vAbsorbMode == "overlayReverseFull" then
                 -- Overlay Reverse, vertical axis: whole absorb fills DOWN into the fill from
                 -- its top edge (UP from its bottom edge under Inverted Fill); default
-                -- filled-region clip masks any excess (see the horizontal branch).
+                -- filled-region clip masks any excess (see the horizontal branch; Full draws
+                -- it through the forward bar).
                 backfillBar:SetReverseFill(true)
                 backfillBar:SetPoint("TOPLEFT", fill, hpA, 0, 0)
                 backfillBar:SetPoint("TOPRIGHT", fill, hpB, 0, 0)
@@ -2977,11 +2990,16 @@ local function CreateAbsorbBar(button, healthBar)
         curClip:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
         curClip:SetPoint("BOTTOMRIGHT", fill, hpB, 0, 0)
         missClip:ClearAllPoints()
-        missClip:SetPoint("TOPLEFT", fill, hpA, -1, 0)
+        missClip:SetPoint("TOPLEFT", fill, hpA, orFull and 0 or -1, 0)
         missClip:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 0, 0)
         forwardBar:ClearAllPoints()
-        forwardBar:SetPoint("TOPLEFT", fill, hpA, 0, 0)
-        forwardBar:SetPoint("BOTTOMLEFT", fill, hpB, 0, 0)
+        if orFull then
+            forwardBar:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+            forwardBar:SetPoint("BOTTOMLEFT", healthBar, "BOTTOMLEFT", 0, 0)
+        else
+            forwardBar:SetPoint("TOPLEFT", fill, hpA, 0, 0)
+            forwardBar:SetPoint("BOTTOMLEFT", fill, hpB, 0, 0)
+        end
         if healPredBar then
             healPredBar:ClearAllPoints()
             healPredBar:SetPoint("TOPLEFT", fill, hpA, 0, 0)
@@ -3004,13 +3022,14 @@ local function CreateAbsorbBar(button, healthBar)
                 backfillBar:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
                 backfillBar:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 0, 0)
             end
-        elseif absorbMode == "overlayReverse" then
+        elseif absorbMode == "overlayReverse" or absorbMode == "overlayReverseFull" then
             -- Overlay Reverse: the WHOLE absorb backfills from the health
             -- fill's leading edge INTO the fill. curClip keeps the default
             -- filled-region clip from above, so a shield larger than current
             -- health is masked at the frame edge -- nothing ever renders over
             -- missing health (the forward bar is hidden by the value pass,
-            -- same as the edge modes).
+            -- same as the edge modes). Full shows that excess through the
+            -- origin-edge forward bar instead.
             backfillBar:SetReverseFill(true)
             backfillBar:ClearAllPoints()
             backfillBar:SetPoint("TOPRIGHT", fill, hpA, 0, 0)
@@ -3590,7 +3609,10 @@ local function UpdateAbsorb(button, unit, now)
         if osm == nil then osm = (s.showOvershield == false) and "never" or "always" end
         ab._overshieldOn = osm ~= "never"
         ab._overlayLike = absStyle == "blizzardModern" or (s.absorbEdgeMode or "overlay") == "overlay"
+        -- Forward bar on: Overlay, and Overlay Reverse (Full) for its excess (Default Blizz
+        -- Frames keeps that placement as plain Overlay Reverse, see ReanchorAbsorbToFill).
         ab._edgeOverlay = (s.absorbEdgeMode or "overlay") == "overlay"
+            or (s.absorbEdgeMode == "overlayReverseFull" and absStyle ~= "blizzardModern")
     end
     local absStyle = ab._absStyle
     local abValue = absorbAmt
@@ -16082,3 +16104,63 @@ function ERF:OnEnable()
 end
 
 -- Slash command registered in EUI_RaidFrames_Options.lua
+
+-------------------------------------------------------------------------------
+--  Party Mode: spinning party and raid frames (EllesmereUI.PartySpin_Create).
+--  Each set's shown buttons orbit the centre of its container, so the 5-slot
+--  party box turns around its third frame. homeInCombat puts the secure
+--  buttons back on the header layout for each fight.
+--  do/end scope: 200-local main-chunk cap.
+-------------------------------------------------------------------------------
+do
+    if EllesmereUI.PartySpin_Create then
+        -- A header's shown buttons, in child order.
+        local function AddShown(hdr, list)
+            if not (hdr and hdr:IsVisible()) then return end
+            local i, b = 1, hdr:GetAttribute("child1")
+            while b do
+                if b:IsVisible() then list[#list + 1] = b end
+                i = i + 1
+                b = hdr:GetAttribute("child" .. i)
+            end
+        end
+
+        local partyList = {}
+        local partyGroup = { frames = partyList }
+        local partyGroups = {}
+        EllesmereUI.PartySpin_Create({
+            target = "partyFrames",
+            homeInCombat = true,
+            collect = function()
+                wipe(partyList); wipe(partyGroups)
+                local box = ns._partyContainerFrame
+                if box and box:IsVisible() then
+                    AddShown(ns._partyHeader, partyList)
+                    local sb = ns._partySelfButton
+                    if sb and sb:IsVisible() then partyList[#partyList + 1] = sb end
+                    partyGroup.pivot = box
+                    partyGroups[1] = partyGroup
+                end
+                return partyGroups
+            end,
+        })
+
+        local raidList = {}
+        local raidGroup = { frames = raidList }
+        local raidGroups = {}
+        EllesmereUI.PartySpin_Create({
+            target = "raidFrames",
+            homeInCombat = true,
+            collect = function()
+                wipe(raidList); wipe(raidGroups)
+                if containerFrame and containerFrame:IsVisible() then
+                    for g = 1, 8 do AddShown(separatedHdrs[g], raidList) end
+                    AddShown(ns._flatHeader, raidList)
+                    raidGroup.pivot = containerFrame
+                    raidGroups[1] = raidGroup
+                end
+                return raidGroups
+            end,
+        })
+    end
+end
