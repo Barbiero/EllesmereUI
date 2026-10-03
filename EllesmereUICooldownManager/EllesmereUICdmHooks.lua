@@ -8427,8 +8427,8 @@ local function CollectAndReanchor()
                                 local isCustomSpell = sd and sd.customSpellIDs and sd.customSpellIDs[sid]
                                 -- Keep saved placement, but do not inject an unlearned talent.
                                 if isCustomSpell then
-                                    isCustomSpell = ns.IsSpellInPlayerBook(sid)
-                                        or C_SpellBook.IsSpellKnownOrInSpellBook(sid, Enum.SpellBookSpellBank.Pet)
+                                    isCustomSpell = ns.IsSpellInPlayerBook(sid, false)
+                                        or C_SpellBook.IsSpellKnownOrInSpellBook(sid, Enum.SpellBookSpellBank.Pet, false)
                                 end
                                 -- FRAMES AS TRUTH (native-first, injection-fallback): a racial
                                 -- with a LIVE Blizzard frame anywhere is a regular native
