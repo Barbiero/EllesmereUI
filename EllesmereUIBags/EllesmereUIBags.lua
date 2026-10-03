@@ -428,7 +428,7 @@ local function IsGearCategory(catIdx)
     return _gearCatSet[catIdx]
 end
 
--- Item panels (mail/trade/AH/bank/guildbank) take one bag slot at a time; a merged button
+-- Item panels (mail/trade/AH/vendor/bank/guildbank) take one bag slot at a time; a merged button
 -- only hands over the slot behind it (3 merged mails would mail 1), so duplicates stay unmerged while any panel is open. bagMergeDuplicates disables merging outright.
 local _openItemPanels = {}
 local _anyItemPanelOpen = false
@@ -761,6 +761,7 @@ end
 
 -- Merge duplicate non-gear items by itemLink within an already-ordered list.
 -- itemLink encodes stats/bonuses, so items with different stats stay separate.
+-- force: skip the bagMergeDuplicates check (list view has its own setting).
 -- Must run AFTER ApplySavedOrder so the first occurrence in visual order wins.
 -- Returns a new list; the caller's tables are NEVER modified. A merged winner is
 -- replaced in the returned list by a pooled, display-only shallow copy carrying
@@ -769,11 +770,11 @@ end
 -- writes _mergedCount back onto a canonical slot table, both break.
 -- The result must not outlive the render pass that produced it: the copies come
 -- from the slot pool and are recycled by ReleaseAllSlotTables on the next refresh.
-local function MergeDuplicates(items)
+local function MergeDuplicates(items, force)
     -- Record what this paint was built with, so the bags OnShow can tell that
     -- the state changed while they were hidden and repaint (see OnShow).
     _paintedPanelOpen = _anyItemPanelOpen
-    if _anyItemPanelOpen or BP().bagMergeDuplicates == false then return items end
+    if _anyItemPanelOpen or (not force and BP().bagMergeDuplicates == false) then return items end
     -- Session-only unmerge marks (EUI_Bags._unmergedLinks: set by the split
     -- dialog, wiped when the bags close, never persisted): a marked item keeps
     -- its real stacks apart so a split's pieces are visible in these views.
@@ -5673,7 +5674,8 @@ local function GetOrCreateCatHeader(idx)
     return f
 end
 
--- "Clear" link on a Recent Items header, sitting just left of its "Hide" link.
+-- "Clear" link on a Recent Items header, sitting just left of its "Hide" link
+-- (or at the header's right edge when there is none, as in the list).
 -- Opt-in (bagShowRecentClear, default off): callers gate on the setting, so a
 -- user who never enables it never has the button built. Pooled on the header
 -- like _hideBtn; hidden by the per-refresh header reset.
@@ -5700,7 +5702,11 @@ local function ShowRecentClearButton(hdr, hideBtn)
         hdr._clearBtn = cb
     end
     hdr._clearBtn:ClearAllPoints()
-    hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    if hideBtn then
+        hdr._clearBtn:SetPoint("RIGHT", hideBtn, "LEFT", -6, 0)
+    else
+        hdr._clearBtn:SetPoint("RIGHT", hdr, "RIGHT", 0, 0)
+    end
     hdr._clearBtn:Show()
     return hdr._clearBtn
 end
@@ -6359,7 +6365,8 @@ function EUI_Bags:RefreshInventory()
             leftX = sidebarW, topY = -(HEADER_H + 1),
             allItems = isAllItems,
             slotView = (selectedCategoryIndex == -1 and "one") or (selectedCategoryIndex == -2 and "multi") or nil,
-            recent = (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true and showRecent)
+            -- Same rule as the grid's Recent Items section
+            recent = (showRecent and (isAllItems or (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true)))
                 and EUI_Bags._recentItems or nil,
             -- Empty rows only when nothing is search-filtered out
             emptySlots = (#displayItems == #tempItems) and emptySlots or nil,
@@ -7145,6 +7152,8 @@ local function StartAddon()
         TRADE_CLOSED          = { "trade",     false },
         AUCTION_HOUSE_SHOW    = { "auction",   true  },
         AUCTION_HOUSE_CLOSED  = { "auction",   false },
+        MERCHANT_SHOW         = { "merchant",  true  },
+        MERCHANT_CLOSED       = { "merchant",  false },
         BANKFRAME_OPENED      = { "bank",      true  },
         BANKFRAME_CLOSED      = { "bank",      false },
         GUILDBANKFRAME_OPENED = { "guildbank", true  },
