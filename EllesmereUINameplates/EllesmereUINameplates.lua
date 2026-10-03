@@ -152,6 +152,18 @@ function ns._appendDisplayPresetKeys(t)
 end
 
 local defaults = {
+    -- EUI_DEBUFF_COLORS: optional player-debuff tinting (Colors page).
+    debuffColorsEnabled = false,
+    debuffColorsPlayerOnly = true,
+    debuffColorSpell1 = "703",
+    debuffColorSpell2 = "1943",
+    debuffColorCustomSpell1 = 0,
+    debuffColorCustomSpell2 = 0,
+    debuffColor1 = { r = 1.00, g = 0.43, b = 0.04 },
+    debuffColor2 = { r = 1.00, g = 0.43, b = 0.04 },
+    debuffColorBothEnabled = true,
+    debuffColorPriority = 2,
+    debuffColorBoth = { r = 0.10, g = 0.88, b = 0.32 },
     -- Blizzard Style (Global Settings > Style): the stock nameplate's bar,
     -- background, selection and cast bar art on our plates with every feature
     -- intact. Default OFF; reload-gated.
@@ -5215,6 +5227,7 @@ function ns.RefreshAllSettings()
     if ns.NT_RefreshSetting then ns.NT_RefreshSetting() end
     if ns.RangeText_Apply then ns.RangeText_Apply() end
     if ns.ApplyClassPowerSetting then ns.ApplyClassPowerSetting() end
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Aura containers: fingerprint-guarded, near-free when no aura setting changed.
     if ns.NPC_ReloadAll then ns.NPC_ReloadAll() end
     -- Hide Enemy Nameplates OOC is CVar + event driven, and its options setter plus
@@ -8430,6 +8443,7 @@ function NameplateFrame:SetUnit(unit, nameplate)
     self:SyncToT(unit)
     -- Attach a pooled aura-container bundle for this unit.
     if ns.NPC_AttachPlate then ns.NPC_AttachPlate(self, unit) end
+    if ns.DebuffColors_Attach then ns.DebuffColors_Attach(self, unit) end
     -- Non-Target Opacity (zero cost while off: one numeric compare).
     if ns._ntAlpha < 1 then ns.NT_Apply(self) end
     -- Execute glow is per-spawn state, not appearance: ApplyAppearance is generation-cached
@@ -8600,6 +8614,7 @@ function NameplateFrame:ClearUnit()
     end
     -- Release this plate's aura-container bundle back to the pool.
     if ns.NPC_DetachPlate then ns.NPC_DetachPlate(self) end
+    if ns.DebuffColors_Detach then ns.DebuffColors_Detach(self) end
     self.unit = nil
     self.nameplate = nil
     self._absorbHidden = nil
@@ -11539,6 +11554,7 @@ function npAddon:OnInitialize()
     )
 end
 function npAddon:OnEnable()
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
     p = ENP.db.profile
     -- A profile already on a stock style gets its one-time bar texture seed
