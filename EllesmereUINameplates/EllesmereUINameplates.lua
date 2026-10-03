@@ -636,6 +636,9 @@ function ns.ApplyCustomBorderStyle(plate, szOverride)
         p and p.customBorderOffset, p and p.customBorderOffsetY,
         p and p.customBorderShiftX, p and p.customBorderShiftY,
         "nameplates", sz, nil, px)
+    -- Solid strips need the scaleGuard the Basic border has, or Scale Target/Casting
+    -- Nameplate leaves them sub-pixel and their sides vanish as the plate moves.
+    if PP.GetBorders(bf) then PP.CreateBorder(bf, nil, nil, nil, nil, nil, nil, nil, true) end
     -- The size it is drawn at (a target/hover effect size included): the cast bar
     -- wrap's lower piece and seam copy it (ns.NP_UpdateCustomBorderWrap).
     bf._cbTex, bf._cbSz, bf._cbPx = tex, sz, px
@@ -721,6 +724,7 @@ function ns.NP_UpdateCustomBorderWrap(plate)
             or lower._sOX ~= offX or lower._sOY ~= offY or lower._sSX ~= shX or lower._sSY ~= shY then
             lower:SetFrameLevel(lvl)
             EUI.ApplyBorderStyle(lower, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
+            if PP.GetBorders(lower) then PP.CreateBorder(lower, nil, nil, nil, nil, nil, nil, nil, true) end
             lower._sTex, lower._sSz, lower._sPx = tex, sz, px
             lower._sOX, lower._sOY, lower._sSX, lower._sSY = offX, offY, shX, shY
         else
@@ -3127,6 +3131,7 @@ function ns.ApplyCastIconBorder(plate)
         bf:SetFrameStrata(strata)
         bf:SetFrameLevel(lvl)
         EllesmereUI.ApplyBorderStyle(bf, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
+        if PP.GetBorders(bf) then PP.CreateBorder(bf, nil, nil, nil, nil, nil, nil, nil, true) end
         bf._sTex, bf._sSz, bf._sPx = tex, sz, px
         bf._sOX, bf._sOY, bf._sSX, bf._sSY = offX, offY, shX, shY
     else
