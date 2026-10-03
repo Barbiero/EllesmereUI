@@ -3773,17 +3773,29 @@ EnterAssignSelectMode = function(catKey, opts)
     _assignSelectToggle = opts and opts.toggle or false
     _assignSelectStayOpen = opts and opts.stayOpen or false
 
-    if not EUI_Bags._assignOverlay then
-        -- Dim only the bag window, not the whole viewport. The overlay sits at
-        -- the bag's OWN strata (just above the bag background/chrome), while the
-        -- item grid rides the scroll frame, which is raised a full strata above
-        -- to FULLSCREEN_DIALOG below -- so the items stay fully bright and only
-        -- the bag behind them dims. (A same-strata overlay left the grid's
-        -- layering ambiguous, which dimmed the items.)
-        local ov = CreateFrame("Frame", nil, EUI_Bags)
-        ov:SetFrameStrata(EUI_Bags:GetFrameStrata())
-        ov:SetFrameLevel(EUI_Bags:GetFrameLevel() + 20)
-        ov:SetAllPoints(EUI_Bags)
+    -- Normal "+" assign dims the whole viewport (its long-standing look); junk
+    -- select mode dims ONLY the bag window so the item grid stays bright while the
+    -- player clicks several items in a row. The two overlays are cached
+    -- separately and picked per mode; the active one is stored in _assignOverlay
+    -- so Exit and the fades below operate on whichever is up.
+    local bagOnly = opts and opts.bagOnly
+    local cacheKey = bagOnly and "_assignOverlayBag" or "_assignOverlayFull"
+    if not EUI_Bags[cacheKey] then
+        local ov = CreateFrame("Frame", nil, bagOnly and EUI_Bags or UIParent)
+        if bagOnly then
+            -- Bag-only: sit at the bag's OWN strata (just above its chrome). The
+            -- item grid rides the scroll frame, raised a full strata above to
+            -- FULLSCREEN_DIALOG below -- so the items stay fully bright and only
+            -- the bag behind them dims. (A same-strata overlay left the grid's
+            -- layering ambiguous, which dimmed the items.)
+            ov:SetFrameStrata(EUI_Bags:GetFrameStrata())
+            ov:SetFrameLevel(EUI_Bags:GetFrameLevel() + 20)
+            ov:SetAllPoints(EUI_Bags)
+        else
+            ov:SetFrameStrata("FULLSCREEN_DIALOG")
+            ov:SetFrameLevel(0)
+            ov:SetAllPoints(UIParent)
+        end
         ov:EnableMouse(true)
         ov.bg = ov:CreateTexture(nil, "BACKGROUND")
         ov.bg:SetAllPoints()
@@ -3797,8 +3809,9 @@ EnterAssignSelectMode = function(catKey, opts)
                 self:SetPropagateKeyboardInput(true)
             end
         end)
-        EUI_Bags._assignOverlay = ov
+        EUI_Bags[cacheKey] = ov
     end
+    EUI_Bags._assignOverlay = EUI_Bags[cacheKey]
     local ov = EUI_Bags._assignOverlay
     -- Controller cursor: Back (which never reaches OnKeyDown) cancels the
     -- mode first. Joined only once a controller is in use; the proxy counts
@@ -3941,7 +3954,7 @@ end
 -- click time.
 function EUI_Bags:EnterJunkSelectMode()
     if not (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()) then return end
-    EnterAssignSelectMode(EUI_CategoryManager.JUNK_KEY, { toggle = true, stayOpen = true })
+    EnterAssignSelectMode(EUI_CategoryManager.JUNK_KEY, { toggle = true, stayOpen = true, bagOnly = true })
 end
 
 -- SellJunk: sell every junk item (grey + player-marked) that has a sell value at
