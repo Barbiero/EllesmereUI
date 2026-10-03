@@ -4081,10 +4081,9 @@ EllesmereUI.RegisterMigration({
     end,
 })
 
--- Health/Power hash lines now live on each thresholdSpecs entry, like the Class
--- Resource. A bar's old single hash config is copied onto every existing entry
--- (an entry shadows the All Specs one) plus an All Specs hash-only entry when
--- none exists, so the lines keep showing on every spec.
+-- Health/Power hash lines are per thresholdSpecs entry, like the Class Resource.
+-- A bar's single hash config is copied onto every existing entry (an entry
+-- shadows the All Specs one), plus an All Specs hash-only entry when none exists.
 EllesmereUI.RegisterMigration({
     id          = "erb_hash_lines_per_spec_v1",
     scope       = "profile",
