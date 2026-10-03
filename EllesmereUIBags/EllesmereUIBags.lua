@@ -1765,6 +1765,9 @@ local function CreateHeader()
     end)
     sellJunk:Hide()
     EUI_Bags._sellJunkBtn = sellJunk
+    -- DB is ready by the time the header is built: register the merchant events
+    -- now iff the feature is on (the toggle re-syncs them on change).
+    if EUI_Bags.SyncJunkMerchantWatcher then EUI_Bags:SyncJunkMerchantWatcher() end
 
     local clear = CreateFrame("Button", nil, search)
     clear:SetSize(22, 22)
@@ -4011,10 +4014,10 @@ end
 
 -- Merchant watcher: show/hide the Sell Junk button with the merchant window, and
 -- run an auto-sell pass on open when the player opted in. Self-contained frame so
--- it does not touch the main bag event handler.
+-- it does not touch the main bag event handler. Its MERCHANT_SHOW/CLOSED events
+-- are registered only while the feature is enabled (SyncJunkMerchantWatcher), so
+-- a player with the feature off never runs this handler.
 local _junkMerchantWatcher = CreateFrame("Frame")
-_junkMerchantWatcher:RegisterEvent("MERCHANT_SHOW")
-_junkMerchantWatcher:RegisterEvent("MERCHANT_CLOSED")
 _junkMerchantWatcher:SetScript("OnEvent", function(_, event)
     local btn = EUI_Bags._sellJunkBtn
     if event == "MERCHANT_SHOW" then
@@ -4030,6 +4033,20 @@ _junkMerchantWatcher:SetScript("OnEvent", function(_, event)
         if btn then btn:Hide() end
     end
 end)
+
+-- Register the merchant events only while the Junk Marker feature is on; drop
+-- them (and hide the Sell Junk button) when it is off. Called once the bag UI is
+-- built with a ready DB, and again whenever the master toggle flips.
+function EUI_Bags:SyncJunkMerchantWatcher()
+    if EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled() then
+        _junkMerchantWatcher:RegisterEvent("MERCHANT_SHOW")
+        _junkMerchantWatcher:RegisterEvent("MERCHANT_CLOSED")
+    else
+        _junkMerchantWatcher:UnregisterEvent("MERCHANT_SHOW")
+        _junkMerchantWatcher:UnregisterEvent("MERCHANT_CLOSED")
+        if EUI_Bags._sellJunkBtn then EUI_Bags._sellJunkBtn:Hide() end
+    end
+end
 
 EnterPinSelectMode = function()
     EUI_Bags._pinSelectMode = true

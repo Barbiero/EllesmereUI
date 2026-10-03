@@ -979,10 +979,14 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         -- inline in the loops) so it can render either at the very bottom
         -- (default) or at the top just below Pinned Items (bagJunkAtTop). Empty
         -- slots are never diverted. Off by default -> no change.
+        -- Nothing below is built unless the pull-out is on: no tables allocated,
+        -- no RenderJunkSection closure created, when the feature (or this view's
+        -- toggle) is off.
         local pullJunk = (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()
             and ((not isMulti and BP().bagJunkOneBag) or (isMulti and BP().bagJunkMultiBag))) or false
-        local junkItems, diverted = {}, {}
+        local junkItems, diverted, RenderJunkSection, junkAtTop
         if pullJunk then
+            junkItems, diverted = {}, {}
             for _, d in ipairs(tempItems) do
                 if d.bag ~= 5 and d.info and d.info.itemID
                    and EUI_CategoryManager:IsJunk(d.info.itemID, d.info.quality) then
@@ -990,17 +994,17 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                     diverted[d] = true
                 end
             end
+            RenderJunkSection = function()
+                if #junkItems == 0 then return end
+                PreCacheSortFields(junkItems)
+                SortJunkByVendor(junkItems)
+                RenderBagGrid(EllesmereUI.L("Junk") .. " (" .. #junkItems .. ")", junkItems)
+            end
+            -- Top placement: below the Pinned Items section (drawn above), before
+            -- the bag section(s).
+            junkAtTop = BP().bagJunkAtTop and #junkItems > 0
+            if junkAtTop then RenderJunkSection() end
         end
-        local function RenderJunkSection()
-            if #junkItems == 0 then return end
-            PreCacheSortFields(junkItems)
-            SortJunkByVendor(junkItems)
-            RenderBagGrid(EllesmereUI.L("Junk") .. " (" .. #junkItems .. ")", junkItems)
-        end
-        -- Top placement: below the Pinned Items section (drawn above), before the
-        -- bag section(s).
-        local junkAtTop = pullJunk and BP().bagJunkAtTop and #junkItems > 0
-        if junkAtTop then RenderJunkSection() end
 
         -- One bag's items + empties as a section titled with the bag's name, in
         -- slot order (MultiBag's bags, OneBag's special bags). Diverted junk is
@@ -1010,7 +1014,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local bagList = {}
             local bagFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag == bag and not diverted[d] then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
+                if d.bag == bag and not (diverted and diverted[d]) then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag == bag then bagList[#bagList + 1] = d end
@@ -1028,7 +1032,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local mainSlots = {}
             local mainFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag ~= 5 and not (special and special[d.bag]) and not diverted[d] then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
+                if d.bag ~= 5 and not (special and special[d.bag]) and not (diverted and diverted[d]) then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag ~= 5 and not (special and special[d.bag]) then mainSlots[#mainSlots + 1] = d end
@@ -1087,7 +1091,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
 
         -- Junk category at the very bottom (OneBag/MultiBag pull-out) unless the
         -- player moved it to the top (already rendered above, below Pinned Items).
-        if not junkAtTop then RenderJunkSection() end
+        if RenderJunkSection and not junkAtTop then RenderJunkSection() end
 
     elseif selectedCategoryIndex == 0 and not selectedGroupName then
         -- "All Items" view: group by category with headers
@@ -1342,15 +1346,18 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         local hiddenSet = BP().bagHiddenInAllItems or {}
         -- "Move Junk to Top" in All Items: render the Junk category right after
         -- Pinned/Recent (the top display-only sections) and skip its normal order
-        -- slot below. Off -> Junk stays in its category-order position.
-        local junkIdx, junkCat
-        for i, c in ipairs(cats) do if c.isJunk then junkIdx, junkCat = i, c; break end end
-        local junkAtTopAll = junkIdx and EUI_CategoryManager:IsJunkMarkerEnabled()
-            and BP().bagJunkAtTop and not hiddenSet[junkCat._defaultName]
+        -- slot below. Only built while the feature + toggle are on, so the scan
+        -- and closure cost nothing per render when off; otherwise Junk stays in
+        -- its category-order position.
+        local junkAtTopAll, junkCat, junkIdx, RenderJunkCatTop
         local junkRendered = false
-        local function RenderJunkCatTop()
-            junkRendered = true
-            RenderSection(junkCat.name, itemsByCat[junkIdx] or {}, false, false, false, junkIdx, true)
+        if EUI_CategoryManager:IsJunkMarkerEnabled() and BP().bagJunkAtTop then
+            for i, c in ipairs(cats) do if c.isJunk then junkIdx, junkCat = i, c; break end end
+            junkAtTopAll = junkIdx and not hiddenSet[junkCat._defaultName]
+            RenderJunkCatTop = function()
+                junkRendered = true
+                RenderSection(junkCat.name, itemsByCat[junkIdx] or {}, false, false, false, junkIdx, true)
+            end
         end
         for ci, cat in ipairs(cats) do
             if junkAtTopAll and not junkRendered and not cat.isPinned and not cat.isRecent then

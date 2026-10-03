@@ -913,14 +913,15 @@ initFrame:SetScript("OnEvent", function(self)
                       db.profile.bagJunkMarker = v
                       -- The Junk category only exists while the feature is on, so
                       -- rebuild the category list, then redraw and sync the header
-                      -- button. The Sell Junk button is merchant-gated; just hide
-                      -- it immediately when turning the feature off.
+                      -- button. SyncJunkMerchantWatcher registers/unregisters the
+                      -- merchant events to match and hides the Sell Junk button
+                      -- when turning the feature off.
                       if _G.EUI_CategoryManager and _G.EUI_CategoryManager.InitCategories then
                           _G.EUI_CategoryManager:InitCategories()
                       end
                       if _G.EUI_Bags then
                           if _G.EUI_Bags._junkBtn then _G.EUI_Bags._junkBtn:SetShown(v) end
-                          if not v and _G.EUI_Bags._sellJunkBtn then _G.EUI_Bags._sellJunkBtn:Hide() end
+                          if _G.EUI_Bags.SyncJunkMerchantWatcher then _G.EUI_Bags:SyncJunkMerchantWatcher() end
                           if _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                       end
                       EllesmereUI:RefreshPage()  -- refresh the cog's disabled state
