@@ -17,6 +17,9 @@ EllesmereUIBlizzardSkin_SocketPanel.lua
 EllesmereUIBlizzardSkin_InspectSheet.lua
 EllesmereUIBlizzardSkin_DragonRiding.lua
 EllesmereUIBlizzardSkin_GreatVault.lua
+# Chat bubbles: Blizzard's own bubbles stay on, we blank their chrome and draw a styled
+# frame on the frame that carries their position.
+EllesmereUIBlizzardSkin_ChatBubbles.lua
 
 # Window Skins (shared engine + per-window packs)
 EllesmereUIBlizzardSkin_WindowEngine.lua
