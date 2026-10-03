@@ -19,7 +19,7 @@ I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
 -- default, existing setups unchanged). Every "shown" SetAlpha site (visibility loop +
 -- mouseover hover) routes through this so a combat transition or hover can't clobber
 -- the fade. Combat state comes from the caller (the visibility loop's event-tracked
--- _ufInCombat, which leads InCombatLockdown() on regen events). On ns for the 200-locals cap.
+-- _ufInCombat, which leads InCombatLockdown() on regen events). On ns: the pass calls it.
 function ns.ResolveFrameAlpha(s, inCombat)
     if s and s.oocFadeEnabled and not inCombat then
         return s.oocAlpha or 0.5
@@ -30,7 +30,7 @@ end
 -- The alpha a unit frame RESTS at while the cursor is not on it, plus whether that resting
 -- state is a hover gate (an alpha 0 a hover may legitimately lift). Single source of truth:
 -- the visibility pass and both hover handlers derive from it, so a mouse leave cannot land
--- on a different verdict than the pass would. On ns for the 200-locals cap. hiddenByOpts
+-- on a different verdict than the pass would. On ns: the pass calls it. hiddenByOpts
 -- leads because it did in the pass too (it re-forced 0 at the end of the chain); returning
 -- hoverGated false with it stops a hover from revealing what an option lane has hidden.
 function ns.ResolveVisResting(s, frame, ext, hiddenByOpts, inCombat)
