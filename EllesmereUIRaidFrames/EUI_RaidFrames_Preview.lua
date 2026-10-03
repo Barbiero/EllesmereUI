@@ -3507,6 +3507,10 @@ local function RefreshPreview()
     local s = ns._pvOverlayProxy or db.profile
     local groupGrowth = s.groupGrowth or "RIGHT"
     local unitGrowth  = s.unitGrowth or "DOWN"
+    -- The same self-heal the live layout runs, so the preview cannot render a
+    -- grid where merged mode lays out a row (Blizzard's flat header has one
+    -- column axis and cannot wrap into one).
+    unitGrowth, groupGrowth = ns._RFEffectiveGrowth(unitGrowth, groupGrowth, s.mergeGroups)
     local bw = PixelSnap(s.frameWidth or 72)
     local bh = PixelSnap(s.frameHeight or 46)
     local cs = PixelSnap(s.cellSpacing or 2)
@@ -3562,15 +3566,10 @@ local function RefreshPreview()
         topExtra = 25
     end
 
-    -- Container size (4 groups)
-    local totalW, totalH
-    if groupGrowth == "DOWN" or groupGrowth == "UP" then
-        totalW = groupW
-        totalH = MOVER_GROUPS * groupH + (MOVER_GROUPS - 1) * gs
-    else
-        totalW = MOVER_GROUPS * groupW + (MOVER_GROUPS - 1) * gs
-        totalH = groupH
-    end
+    -- Container size, through the SAME ns._RFFootprint the live container is
+    -- sized with. The old one-row formula drew a 4x1 box around the grid flow's
+    -- 2x2 block.
+    local totalW, totalH = ns._RFFootprint(bw, bh, unitGrowth, groupGrowth, cs, gs)
 
     -- Pets (Show Pets on the Raid tab) go before the first or after the last group. The overlay
     -- grows to hold them; at the real position the groups stay put and the pets hang off them.
@@ -3578,8 +3577,8 @@ local function RefreshPreview()
     local petX, petY, padL, padT, padR, padB = 0, 0, 0, 0, 0, 0
     if petSpec then
         local slot = petSpec.before and 0 or (MOVER_GROUPS - 1)
-        petX = rawGX[slot] - minGX + petSpec.ox
-        petY = rawGY[slot] - maxGY + petSpec.oy
+        petX = gSlots[slot][1] - minGX + petSpec.ox
+        petY = gSlots[slot][2] - maxGY + petSpec.oy
         if isOverlay then
             padL = max(0, -petX)
             padT = max(0, petY)
@@ -3613,6 +3612,7 @@ local function RefreshPreview()
         local displaySlot = previewSlotByGroup and previewSlotByGroup[g + 1] or g
         local gx = gSlots[displaySlot][1] - minGX
         local gy = gSlots[displaySlot][2] - maxGY
+        local firstFrame   -- the group's u == 0 frame, the group-number anchor
         for u = 0, 4 do
             frameIdx = frameIdx + 1
             local f = GetOrCreatePreviewFrame(frameIdx)
@@ -4073,11 +4073,8 @@ ns._ShowSizePreview = function(tier)
 
     -- Total bounding box: the tier's group mover footprint via the SAME
     -- ns._RFFootprint the live container sizing and the corner origin use (one
-    -- formula, so preview and live can never drift). boxGroups is that tier's
-    -- real box (4 groups up to 30 members, 8 from 31 on) and is what the group
-    -- normalization below must match -- same value the live LayoutGroups uses.
-    local boxGroups = ns._RFBoxGroups(tier)
-    local totalW, totalH = ns._RFFootprint(bw, bh, unitGrowth, groupGrowth, cs, gs, boxGroups)
+    -- formula, so preview and live can never drift).
+    local totalW, totalH = ns._RFFootprint(bw, bh, unitGrowth, groupGrowth, cs, gs)
 
     -- Tier offset
     local tierOX = ov.offsetX or 0
@@ -4116,11 +4113,13 @@ ns._ShowSizePreview = function(tier)
     local fontPath = (EllesmereUI.GetFontPath("raidFrames")) or "Fonts\\FRIZQT__.TTF"
     local nameSize = s.nameSize or 10
 
-    -- Group slot origins along the growth flow, normalized over boxGroups
-    -- (matching the real LayoutGroups container, which normalizes over the same
-    -- tier's box). One slot per group this tier can show, so a 40-man tier fills
-    -- both grid columns exactly like the live headers do.
-    local gSlots, minX, maxY = ns._RFGroupFlow(groupGrowth, groupW, groupH, gs, numGroups, boxGroups)
+    -- Group slot origins along the growth flow, normalized over MOVER_GROUPS
+    -- (matching the real LayoutGroups container). At least MOVER_GROUPS slots
+    -- are generated even when the tier shows fewer groups: the normalization
+    -- origin is what puts slot 0 at the growth corner, so normalizing over a
+    -- 2- or 3-group prefix would place the preview on the wrong side of the
+    -- box for LEFT/UP growth. The extra slots are simply not drawn.
+    local gSlots, minX, maxY = ns._RFGroupFlow(groupGrowth, groupW, groupH, gs, max(numGroups, MOVER_GROUPS))
 
     local groupOrder = s.customGroupOrder and not s.mergeGroups
         and ns._RFValidatedGroupOrder(s.groupOrder)
