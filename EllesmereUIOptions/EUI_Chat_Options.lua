@@ -44,6 +44,7 @@ initFrame:SetScript("OnEvent", function(self)
         local isChat = pageName == "Chat"
         local isTabs = pageName == "Tabs"
         local isSidebar = pageName == "Sidebar"
+        local isBubbles = pageName == "Chat Bubbles"
 
         -- Stock styles (Blizzard Style / Classic WoW UI) reveal Blizzard's own
         -- chat frame art and input box: the panel background, panel border and
@@ -1557,6 +1558,12 @@ initFrame:SetScript("OnEvent", function(self)
 
         end -- isChat
 
+        -- Moved to Blizz UI Enhanced; this page only points there.
+        if isBubbles then
+            y = EllesmereUI.BuildLinkRow(parent, y, "Chat Bubbles moved to Blizz UI Enhanced",
+                "EllesmereUIBlizzardSkin", "Chat Bubbles", "DISPLAY")
+        end
+
         return math.abs(y)
     end
 
@@ -1568,6 +1575,7 @@ initFrame:SetScript("OnEvent", function(self)
     local blizzTabsStyle = EllesmereUI.BlizzStyle and EllesmereUI.BlizzStyle.Active("chat") == "blizzard"
         and not EllesmereUI.BlizzStyle.Forever("chat")
     local chatPages = blizzTabsStyle and { "Chat", "Sidebar" } or { "Chat", "Tabs", "Sidebar" }
+    if EllesmereUI.ChatBubbles then chatPages[#chatPages + 1] = "Chat Bubbles" end
 
     EllesmereUI:RegisterModule("EllesmereUIChat", {
         title       = "Chat",
