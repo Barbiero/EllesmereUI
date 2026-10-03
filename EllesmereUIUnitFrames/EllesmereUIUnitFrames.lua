@@ -15627,6 +15627,7 @@ ns._internals = {
     ApplyBlizzCastbarState = ApplyBlizzCastbarState, ApplyUnitFrameCastColor = ApplyUnitFrameCastColor,
     defaults = defaults, healthBarTextures = healthBarTextures,
     healthBarTextureNames = healthBarTextureNames, healthBarTextureOrder = healthBarTextureOrder,
+    GetSelectedFont = GetSelectedFont, SetFSFont = SetFSFont,
     dbSetters = { function(v) db = v end },
 }
 -- A re-import of a name this table lacks fails where the part file loads,

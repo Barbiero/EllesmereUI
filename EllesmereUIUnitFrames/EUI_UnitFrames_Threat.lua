@@ -1,3 +1,22 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Threat.lua
+--
+--  Threat display on the unit frames: the additive Player Threat border
+--  and the threat % text on target and focus (WoW Forever only). Loads
+--  right after the main file and reads it through ns and ns._internals;
+--  db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, GetSelectedFont, SetFSFont = I.frames, I.GetSelectedFont, I.SetFSFont
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Player Threat border (additive "Shadow" style on the PLAYER frame)
 --
@@ -217,5 +236,3 @@ if EllesmereUI.IS_FOREVER then
     -- layout memo compares every layout input).
     ns.RefreshThreatPct = UpdateAll
 end -- IS_FOREVER
-
-

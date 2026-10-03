@@ -1,3 +1,21 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_ForeverExtras.lua
+--
+--  WoW Forever extras on the unit frames: the pet happiness icon beside the
+--  pet frame and the combo point arc round the target portrait. Both apply
+--  functions return at once off WoW Forever. Reads the main file through ns
+--  and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+
+local I = ns._internals
+local frames = I.frames
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Pet happiness (WoW Forever): the stock pet frame's mood icon, carried
 -- beside our pet frame under Blizzard's own rule -- shown only for a hunter
 -- pet whose happiness reads 1..3, with that state's atlas. The icon frame is
@@ -334,4 +352,3 @@ function ns.UF_ApplyForeverComboArc()
     arc:Show()
     ns.UF_ComboArcRefresh(arc)
 end
-
