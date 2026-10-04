@@ -41,9 +41,13 @@ local ApplySavedOrder = ns.ApplySavedOrder
 -- Callers must have run PreCacheSortFields first (the tiebreak relies on it).
 local function SortJunkByVendor(items)
     for _, d in ipairs(items) do
-        local id = d.info and d.info.itemID
-        -- global GetItemInfo (sellPrice at 11); C_Item.GetItemInfo returns nil here.
-        local price = (id and select(11, GetItemInfo(id))) or 0
+        -- Sell price (GetItemInfo index 11) from the item LINK, not a bare
+        -- itemID: C_Item.GetItemInfo (what GetItemInfo aliases here) returns nil
+        -- for a bare id on this client, so the id form left every value at 0 and
+        -- the sort fell back to visual order. The link form is what List view's
+        -- Sell Price column uses, and PreCacheSortFields (run just above) has
+        -- already warmed it.
+        local price = (d.itemLink and select(11, GetItemInfo(d.itemLink))) or 0
         d._junkSell = price * ((d.info and d.info.stackCount) or 1)
     end
     table.sort(items, function(a, b)
@@ -1106,7 +1110,14 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         end
         for i = 1, #cats do
             if #itemsByCat[i] > 0 and not cats[i].groupName and not cats[i].isRecent then
-                ApplySavedOrder(i, itemsByCat[i])
+                if cats[i].isJunk then
+                    -- Junk orders by vendor value, not the saved drag order --
+                    -- same as the grouped-member and selected-category paths.
+                    PreCacheSortFields(itemsByCat[i])
+                    SortJunkByVendor(itemsByCat[i])
+                else
+                    ApplySavedOrder(i, itemsByCat[i])
+                end
             end
         end
         -- Merge duplicates after ordering so first-in-visual-order wins

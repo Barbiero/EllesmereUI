@@ -4031,9 +4031,10 @@ function EUI_Bags:SellJunk()
         if not bag then finish(); return end
         C_Container.UseContainerItem(bag, slot)
         sold = sold + 1
-        -- Best-effort earned total for the summary line (global GetItemInfo,
-        -- sellPrice at index 11; C_Item.GetItemInfo returns nil on this client).
-        local sp = select(11, GetItemInfo(info.itemID)) or 0
+        -- Best-effort earned total for the summary line. Sell price (GetItemInfo
+        -- index 11) resolves from the item LINK; the bare-itemID form returns nil
+        -- on this client, so the hyperlink is used (same as the Junk sort).
+        local sp = (info.hyperlink and select(11, GetItemInfo(info.hyperlink))) or 0
         earned = earned + sp * (info.stackCount or 1)
         C_Timer.After(0.08, step)
     end
