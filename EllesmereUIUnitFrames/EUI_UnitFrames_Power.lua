@@ -4,7 +4,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --
 --  The power bar seam, portrait separator and power border, spell cost
 --  prediction and CreatePowerBar, published as I.CreatePowerBar for the files
---  that load after this one. Reads the main file through ns and
+--  that load after this one. Reads earlier files through ns and
 --  ns._internals; db is set through I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...

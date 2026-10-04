@@ -2,9 +2,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 --  EUI_UnitFrames_Portrait.lua
 --
---  Class icons, the portrait and raid icon painters, portrait masks and art,
---  detached portrait shapes, CreatePortrait and SwapPortraitMode. Reads the
---  main file through ns and ns._internals; db is set through I.dbSetters.
+--  Class icons, the portrait and raid icon painters, masks and art, detached
+--  shapes, CreatePortrait and SwapPortraitMode. Publishes through I; loads
+--  before Layout and Builders, which re-import. db is set via I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...
 

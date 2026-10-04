@@ -2,9 +2,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 --  EUI_UnitFrames_Text.lua
 --
---  Engine painters and ns.Colors, smart power percent, text decimals, the
---  tag functions, nicknames, text pieces and zone formatters. Reads the main
---  file through ns and ns._internals; db is set through I.dbSetters.
+--  ns.Colors and the engine painters, smart power percent, text decimals,
+--  tags, nicknames and zone formatters. Publishes through I; loads before
+--  Layout and Power, which re-import from it. db is set through I.dbSetters.
 -------------------------------------------------------------------------------
 local addonName, ns = ...
 

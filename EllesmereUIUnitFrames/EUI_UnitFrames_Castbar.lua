@@ -3,8 +3,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  EUI_UnitFrames_Castbar.lua
 --
 --  Cast icon geometry, the kick tick and cast colors, CreateCastBar, show on
---  cast bar and the Blizzard cast bar state. Reads the main file through ns
---  and ns._internals; db is set through I.dbSetters.
+--  cast bar and the Blizzard cast bar state. Publishes through I; loads before
+--  Builders, which re-imports from it. db is set through I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...
 

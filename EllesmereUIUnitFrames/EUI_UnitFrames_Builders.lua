@@ -4,7 +4,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --
 --  The unified frame border with its hover handlers, the aura crop helpers
 --  and the four style functions that build a spawned unit frame, published
---  as I.Style*Frame (EUI_UnitFrames_Init.lua). Reads the main file through
+--  as I.Style*Frame (EUI_UnitFrames_Init.lua). Reads earlier files through
 --  ns and ns._internals; db is set through I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...

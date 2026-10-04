@@ -5,7 +5,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  Mini frame donor and boss getters, text slot widths, the bottom text bar,
 --  frame position, bar clip, border layout, frame dimensions and the health
 --  bar, published through I for the files that load after this one. Reads
---  the main file through ns and ns._internals; db is set through I.dbSetters.
+--  earlier files through ns and ns._internals; db is set through I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...
 
