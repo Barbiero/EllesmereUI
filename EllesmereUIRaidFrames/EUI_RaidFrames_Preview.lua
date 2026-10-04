@@ -302,7 +302,7 @@ local function PvAuraAnchor(icon, f, auraType, slot, totalShown)
     -- frames) so the preview matches exactly -- including row wrapping and CENTER
     -- per-row centering. `slot` is the 0-based index among visible icons.
     if auraType ~= "def" then
-        local sz = s2.debuffSize or 18
+        local sz = ns.RFC_DebuffSize(s2)
         icon:SetSize(sz, sz)
         icon:ClearAllPoints()
         local corner, fx, fy = ns.DebuffGridPoint(s2, slot, totalShown)
@@ -590,7 +590,7 @@ local function PvAuraTick()
                     icon._tex:SetTexture(5927657)
                     local _z = s2.debuffIconZoom or 0.08
                     icon._tex:SetTexCoord(_z, 1 - _z, _z, 1 - _z)
-                    icon:SetSize(s2.debuffSize or 18, s2.debuffSize or 18)
+                    icon:SetSize(ns.RFC_DebuffSize(s2), ns.RFC_DebuffSize(s2))
                     if icon._cooldown then
                         icon._cooldown:SetCooldown(now, dur)
                         icon._cooldown:SetDrawSwipe(s2.debuffShowSwipe ~= false)
@@ -790,7 +790,7 @@ local function GetConfiguredBuffSpells()
                         id = sid, icon = iconTex,
                         indType = ind.type,
                         color = (ind.spellColors and ind.spellColors[sid]) or ind.color,
-                        size = spellSz,
+                        size = ns.RFC_SnapSize(spellSz),
                         position = ind.position or "TOPLEFT",
                         offsetX = ind.offsetX or 0,
                         offsetY = ind.offsetY or 0,
@@ -1031,7 +1031,7 @@ ns.RefreshPvAuraVisuals = function()
         if f._pvDebuffs then
             for _, ic in ipairs(f._pvDebuffs) do
                 if ic:IsShown() then
-                    ic:SetSize(s2.debuffSize or 18, s2.debuffSize or 18)
+                    ic:SetSize(ns.RFC_DebuffSize(s2), ns.RFC_DebuffSize(s2))
                     ic._tex:SetTexCoord(dbZ, 1 - dbZ, dbZ, 1 - dbZ)
                     if ic._borderFrame and _PP then
                         if dbBdrSz > 0 then
@@ -1688,11 +1688,11 @@ local function CreatePreviewFrame(index, party)
     -- frame can showcase a full wrapping layout; only a few are shown otherwise.
     f._pvDebuffs = {}
     for i = 1, 8 do
-        f._pvDebuffs[i] = MakePreviewAuraIcon(f, f:GetFrameLevel() + ns.LVL_AURA, s.debuffSize or 18)
+        f._pvDebuffs[i] = MakePreviewAuraIcon(f, f:GetFrameLevel() + ns.LVL_AURA, ns.RFC_DebuffSize(s))
     end
 
     -- Static dispel debuff icon (shown when dispel eyeball is on)
-    f._pvDispelDebuff = MakePreviewAuraIcon(f, f:GetFrameLevel() + ns.LVL_AURA, s.debuffSize or 18)
+    f._pvDispelDebuff = MakePreviewAuraIcon(f, f:GetFrameLevel() + ns.LVL_AURA, ns.RFC_DebuffSize(s))
 
     -- Defensive preview icons
     f._pvDefs = {}
@@ -2892,7 +2892,7 @@ local function ApplyPreviewData(f, index)
             -- preview icon follows that location, its offsets and its size.
             local dispSplit = (s.dispellableDebuffLocation or "same") ~= "same"
             local dbSz
-            if dispSplit then dbSz = ns.DispellableDebuffSize(s) else dbSz = s.debuffSize or 18 end
+            if dispSplit then dbSz = ns.RFC_SnapSize(ns.DispellableDebuffSize(s)) else dbSz = ns.RFC_DebuffSize(s) end
             ddi:SetSize(dbSz, dbSz)
             ddi._tex:SetTexture(ns._PV_DISPEL_DB_ICONS[dispelType])
             local _z = s.debuffIconZoom or 0.08

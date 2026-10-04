@@ -3879,7 +3879,7 @@ end
 function ns.DebuffGridPoint(s, idx0, total, opts)
     local pos    = (opts and opts.pos)  or s.debuffPosition or "bottomleft"
     local grow   = (opts and opts.grow) or s.debuffGrowDirection or "RIGHT"
-    local sz     = (opts and opts.size) or s.debuffSize or 18
+    local sz     = PixelSnap((opts and opts.size) or s.debuffSize or 18)
     local spc    = PixelSnap(s.debuffSpacing or 1)
     local step   = sz + spc
     local ox     = (opts and opts.ox) or s.debuffOffsetX or 0
