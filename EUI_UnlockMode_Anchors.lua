@@ -1610,7 +1610,7 @@ local function FadeOverlayForSelectElement(entering)
         elapsed = elapsed + dt
         local t = math.min(elapsed / SELECT_ELEMENT_FADE, 1)
         local a = startA + (endA - startA) * t
-        UM.unlockFrame._overlay:SetColorTexture(0.02, 0.03, 0.04, a)
+        UM.unlockFrame._overlay:SetColorTexture(0.030, 0.023, 0.018, a)
         if t >= 1 then self:SetScript("OnUpdate", nil) end
     end)
 end

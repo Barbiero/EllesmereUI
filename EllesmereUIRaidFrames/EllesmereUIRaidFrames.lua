@@ -7190,7 +7190,7 @@ FB.SetMoverShown = function(owner, show, frameName, labelText)
         m:RegisterForDrag("LeftButton")
         local mbg = m:CreateTexture(nil, "BACKGROUND")
         mbg:SetAllPoints()
-        mbg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+        mbg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
         local ar, ag, ab = EllesmereUI.ResolveActiveAccent()
         EllesmereUI.MakeBorder(m, ar or 1, ag or 1, ab or 1, 0.6)
         local lbl = m:CreateFontString(nil, "OVERLAY")
@@ -16053,54 +16053,52 @@ end
 --  do/end scope: 200-local main-chunk cap.
 -------------------------------------------------------------------------------
 do
-    if EllesmereUI.PartySpin_Create then
-        -- A header's shown buttons, in child order.
-        local function AddShown(hdr, list)
-            if not (hdr and hdr:IsVisible()) then return end
-            local i, b = 1, hdr:GetAttribute("child1")
-            while b do
-                if b:IsVisible() then list[#list + 1] = b end
-                i = i + 1
-                b = hdr:GetAttribute("child" .. i)
-            end
+    -- A header's shown buttons, in child order.
+    local function AddShown(hdr, list)
+        if not (hdr and hdr:IsVisible()) then return end
+        local i, b = 1, hdr:GetAttribute("child1")
+        while b do
+            if b:IsVisible() then list[#list + 1] = b end
+            i = i + 1
+            b = hdr:GetAttribute("child" .. i)
         end
-
-        local partyList = {}
-        local partyGroup = { frames = partyList }
-        local partyGroups = {}
-        EllesmereUI.PartySpin_Create({
-            target = "partyFrames",
-            homeInCombat = true,
-            collect = function()
-                wipe(partyList); wipe(partyGroups)
-                local box = ns._partyContainerFrame
-                if box and box:IsVisible() then
-                    AddShown(ns._partyHeader, partyList)
-                    local sb = ns._partySelfButton
-                    if sb and sb:IsVisible() then partyList[#partyList + 1] = sb end
-                    partyGroup.pivot = box
-                    partyGroups[1] = partyGroup
-                end
-                return partyGroups
-            end,
-        })
-
-        local raidList = {}
-        local raidGroup = { frames = raidList }
-        local raidGroups = {}
-        EllesmereUI.PartySpin_Create({
-            target = "raidFrames",
-            homeInCombat = true,
-            collect = function()
-                wipe(raidList); wipe(raidGroups)
-                if containerFrame and containerFrame:IsVisible() then
-                    for g = 1, 8 do AddShown(separatedHdrs[g], raidList) end
-                    AddShown(ns._flatHeader, raidList)
-                    raidGroup.pivot = containerFrame
-                    raidGroups[1] = raidGroup
-                end
-                return raidGroups
-            end,
-        })
     end
+
+    local partyList = {}
+    local partyGroup = { frames = partyList }
+    local partyGroups = {}
+    EllesmereUI.PartySpin_Create({
+        target = "partyFrames",
+        homeInCombat = true,
+        collect = function()
+            wipe(partyList); wipe(partyGroups)
+            local box = ns._partyContainerFrame
+            if box and box:IsVisible() then
+                AddShown(ns._partyHeader, partyList)
+                local sb = ns._partySelfButton
+                if sb and sb:IsVisible() then partyList[#partyList + 1] = sb end
+                partyGroup.pivot = box
+                partyGroups[1] = partyGroup
+            end
+            return partyGroups
+        end,
+    })
+
+    local raidList = {}
+    local raidGroup = { frames = raidList }
+    local raidGroups = {}
+    EllesmereUI.PartySpin_Create({
+        target = "raidFrames",
+        homeInCombat = true,
+        collect = function()
+            wipe(raidList); wipe(raidGroups)
+            if containerFrame and containerFrame:IsVisible() then
+                for g = 1, 8 do AddShown(separatedHdrs[g], raidList) end
+                AddShown(ns._flatHeader, raidList)
+                raidGroup.pivot = containerFrame
+                raidGroups[1] = raidGroup
+            end
+            return raidGroups
+        end,
+    })
 end

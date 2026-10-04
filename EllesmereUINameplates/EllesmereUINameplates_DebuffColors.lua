@@ -32,50 +32,132 @@ ns.DebuffColorPresets = {
 ns.DebuffColorPresetByID = {}
 for _, spell in ipairs(ns.DebuffColorPresets) do ns.DebuffColorPresetByID[spell[1]] = spell end
 
--- Normalize preset IDs while keeping explicit custom IDs exact.
-function ns.DebuffColors_NormalizePreset(selection)
-    if tonumber(selection) == 316099 then return "1259790" end
-    return selection
-end
-
 local function Value(key)
     local p = ns.NP_GetProfile()
     if p and p[key] ~= nil then return p[key] end
     return ns.defaults[key]
 end
 
-local function Spell(slot)
-    local selection = ns.DebuffColors_NormalizePreset(Value("debuffColorSpell" .. slot))
-    if selection == "custom" then selection = Value("debuffColorCustomSpell" .. slot) end
-    local id = tonumber(selection)
+-------------------------------------------------------------------------------
+-- The debuff lists: one setting per class ("debuffColors" .. class token)
+-- holding its single debuffs, then its combos, each list in priority order
+-- (the higher entry wins), as one string so a profile copy or a per-spec
+-- override carries a class's whole list as one value:
+--   "spellID:r,g,b;spellID:r,g,b/spellID+spellID:r,g,b"
+-- Spell 0 is a debuff not chosen yet; a combo needs two to four spells. The
+-- options page edits the lists through this kit; the plates read only the
+-- player's own class.
+-------------------------------------------------------------------------------
+local DC = {
+    MAX_SINGLES = 10, MAX_COMBOS = 5, MAX_COMBO_SPELLS = 4,
+    SINGLE_COLOR = { r = 1.00, g = 0.43, b = 0.04 },
+    COMBO_COLOR = { r = 0.10, g = 0.88, b = 0.32 },
+}
+ns.DebuffColorKit = DC
+
+function DC.Key(class) return "debuffColors" .. class end
+
+function DC.SpellID(v)
+    local id = tonumber(v)
     if id and id > 0 and id == math.floor(id) then return id end
 end
 
-local function Color(key)
-    local c = Value(key)
-    local d = ns.defaults[key]
-    return { r = c.r or d.r, g = c.g or d.g, b = c.b or d.b }
+local function ParseColor(s, d)
+    local r, g, b = s:match("^([%d%.]+),([%d%.]+),([%d%.]+)$")
+    r, g, b = tonumber(r), tonumber(g), tonumber(b)
+    if not (r and g and b) then return { r = d.r, g = d.g, b = d.b } end
+    return { r = math.min(r, 1), g = math.min(g, 1), b = math.min(b, 1) }
+end
+
+local function Num(v) return (string.format("%.4f", v):gsub("%.?0+$", "")) end
+local function ColorText(c) return Num(c.r) .. "," .. Num(c.g) .. "," .. Num(c.b) end
+
+-- A saved list as fresh tables: singles = { { spell, color } },
+-- combos = { { spells = { ids }, color } }.
+function DC.Parse(s)
+    local singles, combos = {}, {}
+    if type(s) ~= "string" then return singles, combos end
+    local singlePart, comboPart = s:match("^([^/]*)/?(.*)$")
+    for entry in singlePart:gmatch("[^;]+") do
+        if #singles == DC.MAX_SINGLES then break end
+        local id, color = entry:match("^(%d*):?(.*)$")
+        singles[#singles + 1] = { spell = DC.SpellID(id) or 0, color = ParseColor(color, DC.SINGLE_COLOR) }
+    end
+    for entry in comboPart:gmatch("[^;]+") do
+        if #combos == DC.MAX_COMBOS then break end
+        local ids, color = entry:match("^([%d%+]*):?(.*)$")
+        local spells = {}
+        for id in ids:gmatch("%d+") do
+            id = DC.SpellID(id)
+            if id and #spells < DC.MAX_COMBO_SPELLS then spells[#spells + 1] = id end
+        end
+        combos[#combos + 1] = { spells = spells, color = ParseColor(color, DC.COMBO_COLOR) }
+    end
+    return singles, combos
+end
+
+-- The string to save (nil once both lists are empty).
+function DC.Encode(singles, combos)
+    if #singles == 0 and #combos == 0 then return nil end
+    local s, c = {}, {}
+    for i, e in ipairs(singles) do s[i] = e.spell .. ":" .. ColorText(e.color) end
+    for i, e in ipairs(combos) do c[i] = table.concat(e.spells, "+") .. ":" .. ColorText(e.color) end
+    return table.concat(s, ";") .. "/" .. table.concat(c, ";")
+end
+
+-- A class's lists; get reads the caller's profile (the plates' by default).
+function DC.Read(class, get)
+    return DC.Parse((get or Value)(DC.Key(class)))
+end
+
+local function Distinct(spells)
+    local out, seen = {}, {}
+    for _, id in ipairs(spells) do
+        if not seen[id] then
+            seen[id] = true
+            out[#out + 1] = id
+        end
+    end
+    return out
 end
 
 local function ReadConfig()
+    local _, class = UnitClass("player")
+    local singles, combos = DC.Read(class or "")
+    local playerOnly = Value("debuffColorsPlayerOnly") ~= false
     local c = {
         enabled = Value("debuffColorsEnabled") == true,
-        spell1 = Spell(1), spell2 = Spell(2),
-        filter = Value("debuffColorsPlayerOnly") ~= false and "HARMFUL|PLAYER" or "HARMFUL",
-        filterTokens = Value("debuffColorsPlayerOnly") ~= false and { "HARMFUL", "PLAYER" } or { "HARMFUL" },
-        both = Value("debuffColorBothEnabled") ~= false,
-        priority = tonumber(Value("debuffColorPriority")) == 1 and 1 or 2,
-        color1 = Color("debuffColor1"), color2 = Color("debuffColor2"),
-        colorBoth = Color("debuffColorBoth"),
+        filterTokens = playerOnly and { "HARMFUL", "PLAYER" } or { "HARMFUL" },
         texture = EllesmereUI.ResolveTexturePath(ns.healthBarTextures,
             Value("healthBarTexture"), WHITE),
+        singles = {}, combos = {},
     }
-    -- Identical choices mean one spell, never a fictitious two-debuff state.
-    if c.spell1 == c.spell2 then c.spell2 = nil end
-    c.fingerprint = table.concat({ tostring(c.enabled), tostring(c.spell1),
-        tostring(c.spell2), c.filter, tostring(c.both), c.priority, tostring(c.texture),
-        c.color1.r, c.color1.g, c.color1.b, c.color2.r, c.color2.g, c.color2.b,
-        c.colorBoth.r, c.colorBoth.g, c.colorBoth.b }, "|")
+    local parts = { tostring(c.enabled), tostring(playerOnly), tostring(c.texture) }
+    -- Declared bottom to top (a later-declared slot draws on top): the single
+    -- debuffs from the end of the list up, then the combos the same way, so a
+    -- combo always wins over a single debuff. A spell listed again lower down
+    -- can never show beneath itself, so only its highest entry gets a slot.
+    local ranked, seen = {}, {}
+    for _, e in ipairs(singles) do
+        if e.spell > 0 and not seen[e.spell] then
+            seen[e.spell] = true
+            ranked[#ranked + 1] = e
+        end
+    end
+    for i = #ranked, 1, -1 do
+        local e = ranked[i]
+        c.singles[#c.singles + 1] = { spell = e.spell, color = e.color, sublevel = i == 1 and 5 or 4 }
+        parts[#parts + 1] = "s" .. e.spell .. ":" .. ColorText(e.color)
+    end
+    for i = #combos, 1, -1 do
+        local spells = Distinct(combos[i].spells)
+        if #spells >= 2 then
+            c.combos[#c.combos + 1] = { spells = spells, color = combos[i].color }
+            parts[#parts + 1] = "c" .. table.concat(spells, "+") .. ":" .. ColorText(combos[i].color)
+        end
+    end
+    c.any = #c.singles > 0 or #c.combos > 0
+    c.fingerprint = table.concat(parts, "|")
     return c
 end
 
@@ -86,6 +168,16 @@ local function DisableRig(rig)
     for _, container in ipairs(rig.containers) do
         container:SetEnabled(false)
         container:SetUnit("none")
+    end
+end
+
+-- A rig a settings change replaces can never be freed (frames are permanent);
+-- releasing its containers keeps their engine slots out of AuraKit's restyle
+-- registry. Refresh runs this out of combat only.
+local function DropRig(rig)
+    DisableRig(rig)
+    for _, container in ipairs(rig.containers) do
+        EllesmereUI.AuraKit.ReleaseContainer(container)
     end
 end
 
@@ -138,6 +230,32 @@ local function AddSlot(rig, container, key, spell, initialize)
     })
 end
 
+-- A combo is a chain of slots, each link the child of the previous spell's
+-- secure button: the tint on the last link renders only while EVERY
+-- engine-owned button in the chain is visible.
+local function AddComboLink(rig, container, key, combo, depth)
+    local spell = combo.spells[depth]
+    if depth == #combo.spells then
+        AddSlot(rig, container, key .. "_" .. depth, spell, TintInitializer(rig, combo.color, 7))
+        return
+    end
+    local initialized = setmetatable({}, { __mode = "k" })
+    AddSlot(rig, container, key .. "_" .. depth, spell, function(button)
+        if initialized[button] then return end
+        initialized[button] = true
+        button:SetFrameLevel(rig.level)
+        button:EnableMouse(false)
+        local nested = Container(rig, button)
+        AddComboLink(rig, nested, key, combo, depth + 1)
+        if rig.unit then
+            nested:SetUnit(rig.unit)
+            nested:SetEnabled(true)
+        end
+    end)
+end
+
+-- The tints share one frame level (the target/focus/hover patterns sit one
+-- level up), so a later-declared slot draws on top: ReadConfig orders them.
 local function BuildRig(plate)
     local rig = {
         config = config, generation = generation,
@@ -152,31 +270,12 @@ local function BuildRig(plate)
     rig.holder:EnableMouse(false)
     rig.holder:Hide()
     local root = Container(rig, rig.holder)
-    if config.spell1 then
-        AddSlot(rig, root, "EUI_DEBUFF_COLOR_1", config.spell1,
-            TintInitializer(rig, config.color1, config.priority == 1 and 5 or 4))
+    for i, single in ipairs(config.singles) do
+        AddSlot(rig, root, "EUI_DEBUFF_COLOR_" .. i, single.spell,
+            TintInitializer(rig, single.color, single.sublevel))
     end
-    if config.spell2 then
-        AddSlot(rig, root, "EUI_DEBUFF_COLOR_2", config.spell2,
-            TintInitializer(rig, config.color2, config.priority == 2 and 5 or 4))
-    end
-    if config.both and config.spell1 and config.spell2 then
-        local initialized = setmetatable({}, { __mode = "k" })
-        AddSlot(rig, root, "EUI_DEBUFF_COLOR_PAIR", config.spell1, function(button)
-            if initialized[button] then return end
-            initialized[button] = true
-            button:SetFrameLevel(rig.level)
-            button:EnableMouse(false)
-            -- The second slot is a child of the first spell's secure button.
-            -- Its tint renders only while BOTH engine-owned buttons are visible.
-            local nested = Container(rig, button)
-            AddSlot(rig, nested, "EUI_DEBUFF_COLOR_BOTH", rig.config.spell2,
-                TintInitializer(rig, rig.config.colorBoth, 7))
-            if rig.unit then
-                nested:SetUnit(rig.unit)
-                nested:SetEnabled(true)
-            end
-        end)
+    for i, combo in ipairs(config.combos) do
+        AddComboLink(rig, root, "EUI_DEBUFF_COMBO_" .. i, combo, 1)
     end
     rigs[plate] = rig
     return rig
@@ -184,10 +283,6 @@ end
 
 local function Attach(plate, unit)
     local rig = rigs[plate]
-    if not config.enabled or not (config.spell1 or config.spell2) then
-        if rig and rig.unit then DisableRig(rig) end
-        return
-    end
     if rig and rig.generation ~= generation then
         DisableRig(rig)
         -- Drop the old engine configuration; its forbidden regions stay hidden.
@@ -210,7 +305,9 @@ local function EnsureWorker()
     if worker then return worker end
     worker = CreateFrame("Frame")
     worker:Hide()
-    worker:SetScript("OnEvent", function()
+    -- PLAYER_REGEN_ENABLED, held only while a combat-deferred refresh waits.
+    worker:SetScript("OnEvent", function(self)
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
         if pendingRefresh then ns.DebuffColors_Refresh() end
     end)
     return worker
@@ -233,18 +330,19 @@ function ns.DebuffColors_Refresh()
     -- Clear active AND currently pooled rigs so a later plate reuse cannot bind
     -- a previous profile's spells or colors.
     for plate, rig in pairs(rigs) do
-        DisableRig(rig)
+        DropRig(rig)
         rigs[plate] = nil
     end
-    if config.enabled then
+    if config.enabled and config.any then
         local AK = EllesmereUI.AuraKit
         AK.styles[STYLE] = AK.styles[STYLE] or { noRegions = true, noTooltips = true }
         ns.DebuffColors_Attach, ns.DebuffColors_Detach = Attach, Detach
-        EnsureWorker():RegisterEvent("PLAYER_REGEN_ENABLED")
         for unit, plate in pairs(ns.plates) do Attach(plate, unit) end
     else
+        -- Nothing to color: no plate hooks. An enabled config stays as the
+        -- applied state Apply Coloring compares against.
         ns.DebuffColors_Attach, ns.DebuffColors_Detach = nil, nil
-        config = nil
+        if not config.enabled then config = nil end
         if worker then
             worker:UnregisterEvent("PLAYER_REGEN_ENABLED")
             worker:SetScript("OnUpdate", nil)
@@ -263,4 +361,11 @@ function ns.DebuffColors_RequestRefresh()
         ns.DebuffColors_Refresh()
     end)
     w:Show()
+end
+
+-- List edits wait for Apply Coloring (or the options window closing): true
+-- while the saved settings would build different plates than the live ones.
+function ns.DebuffColors_Pending()
+    if Value("debuffColorsEnabled") ~= true then return false end
+    return not config or ReadConfig().fingerprint ~= config.fingerprint
 end

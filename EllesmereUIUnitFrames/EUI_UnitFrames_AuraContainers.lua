@@ -1485,7 +1485,7 @@ local function ElementSize(unit, base, s)
         -- strips skip pixel snapping while the icon texture snaps, so a
         -- fractional far edge leaves the border off the icon at a
         -- non-pixel-perfect scale.
-        size = math.floor(size / m + 0.5 + 0.001) * m
+        size = PP.FromPixels(PP.ToPixels(size))
     end
     local cropped = Pick(isBuff, s.buffCropIcons, s.debuffCropIcons)
     local h = size

@@ -20,6 +20,7 @@ local HideBlizzardCDM, RestoreBlizzardBuffFrame = I.HideBlizzardCDM, I.RestoreBl
 local BuildAllCDMBars, UpdateCDMKeybinds = I.BuildAllCDMBars, I.UpdateCDMKeybinds
 local _CDMApplyVisibility, RequestUpdate = I._CDMApplyVisibility, I.RequestUpdate
 local SetInCombat = I.SetInCombat
+local OpenBlizzardCDMTab = I.OpenBlizzardCDMTab
 
 local _keybindDebounceTimer = nil   -- cancellable timer for debounced keybind updates
 
@@ -443,6 +444,24 @@ SLASH_ECME3 = "/ecdm"
 SlashCmdList.ECME = function(msg)
     if InCombatLockdown and InCombatLockdown() then return end
     EllesmereUI:ShowModule("EllesmereUICooldownManager")
+end
+
+-- /cd toggles Blizzard's Cooldown Manager settings: out of combat, a frame
+-- later (off the chat line, as the parent's commands run). WoW Forever's
+-- Gamepad interface style blocks opening a Blizzard panel from addon code.
+SLASH_EUIBLIZZCDM1 = "/cd"
+SlashCmdList.EUIBLIZZCDM = function()
+    C_Timer.After(0, function()
+        if InCombatLockdown() then
+            EllesmereUI.PrintError(EllesmereUI.L("Cannot open the Cooldown Manager during combat."))
+            return
+        end
+        if EllesmereUI.PadGamepadUI() then
+            EllesmereUI.PrintError(EllesmereUI.L("Cannot open the Cooldown Manager with the Gamepad interface style."))
+            return
+        end
+        OpenBlizzardCDMTab()
+    end)
 end
 
 

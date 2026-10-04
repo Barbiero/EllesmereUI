@@ -2,10 +2,11 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 --  EUI_UnitFrames_Init.lua
 --
---  InitializeFrames, a global that EnableBody (EUI_UnitFrames_Lifecycle.lua)
---  calls once: spawns the unit frames, takes over the Blizzard ones and builds
---  the visibility pass. Reads the main file and EUI_UnitFrames_Visibility.lua
---  through ns and ns._internals; db is set through I.dbSetters.
+--  InitializeFrames, published as I.InitializeFrames for EnableBody
+--  (EUI_UnitFrames_Lifecycle.lua), which calls it once: spawns the unit frames,
+--  takes over the Blizzard ones and builds the visibility pass. Reads the main
+--  file and EUI_UnitFrames_Visibility.lua through ns and ns._internals; db is
+--  set through I.dbSetters.
 -------------------------------------------------------------------------------
 local _, ns = ...
 
@@ -26,7 +27,7 @@ local UnitFrame_OnEnter, UnitFrame_OnLeave = I.UnitFrame_OnEnter, I.UnitFrame_On
 local db
 I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
 
-function InitializeFrames()
+local function InitializeFrames()
     -- Sync EUI global power colors into oUF at init
     EllesmereUI.ApplyColorsToOUF()
 
@@ -2178,3 +2179,5 @@ function InitializeFrames()
     -- frames are spawned and anchored.
     ReloadFrames()
 end
+
+I.InitializeFrames = InitializeFrames

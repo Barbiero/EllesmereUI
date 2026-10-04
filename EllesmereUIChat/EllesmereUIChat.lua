@@ -264,9 +264,9 @@ local function GetOutlineFlag()
     return ""
 end
 
--- Published for EllesmereUIChat_Bubbles.lua: the bubbles are chat output and have to follow
--- the Chat page's own font and outline pickers, not just the global "chat" module font. Going
--- straight to EUI.GetFontPath("chat") skips the cfg.font / cfg.outlineMode overrides above.
+-- Published for the tabs and the stock sidebar, which follow the Chat page's own font and
+-- outline pickers, not just the global "chat" module font. Going straight to
+-- EUI.GetFontPath("chat") skips the cfg.font / cfg.outlineMode overrides above.
 ECHAT.GetFont = GetFont
 ECHAT.GetOutlineFlag = GetOutlineFlag
 
@@ -3529,7 +3529,7 @@ local function ShowCopyPopup(text)
         popup:SetFrameLevel(dimmer:GetFrameLevel() + 10)
         popup:EnableMouse(true)
 
-        local bg = EUI.SolidTex(popup, "BACKGROUND", 0.06, 0.08, 0.10, 0.95)
+        local bg = EUI.SolidTex(popup, "BACKGROUND", 0.077, 0.068, 0.058, 0.95)
         bg:SetAllPoints()
         EUI.MakeBorder(popup, 1, 1, 1, 0.15, EUI.PanelPP)
 
@@ -3676,7 +3676,10 @@ local function ShowCopyPopup(text)
     copyDimmer:Show()
     C_Timer.After(0.05, function()
         popup._editBox:SetFocus()
+        -- Open at the newest lines: cursor to the end, then pin the scroll there
+        popup._editBox:SetCursorPosition(#text)
         popup._editBox:HighlightText()
+        popup._textBox:GetScrollBox():ScrollToEnd(true)
     end)
 end
 
@@ -3757,7 +3760,7 @@ local function ShowUrlPopup(url)
 
         local bg = urlPopup:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetColorTexture(0.06, 0.08, 0.10, 0.97)
+        bg:SetColorTexture(0.077, 0.068, 0.058, 0.97)
         if PP and PP.CreateBorder then
             PP.CreateBorder(urlPopup, 1, 1, 1, 0.15, 1, "OVERLAY", 7)
         end
@@ -3775,7 +3778,7 @@ local function ShowUrlPopup(url)
         eb:SetAutoFocus(false)
         eb:SetJustifyH("CENTER")
         local ebBg = eb:CreateTexture(nil, "BACKGROUND")
-        ebBg:SetColorTexture(0.10, 0.12, 0.16, 1)
+        ebBg:SetColorTexture(0.112, 0.105, 0.098, 1)
         ebBg:SetPoint("TOPLEFT", -6, 4); ebBg:SetPoint("BOTTOMRIGHT", 6, -4)
         if PP and PP.CreateBorder then
             PP.CreateBorder(eb, 1, 1, 1, 0.02, 1, "OVERLAY", 7)
