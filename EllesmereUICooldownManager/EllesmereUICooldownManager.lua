@@ -72,7 +72,7 @@ do
 
             local bg = popup:CreateTexture(nil, "BACKGROUND")
             bg:SetAllPoints()
-            bg:SetColorTexture(0.06, 0.08, 0.10, 1)
+            bg:SetColorTexture(0.077, 0.068, 0.058, 1)
             if EllesmereUI.MakeBorder and EllesmereUI.PanelPP then
                 EllesmereUI.MakeBorder(popup, 1, 1, 1, 0.15, EllesmereUI.PanelPP)
             end
@@ -104,7 +104,7 @@ do
             local btnBg = btn:CreateTexture(nil, "BORDER")
             btnBg:SetPoint("TOPLEFT", 1, -1)
             btnBg:SetPoint("BOTTOMRIGHT", -1, 1)
-            btnBg:SetColorTexture(0.06, 0.08, 0.10, 0.92)
+            btnBg:SetColorTexture(0.077, 0.068, 0.058, 0.92)
             local btnLbl = btn:CreateFontString(nil, "OVERLAY")
             btnLbl:SetFont(FONT, 12, EllesmereUI.GetFontOutlineFlag("cdm") or "")
             btnLbl:SetTextColor(EG.r, EG.g, EG.b, 0.9)

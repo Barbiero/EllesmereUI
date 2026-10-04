@@ -152,18 +152,11 @@ function ns._appendDisplayPresetKeys(t)
 end
 
 local defaults = {
-    -- EUI_DEBUFF_COLORS: optional player-debuff tinting (Colors page).
+    -- EUI_DEBUFF_COLORS: optional player-debuff tinting (Colors page). The
+    -- per-class lists ("debuffColors" .. class token) have no defaults: unset
+    -- is an empty list (EllesmereUINameplates_DebuffColors.lua).
     debuffColorsEnabled = false,
     debuffColorsPlayerOnly = true,
-    debuffColorSpell1 = "703",
-    debuffColorSpell2 = "1943",
-    debuffColorCustomSpell1 = 0,
-    debuffColorCustomSpell2 = 0,
-    debuffColor1 = { r = 1.00, g = 0.43, b = 0.04 },
-    debuffColor2 = { r = 1.00, g = 0.43, b = 0.04 },
-    debuffColorBothEnabled = true,
-    debuffColorPriority = 2,
-    debuffColorBoth = { r = 0.10, g = 0.88, b = 0.32 },
     -- Blizzard Style (Global Settings > Style): the stock nameplate's bar,
     -- background, selection and cast bar art on our plates with every feature
     -- intact. Default OFF; reload-gated.
@@ -208,12 +201,12 @@ local defaults = {
     -- "Mini Enemies" (non-elite trash) has no static default: unset views enemyInCombat, so it
     -- starts identical to "Enemies" (see GetReactionColor).
     miniColoringMPlusOnly = false,  -- on = Mini Enemies color only in 5-mans; off = everywhere
-    -- Full Coloring M+ Only (inline cog on Enemy Types): outside 5-mans, mob-type colors (Mini
+    -- Simple Coloring When Not In M+ (inline cog on Enemy Types): outside 5-mans, mob-type colors (Mini
     -- Enemies/Casters/Mini-Bosses/Bosses) collapse to owBasicColor; Neutral stays own color.
     owBasicColoring = false,
     owBasicColor = { r = 0.800, g = 0.137, b = 0.137 },
     darkenEnemiesOOC = true,
-    darkenOOCRecolor = false,  -- "Change Color Instead": recolor OOC enemies rather than dimming
+    darkenOOCRecolor = false,  -- Modify Out of Combat "Change Color": recolor OOC enemies rather than dimming
     darkenOOCColor   = { r = 0.5, g = 0.5, b = 0.5 },
     -- Threat Colors channel multi-check: which surfaces carry the threat color.
     -- Health Bar is the historical single channel (on by default, so existing profiles
@@ -244,6 +237,9 @@ local defaults = {
     threatPctSize = 10,
     threatPctXOffset = 0,
     threatPctYOffset = 0,
+    threatPctMode = "percent",  -- "gap": the target's plate shows the Threat Gap
+    threatGapAheadColor = { r = 0.30, g = 0.90, b = 0.30 },
+    threatGapBehindColor = { r = 0.35, g = 0.60, b = 1.00 },
     dpsHasAggro = { r = 1.00, g = 0.50, b = 0.00 },
     offTankAggro = { r = 0.188, g = 0.761, b = 0.812 },
     offTankAggroEnabled = true,
@@ -2554,7 +2550,7 @@ do
         end
         return nil
     end
-    -- A slot's Core Text Positions "Text Coloring" mode: "custom" (the slot colour),
+    -- A slot's Core Text Coloring mode: "custom" (the slot colour),
     -- "class" (Hostility / Class, painted per unit) or "level" (Level Difficulty, the
     -- unit's level difficulty colour; any text but Target of Target, which names
     -- another unit). An unset <slot>ColorMode is derived from keys read
@@ -4123,11 +4119,14 @@ end
 --  toggle, re-derived at login, by RefreshAllSettings and by RefreshThreatPct
 --  (every setter of a threatPct key calls it), so UpdateHealthColor pays one
 --  field read while it is off. The font string is made on first paint.
+--  ns._npTgapOn is the Threat Gap mode on top of it (NP_PaintThreatGap).
 -------------------------------------------------------------------------------
 ns._npTptOn = false
+ns._npTgapOn = false
 
 function ns.NP_RefreshThreatPctFlag()
     ns._npTptOn = EllesmereUI.IS_FOREVER == true and p ~= nil and p.threatPctEnabled == true
+    ns._npTgapOn = ns._npTptOn and p.threatPctMode == "gap"
 end
 
 function ns.EnsureThreatPctText(plate)
@@ -4168,20 +4167,126 @@ function ns.ApplyThreatPctPos(plate)
 end
 
 -- Percent and status are secret for nameplate units: the percent goes
--- straight to PaintThreatPct, never compared or stored.
-function ns.NP_UpdateThreatPct(plate, unit)
+-- straight to PaintThreatPct, never compared or stored. In Threat Gap mode
+-- the target's plate is painted once per frame by the gap flush (gapNow),
+-- the gap standing in for the percent while its values read plainly.
+function ns.NP_UpdateThreatPct(plate, unit, gapNow)
+    if ns._npTgapOn and plate._isTarget and not gapNow then
+        ns.NP_RequestThreatGap(plate)
+        return
+    end
     local show = false
     if ns._npTptOn then
         local isTanking, status, pct = UnitDetailedThreatSituation("player", unit)
         if type(pct) == "number" then
             ns.ApplyThreatPctPos(plate)
-            EllesmereUI.PaintThreatPct(plate.threatPctText, pct, status, isTanking, p.threatPctColorByThreat)
+            if not (ns._npTgapOn and plate._isTarget and ns.NP_PaintThreatGap(plate.threatPctText)) then
+                EllesmereUI.PaintThreatPct(plate.threatPctText, pct, status, isTanking, p.threatPctColorByThreat)
+            end
             show = true
         end
     end
     if show ~= (plate._tptShown or false) then
         plate._tptShown = show or nil
         plate.threatPctText:SetShown(show)
+    end
+end
+
+-------------------------------------------------------------------------------
+--  Threat Gap (WoW Forever): the target's plate shows the flat threat between
+--  you and the name you are measured against. Nameplate tokens read threat
+--  values as secrets, so this reads through "target". Holding aggro: against
+--  the next name on the table (group members and pets; your whole threat when
+--  you are alone on it). Not holding it: against the holder, read directly when
+--  they are in your group (the last holder's token is tried first, so a steady
+--  fight costs one query), else from your percent of their threat. The colour
+--  says who leads in raw threat. Returns false when a value reads secret, so
+--  the caller paints the percent instead. The scan covers the group's own
+--  tokens only, and the target plate's repaints run once per frame.
+-------------------------------------------------------------------------------
+do
+    local RAID, PARTY = {}, { "pet" }
+    for i = 1, 40 do RAID[#RAID + 1] = "raid" .. i; RAID[#RAID + 1] = "raidpet" .. i end
+    for i = 1, 4 do PARTY[#PARTY + 1] = "party" .. i; PARTY[#PARTY + 1] = "partypet" .. i end
+    local holderTok  -- the group token that last held aggro on the target
+    local flush, pending  -- the once-per-frame repaint (built on first use) and its plate
+
+    -- A frame's threat events collapse into one repaint after them: a hidden
+    -- frame shown by the request, its OnUpdate hiding it before the paint.
+    function ns.NP_RequestThreatGap(plate)
+        pending = plate
+        if not flush then
+            flush = CreateFrame("Frame")
+            flush:SetScript("OnUpdate", function(self)
+                self:Hide()
+                local pl = pending
+                pending = nil
+                if pl and pl.unit and pl._isTarget then ns.NP_UpdateThreatPct(pl, pl.unit, true) end
+            end)
+        end
+        flush:Show()
+    end
+
+    function ns.NP_PaintThreatGap(fs)
+        local isTanking, _, _, rawPct, raw = UnitDetailedThreatSituation("player", "target")
+        if issecretvalue(isTanking) or issecretvalue(rawPct) or issecretvalue(raw)
+           or type(raw) ~= "number" then
+            return false
+        end
+        local inRaid = IsInRaid()
+        local list = inRaid and RAID or PARTY
+        -- The group's own tokens: raidN + raidpetN, or pet + partyN + partypetN.
+        local n = GetNumGroupMembers()
+        local last = inRaid and 2 * n or 1 + 2 * (n > 0 and n - 1 or 0)
+        if last > #list then last = #list end
+        local other
+        if isTanking then
+            other = 0
+            for i = 1, last do
+                local u = list[i]
+                if UnitExists(u) then
+                    local me = UnitIsUnit(u, "player")
+                    if issecretvalue(me) then return false end
+                    if not me then
+                        local _, _, _, _, r = UnitDetailedThreatSituation(u, "target")
+                        if issecretvalue(r) then return false end
+                        if r and r > other then other = r end
+                    end
+                end
+            end
+        else
+            if holderTok then
+                local t, _, _, _, r = UnitDetailedThreatSituation(holderTok, "target")
+                if issecretvalue(t) or issecretvalue(r) then return false end
+                if t then other = r end
+            end
+            if not other then
+                holderTok = nil
+                for i = 1, last do
+                    local u = list[i]
+                    if UnitExists(u) then
+                        local t, _, _, _, r = UnitDetailedThreatSituation(u, "target")
+                        if issecretvalue(t) or issecretvalue(r) then return false end
+                        if t then
+                            holderTok, other = u, r
+                            break
+                        end
+                    end
+                end
+            end
+            if not other then
+                if type(rawPct) ~= "number" or rawPct <= 0 then return false end
+                other = raw * 100 / rawPct
+            end
+        end
+        local gap = raw - other
+        local ahead = gap >= 0
+        if not ahead then gap = -gap end
+        local db = p or defaults
+        EllesmereUI.PaintThreatGap(fs, ns.AbbreviateNumbers(math.floor(gap + 0.5)), ahead,
+            db.threatPctColorByThreat, db.threatGapAheadColor or defaults.threatGapAheadColor,
+            db.threatGapBehindColor or defaults.threatGapBehindColor)
+        return true
     end
 end
 
@@ -6530,9 +6635,9 @@ local function DarkenColor(r, g, b, factor)
     factor = factor or 0.60
     return r * factor, g * factor, b * factor
 end
--- Out-of-combat darkening, gated by "Darken Enemies Out of Combat". On (default): enemies
+-- Out-of-combat darkening, gated by "Modify Out of Combat". On (default): enemies
 -- confirmed in combat (clean boolean) keep full colour, out-of-combat/secret states darken --
--- or, with "Change Color Instead", take the flat Out of Combat Color rather than dimming.
+-- or, with "Change Color", take the flat Out of Combat Color rather than dimming.
 local function MaybeDarken(r, g, b, inCombat)
     local on = (p and p.darkenEnemiesOOC)
     if on == nil then on = defaults.darkenEnemiesOOC end
@@ -6810,7 +6915,7 @@ local function GetEnemyNameReactionColor(unit)
     return c.r, c.g, c.b
 end
 
--- Core Text Positions "Text Coloring" (ns.NP_SlotColorMode, per slot): a slot in
+-- Core Text Coloring (ns.NP_SlotColorMode, per slot): a slot in
 -- Hostility / Class ("class") or Level Difficulty ("level") mode has whatever it shows
 -- painted per unit from UpdateHealthColor; "custom" keeps the static slot colour.
 -- ns._npSlotClassOn is materialized at login and by RefreshAllSettings (also the Spec
@@ -7317,7 +7422,7 @@ local function GetReactionColor(unit)
     -- their own priority steps (7, 8, 10b).
     local inCombat = UnitAffectingCombat(unit)
     local classification = UnitClassification(unit)
-    -- Full Coloring M+ Only (inline cog on Enemy Types): outside 5-man dungeons, collapse the
+    -- Simple Coloring When Not In M+ (inline cog on Enemy Types): outside 5-man dungeons, collapse the
     -- mob-type colors (Mini Enemies, Spell Casters, Mini-Bosses, Bosses) into flat owBasicColor
     -- at the enemy fallback (step 11). Neutral unaffected (already returned at step 5 outside
     -- dungeons). Same dungeon gate as Mini Coloring M+ Only (ns._inDungeon).
@@ -7509,7 +7614,7 @@ local function GetReactionColor(unit)
     if isNeutral then
         return ResolveNeutralColor(unit)
     end
-    -- 11. Fallback: enemy in/out of combat. With Full Coloring M+ Only active, every mob-type
+    -- 11. Fallback: enemy in/out of combat. With Simple Coloring When Not In M+ active, every mob-type
     -- special above was suppressed, so all hostile mobs share the flat "All Enemies" color.
     local eic = _C(owBasic and "owBasicColor" or "enemyInCombat")
     return MaybeDarken(eic.r, eic.g, eic.b, inCombat)
@@ -9739,12 +9844,15 @@ end
 function NameplateFrame:ApplyTarget()
     if not self.unit then return end
     local isTarget = UnitIsUnit(self.unit, "target")
+    local flip = (self._isTarget == true) ~= (isTarget == true)
     -- The hash line is painted by the health pass from this cached flag, so a
     -- flip queues one coalesced repaint (only while the line is enabled).
-    if p and p.hashLineEnabled and (self._isTarget == true) ~= (isTarget == true) then
+    if flip and p and p.hashLineEnabled then
         self:MarkHealthDirty()
     end
     self._isTarget = isTarget  -- cached for hot-path hash line check
+    -- The Threat Gap shows on the target's plate only: a flip repaints its text.
+    if flip and ns._npTgapOn then ns.NP_UpdateThreatPct(self, self.unit) end
     -- Cache ownership lives here so EVERY painter keeps it coherent:
     -- SetUnit's deferred setup (pending-watcher promotion), the UpdateHealthValues
     -- token swap and PLAYER_TARGET_CHANGED all funnel through this method. Gaining

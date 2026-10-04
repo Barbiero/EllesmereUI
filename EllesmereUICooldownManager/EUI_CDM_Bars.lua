@@ -1657,4 +1657,5 @@ I.ApplyCDMTooltipState, I.BuildCDMBar = ApplyCDMTooltipState, BuildCDMBar
 I.ComputeTopRowStride, I.GetStableCDMBarSize = ComputeTopRowStride, GetStableCDMBarSize
 I.LayoutCDMBar, I.ReserveStride = LayoutCDMBar, ReserveStride
 I.SaveCDMBarPosition = SaveCDMBarPosition
+I.OpenBlizzardCDMTab = OpenBlizzardCDMTab
 I.broken = false

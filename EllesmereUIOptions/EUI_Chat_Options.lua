@@ -1560,7 +1560,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         -- Moved to Blizz UI Enhanced; this page only points there.
         if isBubbles then
-            y = EllesmereUI.BuildLinkRow(parent, y, "Chat Bubbles moved to Blizz UI Enhanced",
+            y = EllesmereUI.BuildLinkRow(parent, y, "Chat Bubbles moved to Blizzard Skins+",
                 "EllesmereUIBlizzardSkin", "Chat Bubbles", "DISPLAY")
         end
 
