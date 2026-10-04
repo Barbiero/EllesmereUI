@@ -67,18 +67,18 @@ local function EnsureGhostBars()
 end
 ns.EnsureGhostBars = EnsureGhostBars
 
--- Exports for extracted files (EllesmereUICdmHooks.lua, EllesmereUICdmSpellPicker.lua)
+-- Exports for extracted files (EllesmereUICdmHooks.lua and EUI_CDM_Hook*.lua, EllesmereUICdmSpellPicker.lua)
 ns.MAIN_BAR_KEYS = MAIN_BAR_KEYS
 ns.GetCDMFont = GetCDMFont
 ns.ResolveInfoSpellID = ResolveInfoSpellID
 ns.ResolveChildSpellID = ResolveChildSpellID
 ns.ComputeTopRowStride = ComputeTopRowStride
--- Side-effect caches are now owned by EllesmereUICdmHooks.lua. The hooks file writes to ns._tick*
--- tables directly; these locals are populated from ns after the hooks file loads (in CDMFinishSetup). The ns._ecmeFC external frame cache is still owned by this file.
+-- Side-effect caches are now owned by EUI_CDM_HookIconStyle.lua. The hook files write to ns._tick*
+-- tables directly; these locals are populated from ns after the hook files load (in CDMFinishSetup). The ns._ecmeFC external frame cache is still owned by this file.
 ns._ecmeFC = _ecmeFC
 ns.FC = FC
 
--- Hook-based CDM Backend loaded from EllesmereUICdmHooks.lua
+-- Hook-based CDM Backend loaded from EllesmereUICdmHooks.lua and the EUI_CDM_Hook*.lua files
 local BuildCustomBarSpellSet -- forward declare (defined below)
 
 -------------------------------------------------------------------------------
@@ -106,7 +106,7 @@ ns.BuildCustomBarSpellSet = BuildCustomBarSpellSet
 
 -- (SnapshotBlizzardCDM / UpdateTrackedBarIcons removed -- replaced by hook-based CollectAndReanchor)
 
--- UpdateAllCDMBars: REMOVED. All recurring work is event-driven via hooks in EllesmereUICdmHooks.lua
+-- UpdateAllCDMBars: REMOVED. All recurring work is event-driven via hooks in EUI_CDM_HookViewers.lua
 -- -- CollectAndReanchor runs only when Blizzard fires OnCooldownIDSet, OnActiveStateChanged, Layout, or pool events. The stub exists only so any stale references don't error.
 local function UpdateAllCDMBars(dt) end
 
@@ -625,7 +625,7 @@ local function _ResolveSlotBinding(slot, key, tier)
         end
         -- For everything else `id` from GetActionInfo is NOT a reliable
         -- identifier -- resolve the real macro index via its name instead
-        -- (same workaround EllesmereUICdmHooks.lua's SlotSpellID already uses).
+        -- (same workaround EUI_CDM_HookPressMirror.lua's SlotSpellID already uses).
         local macroName = GetActionText(slot)
         local macroIndex = macroName and GetMacroIndexByName(macroName)
         if macroIndex and macroIndex > 0 then

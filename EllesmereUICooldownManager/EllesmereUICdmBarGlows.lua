@@ -322,7 +322,7 @@ local function SetupOverlays()
     end
 
     -- Whether the buff-tick's aura pool-walk should bother reading applications
-    -- at all (EllesmereUICdmHooks.lua): the set of spellIDs stack-gated
+    -- at all (EUI_CDM_HookViewers.lua): the set of spellIDs stack-gated
     -- entries name, nil when there are none. Only frames resolving to one of
     -- these ids pay the applications read; no gated entry = no reads at all.
     local stackSids

@@ -189,7 +189,7 @@ local _buffAliasSeen = {}
 -- Learns every pairwise edge among {displaySID} union linkedList that this session
 -- hasn't already recorded. Ids are gated for secrecy/plausibility here so callers never
 -- need to; the session-cache early-out (mirrors _learnVariantBase in
--- EllesmereUICdmHooks.lua) keeps repeat observations of an already-known pairing from
+-- EUI_CDM_HookResolve.lua) keeps repeat observations of an already-known pairing from
 -- touching the profile table.
 function ns.LearnBuffVariantAlias(displaySID, linkedList)
     if type(linkedList) ~= "table" or #linkedList == 0 then return end
@@ -1896,7 +1896,7 @@ function ns.AddHostedBuffByCdID(barKey, cdID, sid)
     if not sd then return false end
     DropTrinketSidClaims(cdID, sid)
     -- Empty-table sentinel: ResolveSpellSettings' hostedFrame gate
-    -- (EllesmereUICdmHooks.lua) short-circuits on this table being non-nil to
+    -- (EUI_CDM_HookResolve.lua) short-circuits on this table being non-nil to
     -- skip pricier frame-flag checks. A cd-claimed hosted buff resolves its
     -- own "c"..cooldownID key independently -- only the table's existence matters.
     sd.hostedBuffSpellIDs = sd.hostedBuffSpellIDs or {}
