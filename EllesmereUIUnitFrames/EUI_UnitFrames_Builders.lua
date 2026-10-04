@@ -1,3 +1,31 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Builders.lua
+--
+--  The unified frame border with its hover handlers, the aura crop helpers
+--  and the four style functions that build a spawned unit frame, published
+--  as I.Style*Frame (EUI_UnitFrames_Init.lua). Reads the main file through
+--  ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local math_floor = math.floor
+local PP = EllesmereUI.PP
+local GetMiniDonorSettings = ns.GetMiniDonorSettings
+
+local I = ns._internals
+local GetSettingsForUnit, UnitToSettingsKey, SetFSFont = I.GetSettingsForUnit, I.UnitToSettingsKey, I.SetFSFont
+local ApplyDarkTheme, ApplyClassColor, SpecHasClassPower = I.ApplyDarkTheme, I.ApplyClassColor, I.SpecHasClassPower
+local ApplyHealthBarTexture, ApplyHealthBarAlpha = I.ApplyHealthBarTexture, I.ApplyHealthBarAlpha
+local CreateHealthBar, CreateAbsorbBar, CreatePowerBar, CreatePortrait =
+    I.CreateHealthBar, I.CreateAbsorbBar, I.CreatePowerBar, I.CreatePortrait
+local CreateCastBar, SetupShowOnCastBar, CreateBottomTextBar =
+    I.CreateCastBar, I.SetupShowOnCastBar, I.CreateBottomTextBar
+local ReparentBarsToClip, UpdateBordersForScale = I.ReparentBarsToClip, I.UpdateBordersForScale
+local SlotWidthMul, EstimateUFTextWidth = I.SlotWidthMul, I.EstimateUFTextWidth
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Boss frames have an independent Hover / Target border recolor (mirrors Raid Frames
 -- "Hover Borders"); both default OFF. Priority: hover (moused over) > target (current
 -- target) > the frame's normal border color. Recolors the existing unified border in
@@ -1253,4 +1281,5 @@ end
 -- directly, and the engine's portrait painter always routes through the shared
 -- gated PortraitOverride.)
 
-
+I.StyleFullFrame, I.StyleFocusFrame = StyleFullFrame, StyleFocusFrame
+I.StyleSimpleFrame, I.StyleBossFrame = StyleSimpleFrame, StyleBossFrame

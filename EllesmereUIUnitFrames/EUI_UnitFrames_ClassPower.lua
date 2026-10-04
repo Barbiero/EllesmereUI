@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_ClassPower.lua
+--
+--  The custom class power display on the player frame, its two load-time
+--  driver frames and tickers, and ApplyEnemyColors, published through I
+--  (EUI_UnitFrames_Init.lua, EUI_UnitFrames_Reload.lua). Reads the main
+--  file through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local math_floor = math.floor
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames = I.frames
+local ClassPowerEntry, DruidNeedsCatForm, InCatForm = I.ClassPowerEntry, I.DruidNeedsCatForm, I.InCatForm
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Fixed child-born shells for the class-power event driver and castbar watcher. The
 -- class-power bar is destroyed/rebuilt on spec switches through the profile system,
 -- whose dispatch runs under the PARENT addon's execution context -- and the engine
@@ -612,3 +633,5 @@ local function ApplyEnemyColors()
 end
 ns.ApplyEnemyColors = ApplyEnemyColors
 
+I.CreateCustomClassPower, I.DestroyCustomClassPower = CreateCustomClassPower, DestroyCustomClassPower
+I.ApplyEnemyColors = ApplyEnemyColors
