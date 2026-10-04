@@ -6,7 +6,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 
--- Upvalue aliases (populated by EllesmereUICooldownManager.lua)
+-- Upvalue aliases (populated by EllesmereUICooldownManager.lua and the EUI_CDM_*.lua files)
 local ECME                   = ns.ECME
 local barDataByKey           = ns.barDataByKey
 local cdmBarFrames           = ns.cdmBarFrames
@@ -563,7 +563,7 @@ function ns.EnumerateCDMSettingsCatalog(wantSet)
     local okP, provider = pcall(settings.GetDataProvider, settings)
     if not okP or type(provider) ~= "table" then return nil end
     -- Read the already-built display table, never the getters that would
-    -- build it (see ns.CDMGetProviderDisplayData, EllesmereUICooldownManager.lua).
+    -- build it (see ns.CDMGetProviderDisplayData, EUI_CDM_Reconcile.lua).
     local ordered, infoByID = ns.CDMGetProviderDisplayData(provider)
     if not ordered then return nil end
     local gci = C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo

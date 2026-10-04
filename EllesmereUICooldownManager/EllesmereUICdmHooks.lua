@@ -5396,7 +5396,7 @@ local _pcActive = {}
 --  drop when the last opted icon hides.
 --
 --  Registrations are per SPELL and shared with Blizzard's viewer and the
---  override arming in the main file: a release never disables an id either of
+--  override arming in EUI_CDM_Rotation.lua: a release never disables an id either of
 --  them still holds, and CustomSpellRangeHolds is the same rule from their side.
 -------------------------------------------------------------------------------
 do
@@ -10766,7 +10766,7 @@ function ns.SetupViewerHooks()
             -- glow/desat is a missing edge to register, never to sweep for.
             local _btNow = GetTime()
             -- Park integrity lives on event edges now (ns._parkEdges in the
-            -- main file + the QueueRepark hooksecurefuncs) -- no patrol here.
+            -- EUI_CDM_Blizzard.lua + the QueueRepark hooksecurefuncs) -- no patrol here.
             if not ns._btDirty then
                 -- Preset cooldowns drain independently on clean fires, capped at 1 Hz:
                 -- the dirty flag re-arms ~22x/sec from the racial/ trinket catch-alls,

@@ -325,7 +325,7 @@ function ns.ReconcileAssignedSpellDrops(barKey)
     if ns.IsBarBuffFamily and ns.IsBarBuffFamily(bd or barKey) then
         -- Buff-family drop needs the persisted variant-alias ledger so a
         -- dual-tracked spell's currently-absent half never sinks its present
-        -- half; ns.ReconcileBuffFamilyDrops (EllesmereUICooldownManager.lua)
+        -- half; ns.ReconcileBuffFamilyDrops (further down in this file)
         -- is the single implementation, gated on that ledger. Fails open to
         -- the unmodified sd if the ledger-gated pass isn't available.
         return (ns.ReconcileBuffFamilyDrops and ns.ReconcileBuffFamilyDrops(barKey)) or sd
