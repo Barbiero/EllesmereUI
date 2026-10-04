@@ -1,3 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Reconcile.lua
+--
+--  First login capture, reseeding, drops, the hidden-channel reader and buff
+--  families.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local ALL_RACIAL_SPELLS, ECME, _myRacialsSet = I.ALL_RACIAL_SPELLS, I.ECME, I._myRacialsSet
+local GHOST_CD_BAR_KEY, MAIN_BAR_KEYS = I.GHOST_CD_BAR_KEY, I.MAIN_BAR_KEYS
+local SaveCurrentSpecProfile, barDataByKey = I.SaveCurrentSpecProfile, I.barDataByKey
+local CaptureCDMPositions = I.CaptureCDMPositions
+
 -------------------------------------------------------------------------------
 --  CDM Bar: First Login Capture
 -------------------------------------------------------------------------------
@@ -1164,3 +1181,4 @@ function ns.RepopulateFromBlizzard()
     end)
 end
 
+I.CDMFirstLoginCapture = CDMFirstLoginCapture

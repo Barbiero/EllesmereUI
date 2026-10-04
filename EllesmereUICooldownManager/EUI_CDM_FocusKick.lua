@@ -1,3 +1,19 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_FocusKick.lua
+--
+--  The Focus Kick bar and the focus reminders.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local GetTime = GetTime
+
+local ECME, _ecmeFC, barDataByKey = I.ECME, I._ecmeFC, I.barDataByKey
+local cdmBarFrames, cdmBarIcons = I.cdmBarFrames, I.cdmBarIcons
+
 -- FocusKick bar: a special CD bar pinned to the focus target's nameplate.
 -- Internally it is just another custom cooldowns bar so every existing code
 -- path treats it identically. Three behavior overrides handled elsewhere:
@@ -903,3 +919,6 @@ function ns.RefreshFocusKickProxies()
 end
 
 
+I.EnsureFocusKickBar, I.FOCUSKICK_BAR_KEY = EnsureFocusKickBar, FOCUSKICK_BAR_KEY
+I.FOCUSKICK_SOUND_NAMES, I.FOCUSKICK_SOUND_ORDER = FOCUSKICK_SOUND_NAMES, FOCUSKICK_SOUND_ORDER
+I.FOCUSKICK_SOUND_PATHS = FOCUSKICK_SOUND_PATHS

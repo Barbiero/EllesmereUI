@@ -1,3 +1,27 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Icons.lua
+--
+--  Icon shapes, the fake-active mirror, threshold and charge text and
+--  RefreshCDMIconAppearance.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local CDM_SHAPES, FC, _ecmeFC, _getFD = I.CDM_SHAPES, I.FC, I._ecmeFC, I._getFD
+local IconShownAlpha, ShowProcGlow = I.IconShownAlpha, I.ShowProcGlow
+local StopNativeGlow, barDataByKey = I.StopNativeGlow, I.barDataByKey
+local cdmBarIcons, GetCDMFont, SetBlizzCDMFont = I.cdmBarIcons, I.GetCDMFont, I.SetBlizzCDMFont
+
+local ApplyShapeToCDMIcon
+
+local _inCombat = false
+I.setters._inCombat[#I.setters._inCombat + 1] = function(v) _inCombat = v end
+local _playerClass
+I.setters._playerClass[#I.setters._playerClass + 1] = function(v) _playerClass = v end
+
 -------------------------------------------------------------------------------
 --  Apply custom shape to a CDM icon
 -------------------------------------------------------------------------------
@@ -1119,3 +1143,4 @@ local function RefreshCDMIconAppearance(barKey)
 end
 ns.RefreshCDMIconAppearance = RefreshCDMIconAppearance
 
+I.RefreshCDMIconAppearance = RefreshCDMIconAppearance

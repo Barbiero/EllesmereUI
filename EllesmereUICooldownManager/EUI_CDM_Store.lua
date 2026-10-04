@@ -1,3 +1,17 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Store.lua
+--
+--  The spell assignment store (EllesmereUIDB.spellAssignments), the per-spell
+--  stores, markers and the cooldown claim set.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local ECME = I.ECME
+
 -------------------------------------------------------------------------------
 --  Dedicated spell assignment store helpers
 --  Lives at EllesmereUIDB.spellAssignments; spell/bar data is per-profile at
@@ -1068,3 +1082,4 @@ function ns.RescanActiveGlowFlag()
     end)
 end
 
+I.SpellStore = SpellStore

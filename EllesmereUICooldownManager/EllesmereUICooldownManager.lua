@@ -297,14 +297,10 @@ do
     -- Vertical texcoord trim per side, added on top of the bar's zoom.
     function ns.CdmCropTrim(bd) return CropPercent(bd) / 100 end
 end
--- Forward declarations for glow helpers (defined later, used by consolidated helpers)
-local StartNativeGlow, StopNativeGlow
 
 -- Keybind cache: built once out-of-combat, looked up per tick
 local _cdmKeybindCache       = {}   -- [spellID] -> formatted key string
 local _cdmKeybindRank        = {}   -- [key] -> priority rank of the stored bind (lower wins)
-local _keybindCacheReady     = false  -- true after first successful build
-local _keybindDebounceTimer  = nil   -- cancellable timer for debounced keybind updates
 local _bonusScanSeen         = {}   -- [bonus bar offset] -> true once scanned this session
 
 -- Combat state tracked via events (InCombatLockdown() can lag behind PLAYER_REGEN_DISABLED)
@@ -339,10 +335,6 @@ local function IsPlaceholderRenderHidden(icon, barData)
         and icon._isPlaceholderFrame and true or false
 end
 ns.IsPlaceholderRenderHidden = IsPlaceholderRenderHidden
-
--- Vehicle/petbattle state proxy: created once in CDMFinishSetup; drives _CDMApplyVisibility so CDM bars hide while in vehicle UI.
-local _cdmVehicleProxy = nil
-local _cdmInVehicle    = false
 
 -- Multi-charge spell tracking
 local _multiChargeSpells = {}
@@ -681,10 +673,6 @@ if EllesmereUI.IS_FOREVER then
     end
 end
 
-
-local BuildAllCDMBars
-local RegisterCDMUnlockElements
-
 -------------------------------------------------------------------------------
 --  Defaults
 -------------------------------------------------------------------------------
@@ -810,3 +798,32 @@ local DEFAULTS = {
     },
 }
 
+-- Main-chunk locals the EUI_CDM_*.lua files re-import by name.
+-- setters: a chunk local that changes at run time and is read in more than one
+-- file is one copy per file; each file adds a setter for its copy and the
+-- writer calls I.Set, so every copy follows.
+ns._internals = {
+    _bonusScanSeen = _bonusScanSeen, _cdmKeybindCache = _cdmKeybindCache,
+    _cdmKeybindRank = _cdmKeybindRank, _cdmMouseState = _cdmMouseState,
+    _cdmViewerNames = _cdmViewerNames, _ecmeFC = _ecmeFC, _getFD = _getFD,
+    _maxChargeCount = _maxChargeCount, _multiChargeSpells = _multiChargeSpells,
+    _myRacials = _myRacials, _myRacialsSet = _myRacialsSet,
+    ALL_RACIAL_SPELLS = ALL_RACIAL_SPELLS, CDM_SHAPES = CDM_SHAPES, DEFAULTS = DEFAULTS,
+    ECME = ECME, EffectiveBarAlpha = EffectiveBarAlpha, FC = FC,
+    IsPlaceholderRenderHidden = IsPlaceholderRenderHidden, RACE_RACIALS = RACE_RACIALS,
+    ResolveActiveRacial = ResolveActiveRacial, SnapForScale = SnapForScale,
+    setters = {
+        _inCombat = { function(v) _inCombat = v end },
+        _cdmInVehicle = {}, _playerClass = {}, _cachedSpecKey = {},
+        _CDMApplyVisibility = {},
+    },
+    Set = function(name, v)
+        local list = ns._internals.setters[name]
+        for i = 1, #list do list[i](v) end
+    end,
+}
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._internals, { __index = function(_, k)
+    error("ns._internals has no entry " .. tostring(k), 2)
+end })

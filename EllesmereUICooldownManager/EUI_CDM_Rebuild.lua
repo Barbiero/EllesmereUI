@@ -1,3 +1,45 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Rebuild.lua
+--
+--  Ghost bars, bar visibility, the keybind cache, BuildAllCDMBars and
+--  FullCDMRebuild.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local ALL_RACIAL_SPELLS, ECME = I.ALL_RACIAL_SPELLS, I.ECME
+local EffectiveBarAlpha, FC = I.EffectiveBarAlpha, I.FC
+local IsPlaceholderRenderHidden = I.IsPlaceholderRenderHidden
+local ResolveActiveRacial, _cdmKeybindCache = I.ResolveActiveRacial, I._cdmKeybindCache
+local _cdmKeybindRank, _cdmViewerNames = I._cdmKeybindRank, I._cdmViewerNames
+local _ecmeFC, _getFD, GHOST_CD_BAR_KEY = I._ecmeFC, I._getFD, I.GHOST_CD_BAR_KEY
+local MAIN_BAR_KEYS, ResolveChildSpellID = I.MAIN_BAR_KEYS, I.ResolveChildSpellID
+local ResolveInfoSpellID, barDataByKey = I.ResolveInfoSpellID, I.barDataByKey
+local cdmBarFrames, cdmBarIcons = I.cdmBarFrames, I.cdmBarIcons
+local BLIZZ_CDM_FRAMES, CDM_BAR_CATEGORIES = I.BLIZZ_CDM_FRAMES, I.CDM_BAR_CATEGORIES
+local EnforceCooldownViewerEditModeSettings = I.EnforceCooldownViewerEditModeSettings
+local GetCDMFont, HideBlizzardCDM = I.GetCDMFont, I.HideBlizzardCDM
+local MAX_CUSTOM_BARS, RestoreBlizzardBuffFrame = I.MAX_CUSTOM_BARS, I.RestoreBlizzardBuffFrame
+local RestoreBlizzardCDM = I.RestoreBlizzardCDM
+local ApplyBarPositionCentered = I.ApplyBarPositionCentered
+local ApplyCDMTooltipState, BuildCDMBar = I.ApplyCDMTooltipState, I.BuildCDMBar
+local ComputeTopRowStride, LayoutCDMBar = I.ComputeTopRowStride, I.LayoutCDMBar
+local SaveCDMBarPosition = I.SaveCDMBarPosition
+local RefreshCDMIconAppearance = I.RefreshCDMIconAppearance
+local EnsureFocusKickBar, FOCUSKICK_BAR_KEY = I.EnsureFocusKickBar, I.FOCUSKICK_BAR_KEY
+
+local BuildAllCDMBars
+local _CDMApplyVisibility
+local _keybindCacheReady = false  -- true after first successful build
+
+local _cdmInVehicle = false
+I.setters._cdmInVehicle[#I.setters._cdmInVehicle + 1] = function(v) _cdmInVehicle = v end
+local _inCombat = false
+I.setters._inCombat[#I.setters._inCombat + 1] = function(v) _inCombat = v end
+
 -- Ghost bars: ensure both buff and CD ghost bars exist in the bars array. Called from BuildAllCDMBars before iterating bars.
 ns.GHOST_CD_BAR_KEY = GHOST_CD_BAR_KEY
 local function EnsureGhostBars()
@@ -1189,3 +1231,6 @@ end
 
 -- Interactive Preview Helpers loaded from EllesmereUICdmSpellPicker.lua
 
+I._CDMApplyVisibility, I.BuildAllCDMBars = _CDMApplyVisibility, BuildAllCDMBars
+I.UpdateCDMKeybinds = UpdateCDMKeybinds
+I.Set("_CDMApplyVisibility", _CDMApplyVisibility)

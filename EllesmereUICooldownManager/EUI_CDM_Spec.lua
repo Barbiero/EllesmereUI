@@ -1,3 +1,19 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Spec.lua
+--
+--  Spec key cache, spell id resolvers, the available spell pool, spec change
+--  handling and the bar roots.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local GetTime = GetTime
+
+local ECME, SpellStore = I.ECME, I.SpellStore
+
 -------------------------------------------------------------------------------
 --  Spec helpers
 --
@@ -9,6 +25,7 @@
 --  Returns nil when the spec API isn't ready (very early login); consumers MUST bail on nil rather than fall back to a stored value, so CDM never builds with a wrong/guessed spec.
 -------------------------------------------------------------------------------
 local _cachedSpecKey = nil
+I.setters._cachedSpecKey[#I.setters._cachedSpecKey + 1] = function(v) _cachedSpecKey = v end
 
 function ns.GetActiveSpecKey()
     if _cachedSpecKey then return _cachedSpecKey end
@@ -16,13 +33,13 @@ function ns.GetActiveSpecKey()
     if not specIndex or specIndex == 0 then return nil end
     local specID = select(1, C_SpecializationInfo.GetSpecializationInfo(specIndex))
     if not specID or specID == 0 then return nil end
-    _cachedSpecKey = tostring(specID)
+    I.Set("_cachedSpecKey", tostring(specID))
     return _cachedSpecKey
 end
 
 -- Early-login wakeFrame use only (before CDM setup completes); never called during spec change processing.
 function ns.InvalidateSpecKey()
-    _cachedSpecKey = nil
+    I.Set("_cachedSpecKey", nil)
     ns._cachedSpecProfiles = nil
     ns._cdmStoreMemo = nil
 end
@@ -66,7 +83,7 @@ if EllesmereUI.IS_FOREVER then
         if _cachedSpecKey and ns._fvSpecKeyRoot == ns.GetActiveSpecProfiles() then return _cachedSpecKey end
         local key = ComputeLiveSpecKey()
         if not key then return nil end
-        _cachedSpecKey = key
+        I.Set("_cachedSpecKey", key)
         ns._fvSpecKeyRoot = ns.GetActiveSpecProfiles()
         return key
     end
@@ -316,7 +333,7 @@ local function ProcessSpecChange(newSpecKey)
     ns._spellOrderDirty = true  -- force spell order cache rebuild
 
     -- Atomic swap: write the new key BEFORE rebuilding so every GetBarSpellData call during the rebuild reads the correct spec.
-    _cachedSpecKey = newSpecKey
+    I.Set("_cachedSpecKey", newSpecKey)
     ns._cachedSpecProfiles = nil
     ns._cdmStoreMemo = nil
 
@@ -369,3 +386,8 @@ ns.CDM_BAR_ROOTS = {
     CDM_UTILITY  = "UtilityCooldownViewer",
 }
 
+I.BuildAvailableSpellPool, I.CheckSpecChange = BuildAvailableSpellPool, CheckSpecChange
+I.ComputeLiveSpecKey, I.EnsureMappings = ComputeLiveSpecKey, EnsureMappings
+I.GetStore, I.GHOST_CD_BAR_KEY, I.MAIN_BAR_KEYS = GetStore, GHOST_CD_BAR_KEY, MAIN_BAR_KEYS
+I.ResolveChildSpellID, I.ResolveInfoSpellID = ResolveChildSpellID, ResolveInfoSpellID
+I.SaveCurrentSpecProfile = SaveCurrentSpecProfile

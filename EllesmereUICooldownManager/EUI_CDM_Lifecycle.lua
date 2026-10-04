@@ -1,3 +1,44 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Lifecycle.lua
+--
+--  Unlock Mode registration and the addon object: OnInitialize, OnEnable,
+--  first login and CDMFinishSetup.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local GetTime = GetTime
+
+local DEFAULTS, ECME, RACE_RACIALS = I.DEFAULTS, I.ECME, I.RACE_RACIALS
+local ResolveActiveRacial, _myRacials = I.ResolveActiveRacial, I._myRacials
+local _myRacialsSet, ComputeLiveSpecKey = I._myRacialsSet, I.ComputeLiveSpecKey
+local EnsureMappings, GetStore = I.EnsureMappings, I.GetStore
+local SaveCurrentSpecProfile = I.SaveCurrentSpecProfile
+local InstallProcGlowHooks, barDataByKey = I.InstallProcGlowHooks, I.barDataByKey
+local cdmBarFrames, cdmBarIcons = I.cdmBarFrames, I.cdmBarIcons
+local ApplyBarPositionCentered = I.ApplyBarPositionCentered
+local ComputeTopRowStride, GetStableCDMBarSize = I.ComputeTopRowStride, I.GetStableCDMBarSize
+local LayoutCDMBar, ReserveStride = I.LayoutCDMBar, I.ReserveStride
+local FOCUSKICK_BAR_KEY, FOCUSKICK_SOUND_NAMES = I.FOCUSKICK_BAR_KEY, I.FOCUSKICK_SOUND_NAMES
+local FOCUSKICK_SOUND_ORDER = I.FOCUSKICK_SOUND_ORDER
+local FOCUSKICK_SOUND_PATHS, BuildAllCDMBars = I.FOCUSKICK_SOUND_PATHS, I.BuildAllCDMBars
+local UpdateCDMKeybinds, _CDMApplyVisibility = I.UpdateCDMKeybinds, I._CDMApplyVisibility
+local CDMFirstLoginCapture = I.CDMFirstLoginCapture
+
+local RegisterCDMUnlockElements
+-- Vehicle/petbattle state proxy: created once in CDMFinishSetup; drives _CDMApplyVisibility so CDM bars hide while in vehicle UI.
+local _cdmVehicleProxy = nil
+-- Cached player info (set once at PLAYER_LOGIN)
+local _playerRace
+
+local _cachedSpecKey
+I.setters._cachedSpecKey[#I.setters._cachedSpecKey + 1] = function(v) _cachedSpecKey = v end
+local _playerClass
+I.setters._playerClass[#I.setters._playerClass + 1] = function(v) _playerClass = v end
+
 -------------------------------------------------------------------------------
 --  Register CDM bars with unlock mode
 -------------------------------------------------------------------------------
@@ -419,7 +460,7 @@ local _cdmSetupStarted = false
 function ECME:OnEnable()
     -- Cache player race/class for trinket/racial/potion tracking
     _playerRace = select(2, UnitRace("player"))
-    _playerClass = select(2, UnitClass("player"))
+    I.Set("_playerClass", (select(2, UnitClass("player"))))
     ns._playerRace = _playerRace
     ns._playerClass = _playerClass
     ns._myRacialsSet = _myRacialsSet
@@ -699,7 +740,7 @@ function ECME:CDMFinishSetup()
             self:CallMethod("OnVehicleStateChanged", newstate)
         ]])
         _cdmVehicleProxy.OnVehicleStateChanged = function(_, state)
-            _cdmInVehicle = (state == "hide")
+            I.Set("_cdmInVehicle", state == "hide")
             _CDMApplyVisibility()
         end
         RegisterStateDriver(_cdmVehicleProxy, "cdmvehicle", "[vehicleui][petbattle] hide; show")
@@ -730,3 +771,4 @@ function ECME:CDMFinishSetup()
     ns._pendingApplyOnReanchor = true
 end
 
+I.RequestUpdate = RequestUpdate

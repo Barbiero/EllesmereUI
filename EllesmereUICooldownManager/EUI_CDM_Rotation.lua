@@ -1,3 +1,18 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Rotation.lua
+--
+--  Rotation helper integration (Blizzard C_AssistedCombat).
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local ECME, FC, SnapForScale, _ecmeFC = I.ECME, I.FC, I.SnapForScale, I._ecmeFC
+local _getFD, StartNativeGlow, StopNativeGlow = I._getFD, I.StartNativeGlow, I.StopNativeGlow
+local cdmBarIcons = I.cdmBarIcons
+
 -------------------------------------------------------------------------------
 --  Rotation Helper Integration (Blizzard C_AssistedCombat)
 --  Highlights the currently suggested spell on its CDM icon. The default is

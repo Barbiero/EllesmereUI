@@ -1,3 +1,17 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Blizzard.lua
+--
+--  Blizzard viewer lists and fonts, position capture, Edit Mode enforcement,
+--  hiding and restoring the Blizzard Cooldown Manager.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local ECME, FC, _ecmeFC, cdmBarFrames = I.ECME, I.FC, I._ecmeFC, I.cdmBarFrames
+
 -------------------------------------------------------------------------------
 --  CDM Bars: Our replacement for Blizzard's Cooldown Manager
 --  Captures Blizzard positions on first login, then creates our own bars.
@@ -32,13 +46,9 @@ local CDM_BAR_CATEGORIES = {
 -- Maximum number of custom bars a user can create
 local MAX_CUSTOM_BARS = 20
 
--- Cached player info (set once at PLAYER_LOGIN)
-local _playerRace, _playerClass
-
 -- Forward declarations
-local BuildCDMBar, LayoutCDMBar, HideBlizzardCDM, RestoreBlizzardCDM
-local CaptureCDMPositions, ApplyCDMBarPosition, ApplyShapeToCDMIcon
-local _CDMApplyVisibility
+local HideBlizzardCDM, RestoreBlizzardCDM
+local CaptureCDMPositions, ApplyCDMBarPosition
 
 -------------------------------------------------------------------------------
 --  Capture Blizzard CDM positions (first login only)
@@ -548,3 +558,9 @@ local function RestoreBlizzardBuffFrame()
     end
 end
 
+I.BLIZZ_CDM_FRAMES, I.BLIZZ_CDM_FRAMES_SECONDARY = BLIZZ_CDM_FRAMES, BLIZZ_CDM_FRAMES_SECONDARY
+I.CaptureCDMPositions, I.CDM_BAR_CATEGORIES = CaptureCDMPositions, CDM_BAR_CATEGORIES
+I.EnforceCooldownViewerEditModeSettings = EnforceCooldownViewerEditModeSettings
+I.GetCDMFont, I.HideBlizzardCDM = GetCDMFont, HideBlizzardCDM
+I.MAX_CUSTOM_BARS, I.RestoreBlizzardBuffFrame = MAX_CUSTOM_BARS, RestoreBlizzardBuffFrame
+I.RestoreBlizzardCDM, I.SetBlizzCDMFont = RestoreBlizzardCDM, SetBlizzCDMFont

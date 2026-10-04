@@ -1,3 +1,26 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_Bars.lua
+--
+--  Bar position helpers, BuildCDMBar, LayoutCDMBar and the tooltip state.
+--  Reads the earlier CDM files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+
+local floor = math.floor
+
+local ECME, FC, IsPlaceholderRenderHidden = I.ECME, I.FC, I.IsPlaceholderRenderHidden
+local SnapForScale, _cdmMouseState, _ecmeFC = I.SnapForScale, I._cdmMouseState, I._ecmeFC
+local _getFD, barDataByKey, cdmBarFrames = I._getFD, I.barDataByKey, I.cdmBarFrames
+local cdmBarIcons = I.cdmBarIcons
+
+local BuildCDMBar, LayoutCDMBar
+
+local _CDMApplyVisibility
+I.setters._CDMApplyVisibility[#I.setters._CDMApplyVisibility + 1] = function(v) _CDMApplyVisibility = v end
+
 -------------------------------------------------------------------------------
 --  CDM Bar Position Helpers
 -------------------------------------------------------------------------------
@@ -1627,3 +1650,8 @@ local function ApplyCDMTooltipState(barKey)
 end
 ns.ApplyCDMTooltipState = ApplyCDMTooltipState
 
+I.ApplyBarPositionCentered = ApplyBarPositionCentered
+I.ApplyCDMTooltipState, I.BuildCDMBar = ApplyCDMTooltipState, BuildCDMBar
+I.ComputeTopRowStride, I.GetStableCDMBarSize = ComputeTopRowStride, GetStableCDMBarSize
+I.LayoutCDMBar, I.ReserveStride = LayoutCDMBar, ReserveStride
+I.SaveCDMBarPosition = SaveCDMBarPosition
