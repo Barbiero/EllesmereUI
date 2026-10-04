@@ -3676,7 +3676,10 @@ local function ShowCopyPopup(text)
     copyDimmer:Show()
     C_Timer.After(0.05, function()
         popup._editBox:SetFocus()
+        -- Open at the newest lines: cursor to the end, then pin the scroll there
+        popup._editBox:SetCursorPosition(#text)
         popup._editBox:HighlightText()
+        popup._textBox:GetScrollBox():ScrollToEnd(true)
     end)
 end
 
