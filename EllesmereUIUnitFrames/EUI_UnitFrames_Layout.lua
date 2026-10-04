@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Layout.lua
+--
+--  Mini frame donor and boss getters, text slot widths, the bottom text bar,
+--  frame position, bar clip, border layout, frame dimensions and the health
+--  bar, published through I for the files that load after this one. Reads
+--  the main file through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local GetSettingsForUnit, UnitToSettingsKey, unitSettingsKey = I.GetSettingsForUnit, I.UnitToSettingsKey, I.unitSettingsKey
+local SetFSFont, ApplyDarkTheme, SpecHasClassPower = I.SetFSFont, I.ApplyDarkTheme, I.SpecHasClassPower
+local ApplyHealthBarTexture, ApplyHealthBarAlpha = I.ApplyHealthBarTexture, I.ApplyHealthBarAlpha
+local ApplyClassIconTexture, ResolveRestrictedClassColor = I.ApplyClassIconTexture, I.ResolveRestrictedClassColor
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Donor settings table for a mini frame, the source of its inherited border,
 -- bar texture and hover highlight: the main frame its Copy Look From picks
 -- (lookSource "target" / "focus" / "player"), else Automatic (focus > target >
@@ -807,3 +829,7 @@ local function CreateHealthBar(frame, unit, height, xOffset, settings, rightInse
     return health
 end
 
+I.SlotWidthMul, I.EstimateUFTextWidth, I.ApplyClassColor = SlotWidthMul, EstimateUFTextWidth, ApplyClassColor
+I.CreateBottomTextBar, I.ApplyFramePosition = CreateBottomTextBar, ApplyFramePosition
+I.ReparentBarsToClip, I.UpdateBordersForScale = ReparentBarsToClip, UpdateBordersForScale
+I.GetFrameDimensions, I.CreateHealthBar = GetFrameDimensions, CreateHealthBar

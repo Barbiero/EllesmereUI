@@ -1,3 +1,26 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Power.lua
+--
+--  The power bar seam, portrait separator and power border, spell cost
+--  prediction and CreatePowerBar, published as I.CreatePowerBar for the files
+--  that load after this one. Reads the main file through ns and
+--  ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local GetSettingsForUnit, UnitToSettingsKey, SetFSFont = I.GetSettingsForUnit, I.UnitToSettingsKey, I.SetFSFont
+local UnsnapTex, healthBarTextures = I.UnsnapTex, I.healthBarTextures
+local ApplyBarGradient, ApplyPowerBarAlpha = I.ApplyBarGradient, I.ApplyPowerBarAlpha
+local EUI_IsSmartPowerPercent = I.EUI_IsSmartPowerPercent
+local PLAYER_POWER_DEFAULT, PLAYER_POWER_ALT = I.PLAYER_POWER_DEFAULT, I.PLAYER_POWER_ALT
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Power bar border: detached bars use the selected full border style; attached bars
 -- use a solid divider only along the edge shared with the health bar. Lazy creation
 -- lets a newly detached/attached bar (or Border Size raised from 0) gain its border
@@ -656,3 +679,4 @@ local function CreatePowerBar(frame, unit, settings)
     return power
 end
 
+I.CreatePowerBar = CreatePowerBar

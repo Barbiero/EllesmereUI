@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Absorb.lua
+--
+--  Absorb and heal absorb styles, heal prediction, the Blizzard glow line,
+--  the strip bar layout and CreateAbsorbBar, published through I for the
+--  files that load after this one. Reads the main file through ns and
+--  ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local GetSettingsForUnit, UnsnapTex = I.GetSettingsForUnit, I.UnsnapTex
+local healthBarTextures, AbbreviateNumbers = I.healthBarTextures, I.AbbreviateNumbers
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Shield texture. DO NOT change this path; it is the one that resolves.
 local ABSORB_SHIELD_TEX = "Interface\\AddOns\\EllesmereUIUnitFrames\\Media\\shield.tga"
 
@@ -1498,3 +1518,5 @@ local function CreateAbsorbBar(frame, unit, settings)
     return backfillBar
 end
 
+I.ApplyAbsorbStyle, I.UpdateAbsorbBarReverseFill = ApplyAbsorbStyle, UpdateAbsorbBarReverseFill
+I.CreateAbsorbBar = CreateAbsorbBar
