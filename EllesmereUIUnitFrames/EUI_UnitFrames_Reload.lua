@@ -1,3 +1,36 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Reload.lua
+--
+--  ReloadFrames, the settings pass over every spawned unit frame, published
+--  as I.ReloadFrames (EUI_UnitFrames_Init.lua, EUI_UnitFrames_OptionsSetup.lua),
+--  and the frame border pad that mirrors its unified border apply. Reads the
+--  main file through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+local GetMiniDonorSettings = ns.GetMiniDonorSettings
+
+local I = ns._internals
+local frames, GetSettingsForUnit, UnitToSettingsKey = I.frames, I.GetSettingsForUnit, I.UnitToSettingsKey
+local UnsnapTex, SetFSFont, ResolveFontPath = I.UnsnapTex, I.SetFSFont, I.ResolveFontPath
+local ApplyDarkTheme, ApplyEnemyColors, ApplyBarGradient = I.ApplyDarkTheme, I.ApplyEnemyColors, I.ApplyBarGradient
+local ApplyHealthBarTexture, ApplyHealthBarAlpha, ApplyPowerBarAlpha =
+    I.ApplyHealthBarTexture, I.ApplyHealthBarAlpha, I.ApplyPowerBarAlpha
+local ApplyFramePosition, CreateBottomTextBar, ReparentBarsToClip, UpdateBordersForScale =
+    I.ApplyFramePosition, I.CreateBottomTextBar, I.ReparentBarsToClip, I.UpdateBordersForScale
+local ApplyAbsorbStyle, UpdateAbsorbBarReverseFill, ApplyDetachedPortraitShape =
+    I.ApplyAbsorbStyle, I.UpdateAbsorbBarReverseFill, I.ApplyDetachedPortraitShape
+local SwapPortraitMode, SpecHasClassPower = I.SwapPortraitMode, I.SpecHasClassPower
+local CastIconInWidth, CastIconOffsets, CastIconOnRight, CastIconShown, LayoutCastbarIcon =
+    I.CastIconInWidth, I.CastIconOffsets, I.CastIconOnRight, I.CastIconShown, I.LayoutCastbarIcon
+local GetCastbarColor, ApplyUnitFrameCastColor, IsKickCastbarUnit, UpdateUnitFrameKickTick =
+    I.GetCastbarColor, I.ApplyUnitFrameCastColor, I.IsKickCastbarUnit, I.UpdateUnitFrameKickTick
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Blizzard Style: the per-unit geometry re-applies inside a reload each run
 -- the stock pass from UpdateBordersForScale's tail, only for the re-anchors
 -- that follow to undo it; the sweep at the end of the reload is the pass that
@@ -1917,3 +1950,4 @@ function ns.UF_FrameBorderPad(k)
         d.borderTextureShiftX, d.borderTextureShiftY, "unitframes", bs, bpx, nil, d.borderAlpha or 1)
 end
 
+I.ReloadFrames = ReloadFrames
