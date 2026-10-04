@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local CDM_SHAPES, ECME, EffectiveBarAlpha, FC = I.CDM_SHAPES, I.ECME, I.EffectiveBarAlpha, I.FC
 local _ecmeFC, _getFD, BuildAvailableSpellPool = I._ecmeFC, I._getFD, I.BuildAvailableSpellPool
@@ -17,7 +19,7 @@ local ResolveInfoSpellID = I.ResolveInfoSpellID
 local StartNativeGlow, StopNativeGlow
 
 local _inCombat = false
-I.setters._inCombat[#I.setters._inCombat + 1] = function(v) _inCombat = v end
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) _inCombat = v end
 
 -------------------------------------------------------------------------------
 --  Native Glow System -- engines provided by shared EllesmereUI_Glows.lua
@@ -888,3 +890,4 @@ I.barDataByKey, I.cdmBarFrames, I.cdmBarIcons = barDataByKey, cdmBarFrames, cdmB
 I.IconShownAlpha, I.InstallProcGlowHooks = IconShownAlpha, InstallProcGlowHooks
 I.OnProcGlowEvent, I.ShowProcGlow = OnProcGlowEvent, ShowProcGlow
 I.StartNativeGlow, I.StopNativeGlow = StartNativeGlow, StopNativeGlow
+I.broken = false

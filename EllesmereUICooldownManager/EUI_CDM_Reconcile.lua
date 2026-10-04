@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local ALL_RACIAL_SPELLS, ECME, _myRacialsSet = I.ALL_RACIAL_SPELLS, I.ECME, I._myRacialsSet
 local GHOST_CD_BAR_KEY, MAIN_BAR_KEYS = I.GHOST_CD_BAR_KEY, I.MAIN_BAR_KEYS
@@ -1182,3 +1184,4 @@ function ns.RepopulateFromBlizzard()
 end
 
 I.CDMFirstLoginCapture = CDMFirstLoginCapture
+I.broken = false

@@ -7,7 +7,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local ECME, _bonusScanSeen, _cdmViewerNames = I.ECME, I._bonusScanSeen, I._cdmViewerNames
 local _ecmeFC, _maxChargeCount = I._ecmeFC, I._maxChargeCount
@@ -17,6 +19,7 @@ local BLIZZ_CDM_FRAMES_SECONDARY = I.BLIZZ_CDM_FRAMES_SECONDARY
 local HideBlizzardCDM, RestoreBlizzardBuffFrame = I.HideBlizzardCDM, I.RestoreBlizzardBuffFrame
 local BuildAllCDMBars, UpdateCDMKeybinds = I.BuildAllCDMBars, I.UpdateCDMKeybinds
 local _CDMApplyVisibility, RequestUpdate = I._CDMApplyVisibility, I.RequestUpdate
+local SetInCombat = I.SetInCombat
 
 local _keybindDebounceTimer = nil   -- cancellable timer for debounced keybind updates
 
@@ -329,7 +332,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
     if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" or event == "ZONE_CHANGED_NEW_AREA" then
         if ns._syncRotationCombatState then ns._syncRotationCombatState() end
         if event == "PLAYER_REGEN_DISABLED" then
-            I.Set("_inCombat", true)
+            SetInCombat(true)
             _CDMApplyVisibility()
             ns.RefreshItemCountOOCBars()
             -- Straight through, same as the exit edge below: the sweep only
@@ -340,7 +343,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
             -- Buffer combat exit: brief out-of-combat blips (mob dies, re-aggro) shouldn't flash visibility changes.
             C_Timer.After(0.1, function()
                 if not InCombatLockdown() then
-                    I.Set("_inCombat", false)
+                    SetInCombat(false)
                     _CDMApplyVisibility()
                     ns.RefreshItemCountOOCBars()
                     ns.CDMGlowCombatSync()
@@ -377,7 +380,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, updateInfo, arg3)
         if c == nil or (issecretvalue and issecretvalue(c)) then
             c = InCombatLockdown and InCombatLockdown() or false
         end
-        I.Set("_inCombat", c == true)
+        SetInCombat(c == true)
         -- Re-read the gate (a profile may have loaded), then reconcile against
         -- the combat state sampled just above: the regen events never fire for
         -- a zone-in that lands mid-combat. At the very first world entry nothing
@@ -443,3 +446,4 @@ SlashCmdList.ECME = function(msg)
 end
 
 
+I.broken = false

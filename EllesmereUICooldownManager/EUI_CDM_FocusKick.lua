@@ -7,7 +7,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local GetTime = GetTime
 
@@ -922,3 +924,4 @@ end
 I.EnsureFocusKickBar, I.FOCUSKICK_BAR_KEY = EnsureFocusKickBar, FOCUSKICK_BAR_KEY
 I.FOCUSKICK_SOUND_NAMES, I.FOCUSKICK_SOUND_ORDER = FOCUSKICK_SOUND_NAMES, FOCUSKICK_SOUND_ORDER
 I.FOCUSKICK_SOUND_PATHS = FOCUSKICK_SOUND_PATHS
+I.broken = false

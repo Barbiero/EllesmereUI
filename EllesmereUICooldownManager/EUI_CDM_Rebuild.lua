@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local ALL_RACIAL_SPELLS, ECME = I.ALL_RACIAL_SPELLS, I.ECME
 local EffectiveBarAlpha, FC = I.EffectiveBarAlpha, I.FC
@@ -33,12 +35,11 @@ local EnsureFocusKickBar, FOCUSKICK_BAR_KEY = I.EnsureFocusKickBar, I.FOCUSKICK_
 
 local BuildAllCDMBars
 local _CDMApplyVisibility
-local _keybindCacheReady = false  -- true after first successful build
 
 local _cdmInVehicle = false
-I.setters._cdmInVehicle[#I.setters._cdmInVehicle + 1] = function(v) _cdmInVehicle = v end
+I.SetCdmInVehicle = function(v) _cdmInVehicle = v end
 local _inCombat = false
-I.setters._inCombat[#I.setters._inCombat + 1] = function(v) _inCombat = v end
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) _inCombat = v end
 
 -- Ghost bars: ensure both buff and CD ghost bars exist in the bars array. Called from BuildAllCDMBars before iterating bars.
 ns.GHOST_CD_BAR_KEY = GHOST_CD_BAR_KEY
@@ -800,7 +801,6 @@ end
 
 UpdateCDMKeybinds = function()
     RebuildKeybindCache()
-    _keybindCacheReady = true
     -- Defer apply by one frame so the Blizzard tick has populated FC(icon).spellID
     C_Timer.After(0, ApplyCachedKeybinds)
 end
@@ -1233,4 +1233,5 @@ end
 
 I._CDMApplyVisibility, I.BuildAllCDMBars = _CDMApplyVisibility, BuildAllCDMBars
 I.UpdateCDMKeybinds = UpdateCDMKeybinds
-I.Set("_CDMApplyVisibility", _CDMApplyVisibility)
+I.SetCDMApplyVisibility(_CDMApplyVisibility)
+I.broken = false

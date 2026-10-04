@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local ECME, FC, _ecmeFC, cdmBarFrames = I.ECME, I.FC, I._ecmeFC, I.cdmBarFrames
 
@@ -48,7 +50,7 @@ local MAX_CUSTOM_BARS = 20
 
 -- Forward declarations
 local HideBlizzardCDM, RestoreBlizzardCDM
-local CaptureCDMPositions, ApplyCDMBarPosition
+local CaptureCDMPositions
 
 -------------------------------------------------------------------------------
 --  Capture Blizzard CDM positions (first login only)
@@ -564,3 +566,4 @@ I.EnforceCooldownViewerEditModeSettings = EnforceCooldownViewerEditModeSettings
 I.GetCDMFont, I.HideBlizzardCDM = GetCDMFont, HideBlizzardCDM
 I.MAX_CUSTOM_BARS, I.RestoreBlizzardBuffFrame = MAX_CUSTOM_BARS, RestoreBlizzardBuffFrame
 I.RestoreBlizzardCDM, I.SetBlizzCDMFont = RestoreBlizzardCDM, SetBlizzCDMFont
+I.broken = false

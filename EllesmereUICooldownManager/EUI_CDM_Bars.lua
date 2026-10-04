@@ -7,7 +7,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local floor = math.floor
 
@@ -19,7 +21,7 @@ local cdmBarIcons = I.cdmBarIcons
 local BuildCDMBar, LayoutCDMBar
 
 local _CDMApplyVisibility
-I.setters._CDMApplyVisibility[#I.setters._CDMApplyVisibility + 1] = function(v) _CDMApplyVisibility = v end
+I.SetCDMApplyVisibility = function(fn) _CDMApplyVisibility = fn end
 
 -------------------------------------------------------------------------------
 --  CDM Bar Position Helpers
@@ -1655,3 +1657,4 @@ I.ApplyCDMTooltipState, I.BuildCDMBar = ApplyCDMTooltipState, BuildCDMBar
 I.ComputeTopRowStride, I.GetStableCDMBarSize = ComputeTopRowStride, GetStableCDMBarSize
 I.LayoutCDMBar, I.ReserveStride = LayoutCDMBar, ReserveStride
 I.SaveCDMBarPosition = SaveCDMBarPosition
+I.broken = false

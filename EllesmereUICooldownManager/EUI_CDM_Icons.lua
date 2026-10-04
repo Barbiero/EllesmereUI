@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local CDM_SHAPES, FC, _ecmeFC, _getFD = I.CDM_SHAPES, I.FC, I._ecmeFC, I._getFD
 local IconShownAlpha, ShowProcGlow = I.IconShownAlpha, I.ShowProcGlow
@@ -18,9 +20,7 @@ local cdmBarIcons, GetCDMFont, SetBlizzCDMFont = I.cdmBarIcons, I.GetCDMFont, I.
 local ApplyShapeToCDMIcon
 
 local _inCombat = false
-I.setters._inCombat[#I.setters._inCombat + 1] = function(v) _inCombat = v end
-local _playerClass
-I.setters._playerClass[#I.setters._playerClass + 1] = function(v) _playerClass = v end
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) _inCombat = v end
 
 -------------------------------------------------------------------------------
 --  Apply custom shape to a CDM icon
@@ -38,7 +38,7 @@ ApplyShapeToCDMIcon = function(icon, shape, barData, ssb)
     local brdB = barData.borderB or 0
     local brdA = barData.borderA or 1
     if barData.borderClassColor then
-        local cc = _playerClass and RAID_CLASS_COLORS[_playerClass]
+        local cc = ns._playerClass and RAID_CLASS_COLORS[ns._playerClass]
         if cc then brdR, brdG, brdB = cc.r, cc.g, cc.b end
     end
     -- Per-icon Border override (buff-family bars): size + color only, NEVER style. ssb is the
@@ -1144,3 +1144,4 @@ end
 ns.RefreshCDMIconAppearance = RefreshCDMIconAppearance
 
 I.RefreshCDMIconAppearance = RefreshCDMIconAppearance
+I.broken = false

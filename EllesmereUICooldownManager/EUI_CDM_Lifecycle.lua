@@ -8,7 +8,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
-if not I then return end -- main file went dormant (Ayije_CDM conflict guard)
+-- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
 local GetTime = GetTime
 
@@ -27,17 +29,13 @@ local FOCUSKICK_SOUND_ORDER = I.FOCUSKICK_SOUND_ORDER
 local FOCUSKICK_SOUND_PATHS, BuildAllCDMBars = I.FOCUSKICK_SOUND_PATHS, I.BuildAllCDMBars
 local UpdateCDMKeybinds, _CDMApplyVisibility = I.UpdateCDMKeybinds, I._CDMApplyVisibility
 local CDMFirstLoginCapture = I.CDMFirstLoginCapture
+local GetCachedSpecKey, SetCdmInVehicle = I.GetCachedSpecKey, I.SetCdmInVehicle
 
 local RegisterCDMUnlockElements
 -- Vehicle/petbattle state proxy: created once in CDMFinishSetup; drives _CDMApplyVisibility so CDM bars hide while in vehicle UI.
 local _cdmVehicleProxy = nil
--- Cached player info (set once at PLAYER_LOGIN)
-local _playerRace
-
-local _cachedSpecKey
-I.setters._cachedSpecKey[#I.setters._cachedSpecKey + 1] = function(v) _cachedSpecKey = v end
-local _playerClass
-I.setters._playerClass[#I.setters._playerClass + 1] = function(v) _playerClass = v end
+-- Cached player info (set in ECME:OnEnable)
+local _playerRace, _playerClass
 
 -------------------------------------------------------------------------------
 --  Register CDM bars with unlock mode
@@ -243,7 +241,7 @@ RegisterCDMUnlockElements = function()
                     -- rebuild here can only construct the OLD spec's layout against the NEW spec's
                     -- already-repopulating engine pool (the pre-swap window before SPELLS_CHANGED lands). The talent_reconcile that follows is the only correct builder for that state.
                     local liveKey = ComputeLiveSpecKey()
-                    if liveKey and liveKey ~= _cachedSpecKey then return end
+                    if liveKey and liveKey ~= GetCachedSpecKey() then return end
                     -- Same-burst coalescing: position passes (ApplySavedPositions et al) call EVERY
                     -- CDM element's applyPosition back-to-back, and each call rebuilt ALL bars -- an
                     -- 11+ deep same-frame rebuild storm. The first call rebuilds synchronously (Save & Exit's sequencing depends on that); the rest of the burst no-ops until the next frame.
@@ -460,7 +458,7 @@ local _cdmSetupStarted = false
 function ECME:OnEnable()
     -- Cache player race/class for trinket/racial/potion tracking
     _playerRace = select(2, UnitRace("player"))
-    I.Set("_playerClass", (select(2, UnitClass("player"))))
+    _playerClass = select(2, UnitClass("player"))
     ns._playerRace = _playerRace
     ns._playerClass = _playerClass
     ns._myRacialsSet = _myRacialsSet
@@ -740,7 +738,7 @@ function ECME:CDMFinishSetup()
             self:CallMethod("OnVehicleStateChanged", newstate)
         ]])
         _cdmVehicleProxy.OnVehicleStateChanged = function(_, state)
-            I.Set("_cdmInVehicle", state == "hide")
+            SetCdmInVehicle(state == "hide")
             _CDMApplyVisibility()
         end
         RegisterStateDriver(_cdmVehicleProxy, "cdmvehicle", "[vehicleui][petbattle] hide; show")
@@ -772,3 +770,4 @@ function ECME:CDMFinishSetup()
 end
 
 I.RequestUpdate = RequestUpdate
+I.broken = false

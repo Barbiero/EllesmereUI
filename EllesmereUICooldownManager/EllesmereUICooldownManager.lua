@@ -799,9 +799,10 @@ local DEFAULTS = {
 }
 
 -- Main-chunk locals the EUI_CDM_*.lua files re-import by name.
--- setters: a chunk local that changes at run time and is read in more than one
--- file is one copy per file; each file adds a setter for its copy and the
--- writer calls I.Set, so every copy follows.
+-- inCombatSetters: a file that reads _inCombat keeps its own local and adds a
+-- setter here; the event frame writes through SetInCombat, which runs them all.
+-- broken: true while an EUI_CDM_*.lua file loads; a file that fails leaves it
+-- set, and the files behind it return at their first lines.
 ns._internals = {
     _bonusScanSeen = _bonusScanSeen, _cdmKeybindCache = _cdmKeybindCache,
     _cdmKeybindRank = _cdmKeybindRank, _cdmMouseState = _cdmMouseState,
@@ -812,15 +813,12 @@ ns._internals = {
     ECME = ECME, EffectiveBarAlpha = EffectiveBarAlpha, FC = FC,
     IsPlaceholderRenderHidden = IsPlaceholderRenderHidden, RACE_RACIALS = RACE_RACIALS,
     ResolveActiveRacial = ResolveActiveRacial, SnapForScale = SnapForScale,
-    setters = {
-        _inCombat = { function(v) _inCombat = v end },
-        _cdmInVehicle = {}, _playerClass = {}, _cachedSpecKey = {},
-        _CDMApplyVisibility = {},
-    },
-    Set = function(name, v)
-        local list = ns._internals.setters[name]
+    inCombatSetters = { function(v) _inCombat = v end },
+    SetInCombat = function(v)
+        local list = ns._internals.inCombatSetters
         for i = 1, #list do list[i](v) end
     end,
+    broken = false,
 }
 -- A re-import of a name this table lacks fails where the part file loads,
 -- not later as a nil upvalue inside one of its functions.
