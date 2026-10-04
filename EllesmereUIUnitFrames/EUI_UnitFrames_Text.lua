@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Text.lua
+--
+--  Engine painters and ns.Colors, smart power percent, text decimals, the
+--  tag functions, nicknames, text pieces and zone formatters. Reads the main
+--  file through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local addonName, ns = ...
+
+local GetSpecialization = (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization) or GetSpecialization
+local string_format = string.format
+local issecretvalue = issecretvalue
+
+local I = ns._internals
+local frames, AbbreviateNumbers = I.frames, I.AbbreviateNumbers
+local UF_SecretSafeHealthColor = I.UF_SecretSafeHealthColor
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Engine painters (oUF extraction). ns.Colors carries the exact color table
 --  the shared color chains read through frame.colors: same value sources and
@@ -1095,3 +1115,5 @@ do
     end
 end
 
+I.EUI_IsSmartPowerPercent, I.ResolveRestrictedClassColor = EUI_IsSmartPowerPercent, ResolveRestrictedClassColor
+I.PLAYER_POWER_DEFAULT, I.PLAYER_POWER_ALT = PLAYER_POWER_DEFAULT, PLAYER_POWER_ALT

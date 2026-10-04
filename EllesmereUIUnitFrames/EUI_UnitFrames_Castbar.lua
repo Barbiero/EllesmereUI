@@ -1,3 +1,22 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Castbar.lua
+--
+--  Cast icon geometry, the kick tick and cast colors, CreateCastBar, show on
+--  cast bar and the Blizzard cast bar state. Reads the main file through ns
+--  and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, GetSettingsForUnit = I.frames, I.GetSettingsForUnit
+local GetCastbarColor, SetFSFont = I.GetCastbarColor, I.SetFSFont
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -- Cast-bar icon "part of the bar" resolver. True = icon counts inside the cast bar's
 -- width (icon inside footprint, fill inset to its right, like Resource Bars). False =
 -- icon outside the width. Requires the icon shown; a hidden icon is never "in width".
@@ -1562,3 +1581,9 @@ function ns.UF_ApplyGamepadCastbar(padOn)
     end
 end
 
+I.CastIconInWidth, I.CastIconShown, I.CastIconOnRight = CastIconInWidth, CastIconShown, CastIconOnRight
+I.CastIconOffsets, I.LayoutCastbarIcon = CastIconOffsets, LayoutCastbarIcon
+I.CastbarUnlockKey, I.IsKickCastbarUnit = CastbarUnlockKey, IsKickCastbarUnit
+I.ApplyUnitFrameCastColor, I.UpdateUnitFrameKickTick = ApplyUnitFrameCastColor, UpdateUnitFrameKickTick
+I.CreateCastBar, I.SetupShowOnCastBar = CreateCastBar, SetupShowOnCastBar
+I.ApplyBlizzCastbarState = ApplyBlizzCastbarState

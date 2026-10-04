@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_UnitFrames_Portrait.lua
+--
+--  Class icons, the portrait and raid icon painters, portrait masks and art,
+--  detached portrait shapes, CreatePortrait and SwapPortraitMode. Reads the
+--  main file through ns and ns._internals; db is set through I.dbSetters.
+-------------------------------------------------------------------------------
+local _, ns = ...
+
+local math_max = math.max
+local issecretvalue = issecretvalue
+local PP = EllesmereUI.PP
+
+local I = ns._internals
+local frames, UnsnapTex = I.frames, I.UnsnapTex
+local GetSettingsForUnit, UnitToSettingsKey = I.GetSettingsForUnit, I.UnitToSettingsKey
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 local UF_ICONS_PATH = "Interface\\AddOns\\EllesmereUI\\media\\icons\\"
 local CLASS_FULL_SPRITE_BASE = UF_ICONS_PATH .. "class-full\\"
 local CLASS_FULL_COORDS = EllesmereUI.CLASS_ICON_SPRITE_COORDS
@@ -1483,3 +1503,5 @@ function SwapPortraitMode(frame, painting)
     ns.UF_StampPortraitForceUpdate(frame)
 end
 
+I.ApplyClassIconTexture, I.ApplyDetachedPortraitShape = ApplyClassIconTexture, ApplyDetachedPortraitShape
+I.CreatePortrait, I.SwapPortraitMode = CreatePortrait, SwapPortraitMode
