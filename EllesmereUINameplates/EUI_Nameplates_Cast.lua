@@ -1,3 +1,38 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Cast.lua
+--
+--  NameplateFrame: the cast bar, kick tick, interrupts and the spellcast events.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, type = pairs, type
+local UnitName = UnitName
+local UnitIsUnit = UnitIsUnit
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
+local GetTime = GetTime
+local Enum = Enum
+local ComputeCastBarTint = ns.ComputeCastBarTint
+
+local defaults, GetCastBarHeight, GetCastScale = I.defaults, I.GetCastBarHeight, I.GetCastScale
+local GetKickTickColor, GetKickTickEnabled = I.GetKickTickColor, I.GetKickTickEnabled
+local GetShowClassPower, GetTargetScale = I.GetShowClassPower, I.GetTargetScale
+local PANDEMIC_GLOW_STYLES, GetActiveKickSpell = I.PANDEMIC_GLOW_STYLES, I.GetActiveKickSpell
+local NotifyCastEnded, NotifyCastStarted = I.NotifyCastEnded, I.NotifyCastStarted
+local UpdateClassPowerOnPlate, _fallbackPlates = I.UpdateClassPowerOnPlate, I._fallbackPlates
+local castFallbackFrame, NameplateFrame = I.castFallbackFrame, I.NameplateFrame
+
+local classPowerType
+I.classPowerTypeSetters[#I.classPowerTypeSetters + 1] = function(v) classPowerType = v end
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
 function NameplateFrame:UpdateImportantCastGlow(spellID)
     local cfg = p or defaults
     local enabled = cfg.importantCastGlow
@@ -82,8 +117,8 @@ function NameplateFrame:UpdateCast()
             if self._castFallback then
                 self._castFallback = nil
                 _fallbackPlates[self] = nil
-                fallbackCastCount = fallbackCastCount - 1
-                if fallbackCastCount <= 0 then fallbackCastCount = 0; castFallbackFrame:Hide() end
+                I.fallbackCastCount = I.fallbackCastCount - 1
+                if I.fallbackCastCount <= 0 then I.fallbackCastCount = 0; castFallbackFrame:Hide() end
             end
             NotifyCastEnded(self)
         end
@@ -205,7 +240,7 @@ function NameplateFrame:UpdateCast()
             self.isCasting = true
             self._castFallback = true
             _fallbackPlates[self] = true
-            fallbackCastCount = fallbackCastCount + 1
+            I.fallbackCastCount = I.fallbackCastCount + 1
             castFallbackFrame:Show()
             NotifyCastStarted(self)
         end
@@ -580,8 +615,8 @@ function NameplateFrame:ShowInterrupted(interrupterGUID)
         if self._castFallback then
             self._castFallback = nil
             _fallbackPlates[self] = nil
-            fallbackCastCount = fallbackCastCount - 1
-            if fallbackCastCount <= 0 then fallbackCastCount = 0; castFallbackFrame:Hide() end
+            I.fallbackCastCount = I.fallbackCastCount - 1
+            if I.fallbackCastCount <= 0 then I.fallbackCastCount = 0; castFallbackFrame:Hide() end
         end
         NotifyCastEnded(self)
     end
@@ -810,8 +845,8 @@ function NameplateFrame:UNIT_SPELLCAST_STOP()
         if self._castFallback then
             self._castFallback = nil
             _fallbackPlates[self] = nil
-            fallbackCastCount = math.max(0, fallbackCastCount - 1)
-            if fallbackCastCount == 0 then castFallbackFrame:Hide() end
+            I.fallbackCastCount = math.max(0, I.fallbackCastCount - 1)
+            if I.fallbackCastCount == 0 then castFallbackFrame:Hide() end
         end
         NotifyCastEnded(self)
         if GetShowClassPower() and classPowerType and self._cpPips and self.unit and UnitIsUnit(self.unit, "target") then
@@ -827,8 +862,8 @@ function NameplateFrame:UNIT_SPELLCAST_CHANNEL_STOP(_, _, _, interrupterGUID)
         if self._castFallback then
             self._castFallback = nil
             _fallbackPlates[self] = nil
-            fallbackCastCount = fallbackCastCount - 1
-            if fallbackCastCount <= 0 then fallbackCastCount = 0; castFallbackFrame:Hide() end
+            I.fallbackCastCount = I.fallbackCastCount - 1
+            if I.fallbackCastCount <= 0 then I.fallbackCastCount = 0; castFallbackFrame:Hide() end
         end
         NotifyCastEnded(self)
     end
@@ -916,8 +951,8 @@ function NameplateFrame:UNIT_SPELLCAST_EMPOWER_STOP(_, _, _, _, interrupterGUID)
         if self._castFallback then
             self._castFallback = nil
             _fallbackPlates[self] = nil
-            fallbackCastCount = math.max(0, fallbackCastCount - 1)
-            if fallbackCastCount == 0 then castFallbackFrame:Hide() end
+            I.fallbackCastCount = math.max(0, I.fallbackCastCount - 1)
+            if I.fallbackCastCount == 0 then castFallbackFrame:Hide() end
         end
         NotifyCastEnded(self)
     end
@@ -928,3 +963,5 @@ function NameplateFrame:UNIT_SPELLCAST_EMPOWER_STOP(_, _, _, _, interrupterGUID)
         self:HandleInterrupted(interrupterGUID)
     end
 end
+
+I.broken = false

@@ -1,3 +1,34 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_PlatePool.lua
+--
+--  The frame pool and plate construction, the pool prewarm, RefreshBorder, the
+--  hitbox overlay and ns.RefreshAllSettings.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, ipairs = pairs, ipairs
+local UnitIsUnit = UnitIsUnit
+local C_NamePlate = C_NamePlate
+local Enum = Enum
+
+local CAST_H, defaults, ENP, GetNPOutline = I.CAST_H, I.defaults, I.ENP, I.GetNPOutline
+local SetFSFont, GetBorderColor = I.SetFSFont, I.GetBorderColor
+local GetCastBarHeight, GetDebuffTextColor = I.GetCastBarHeight, I.GetDebuffTextColor
+local GetEnemyNameTextSize, GetHealthBarHeight = I.GetEnemyNameTextSize, I.GetHealthBarHeight
+local GetHealthBarWidth, GetHitboxYShift = I.GetHealthBarWidth, I.GetHitboxYShift
+local GetNameplateYOffset, GetRaidMarkerSize = I.GetNameplateYOffset, I.GetRaidMarkerSize
+local GetRareEliteIconSize, GetShowCastIcon = I.GetRareEliteIconSize, I.GetShowCastIcon
+local GetStackSpacingScale, IsBorderEnabled = I.GetStackSpacingScale, I.IsBorderEnabled
+local SetProfile = I.SetProfile
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 local frameCache = CreateFramePool("Frame", UIParent, nil, nil, false, function(plate)
     plate:SetFlattensRenderLayers(true)
@@ -930,6 +961,7 @@ function ns.RefreshAllSettings()
     -- Re-read the profile reference: RepointAllDBs may have swapped the profile table
     -- (spec-linked profiles). All color lookups via _C() read this local.
     p = ENP.db.profile
+    SetProfile(p)
     -- Before any plate repaints: the Text Coloring slot flags the health pass reads
     -- and the name text's combo formats.
     ns.NP_RefreshSlotClassFlags()
@@ -974,3 +1006,6 @@ function ns.RefreshAllSettings()
     -- toggles reaches the live full plates.
     if ns.RefreshFriendlyColors then ns.RefreshFriendlyColors() end
 end
+
+I.frameCache, I.GetActiveKickSpell = frameCache, GetActiveKickSpell
+I.broken = false

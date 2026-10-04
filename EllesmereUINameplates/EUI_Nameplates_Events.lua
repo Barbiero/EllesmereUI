@@ -1,3 +1,28 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Events.lua
+--
+--  The cast event dispatcher, the plate manager, the pending and enemy watchers
+--  and the faction frame.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs = pairs
+local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
+local C_NamePlate = C_NamePlate
+
+local _npYOffsetState, defaults = I._npYOffsetState, I.defaults
+local GetCastBarHeight, GetFocusCastHeight = I.GetCastBarHeight, I.GetFocusCastHeight
+local frameCache, questMobCache = I.frameCache, I.questMobCache
+local RefreshThreatCache, NameplateFrame = I.RefreshThreatCache, I.NameplateFrame
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 -------------------------------------------------------------------------------
 --  Centralized cast event dispatcher: registers all 13 SPELLCAST events ONCE globally instead
@@ -500,3 +525,5 @@ manager:SetScript("OnEvent", function(self, event, unit)
         end
     end
 end)
+
+I.broken = false

@@ -1,3 +1,31 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Health.lua
+--
+--  NameplateFrame: health values and health color.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
+local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
+local UnitIsUnit = UnitIsUnit
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+
+local defaults, NoTintFlag, GetTextSlotColor = I.defaults, I.NoTintFlag, I.GetTextSlotColor
+local IsComboHealthText, SetCombinedHealthText = I.IsComboHealthText, I.SetCombinedHealthText
+local ApplyOverlayGeometry, EnsureFocusOverlay = I.ApplyOverlayGeometry, I.EnsureFocusOverlay
+local OverlayBgAlpha, NotifyCastEnded, _C = I.OverlayBgAlpha, I.NotifyCastEnded, I._C
+local GetReactionColor, _fallbackPlates = I.GetReactionColor, I._fallbackPlates
+local castFallbackFrame, NameplateFrame = I.castFallbackFrame, I.NameplateFrame
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
 -- WoW Forever: no health number under 10,000 abbreviates (EllesmereUI_NumberFormat.lua).
 -- On ns, not a local: this chunk is near its 200-local cap.
 ns.AbbreviateNumbers = (EllesmereUI.IS_FOREVER and EllesmereUI.ForeverAbbreviateNumbers) or AbbreviateNumbers
@@ -14,8 +42,8 @@ function NameplateFrame:UpdateHealthValues()
                 if self._castFallback then
                     self._castFallback = nil
                     _fallbackPlates[self] = nil
-                    fallbackCastCount = fallbackCastCount - 1
-                    if fallbackCastCount <= 0 then fallbackCastCount = 0; castFallbackFrame:Hide() end
+                    I.fallbackCastCount = I.fallbackCastCount - 1
+                    if I.fallbackCastCount <= 0 then I.fallbackCastCount = 0; castFallbackFrame:Hide() end
                 end
                 NotifyCastEnded(self)
                 self.isCasting = false
@@ -553,3 +581,5 @@ function NameplateFrame:UpdateHealth()
     self:UpdateHealthValues()
     self:UpdateHealthColor()
 end
+
+I.broken = false

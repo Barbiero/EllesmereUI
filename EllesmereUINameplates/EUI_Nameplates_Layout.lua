@@ -1,3 +1,26 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Layout.lua
+--
+--  Setting getters (offsets, sizes, scales, slots, borders, class power
+--  options), the glow aliases, the dispel glow and aura slot positioning.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ipairs, type = ipairs, type
+local PP = EllesmereUI.PP
+local UnitIsPlayer = UnitIsPlayer
+local GetTime = GetTime
+
+local BAR_W, defaults = I.BAR_W, I.defaults
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 local function GetNameplateYOffset()
     return (p and p.nameplateYOffset) or defaults.nameplateYOffset
@@ -1569,3 +1592,30 @@ PositionArrowsOutsideAuras = function(plate)
 end
 end -- do (AddSideExtent scope)
 ns.PositionArrowsOutsideAuras = PositionArrowsOutsideAuras
+
+I.EstimateHealthTextWidth, I.GetAuraSlotOffsets = EstimateHealthTextWidth, GetAuraSlotOffsets
+I.GetAuraSlots, I.GetAuraSpacing = GetAuraSlots, GetAuraSpacing
+I.GetBorderColor, I.GetBuffIconSize = GetBorderColor, GetBuffIconSize
+I.GetCastBarHeight, I.GetCastScale = GetCastBarHeight, GetCastScale
+I.GetCCIconSize, I.GetClassificationSlot = GetCCIconSize, GetClassificationSlot
+I.GetClassPowerClassColors = GetClassPowerClassColors
+I.GetClassPowerCustomColor, I.GetDebuffIconSize = GetClassPowerCustomColor, GetDebuffIconSize
+I.GetDebuffTextColor, I.GetDebuffYOffset = GetDebuffTextColor, GetDebuffYOffset
+I.GetEnemyNameTextSize, I.GetFocusCastHeight = GetEnemyNameTextSize, GetFocusCastHeight
+I.GetHealthBarHeight, I.GetHealthBarWidth = GetHealthBarHeight, GetHealthBarWidth
+I.GetHideEnemyNameWhileCasting = GetHideEnemyNameWhileCasting
+I.GetHitboxYShift, I.GetKickTickColor = GetHitboxYShift, GetKickTickColor
+I.GetKickTickEnabled, I.GetNameplateYOffset = GetKickTickEnabled, GetNameplateYOffset
+I.GetNameYOffset, I.GetRaidMarkerPos = GetNameYOffset, GetRaidMarkerPos
+I.GetRaidMarkerSize, I.GetRareEliteIconSize = GetRaidMarkerSize, GetRareEliteIconSize
+I.GetShowCastIcon, I.GetShowClassPower = GetShowCastIcon, GetShowClassPower
+I.GetSideAuraXOffset, I.GetSlotOffsets = GetSideAuraXOffset, GetSlotOffsets
+I.GetStackSpacingScale, I.GetTargetScale = GetStackSpacingScale, GetTargetScale
+I.GetTextSlot, I.GetTextSlotColor = GetTextSlot, GetTextSlotColor
+I.GetTextSlotOffsets, I.GetTextSlotSize = GetTextSlotOffsets, GetTextSlotSize
+I.IsBorderEnabled, I.IsComboHealthText = IsBorderEnabled, IsComboHealthText
+I.PANDEMIC_GLOW_STYLES = PANDEMIC_GLOW_STYLES
+I.PositionArrowsOutsideAuras, I.PositionAuraSlot = PositionArrowsOutsideAuras, PositionAuraSlot
+I.SetCombinedHealthText = SetCombinedHealthText
+I.SetClassPowerTopPush = function(f) GetClassPowerTopPush = f end
+I.broken = false

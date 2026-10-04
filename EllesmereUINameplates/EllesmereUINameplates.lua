@@ -9,29 +9,9 @@ local ENP = EllesmereUI.Lite.NewAddon("EllesmereUINameplates")
 -- Profile alias: set in OnInitialize; getters fall back to defaults while nil.
 local p
 
-local pairs, ipairs, type = pairs, ipairs, type
+local ipairs = ipairs
 local PP = EllesmereUI.PP
--- Pre-hook SetTexture for pooled aura-slot icons (snap-disabled at creation, so
--- the pixel-snap hook is pure overhead). Upgraded to PP.RawSetTexture in
--- OnEnable; starts as a plain wrapper so it is never nil.
-local RawSetTex = function(t, v) t:SetTexture(v) end
-local UnitHealth, UnitHealthMax = UnitHealth, UnitHealthMax
-local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs
-local C_UnitAuras = C_UnitAuras
-local UnitName, UnitGUID = UnitName, UnitGUID
-local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
-local UnitIsEnemy, UnitIsTapDenied = UnitIsEnemy, UnitIsTapDenied
-
-local UnitAffectingCombat, UnitClassification = UnitAffectingCombat, UnitClassification
-local UnitIsDeadOrGhost, UnitReaction = UnitIsDeadOrGhost, UnitReaction
-local UnitIsPlayer, UnitClass = UnitIsPlayer, UnitClass
-local UnitCreatureType, UnitClassBase, UnitLevel = UnitCreatureType, UnitClassBase, UnitLevel
-local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
-local GetTime = GetTime
-local C_NamePlate = C_NamePlate
-local GetRaidTargetIndex, SetRaidTargetIconTexture = GetRaidTargetIndex, SetRaidTargetIconTexture
-local C_CVar, NamePlateConstants, Enum = C_CVar, NamePlateConstants, Enum
-local _, PLAYER_CLASS = UnitClass("player")
+local UnitIsUnit = UnitIsUnit
 
 local function GetFont() return EllesmereUI.GetFontPath("nameplates") end
 -- Slug-gated at the source (GetFontOutlineFlag); SetFSFont gates the
@@ -954,3 +934,26 @@ function ns.NP_LayoutWrapSeam(host)
     end
     t:Show()
 end
+
+-- Main-chunk locals the EUI_Nameplates_*.lua files re-import by name.
+-- profileSetters: every file keeps its own copy of the profile alias p and
+-- adds a setter here; the places that re-read the profile write through
+-- SetProfile, which runs them all.
+-- broken: true while an EUI_Nameplates_*.lua file loads; a file that fails
+-- leaves it set, and the files behind it return at their first lines.
+ns._npInternals = {
+    _npYOffsetState = _npYOffsetState, BAR_W = BAR_W, CAST_H = CAST_H, defaults = defaults,
+    ENP = ENP, GetFont = GetFont, GetNPOutline = GetNPOutline, HP_BAR_SLOTS = HP_BAR_SLOTS,
+    SetFSFont = SetFSFont,
+    profileSetters = { function(v) p = v end },
+    SetProfile = function(v)
+        local list = ns._npInternals.profileSetters
+        for i = 1, #list do list[i](v) end
+    end,
+    broken = false,
+}
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._npInternals, { __index = function(_, k)
+    error("ns._npInternals has no entry " .. tostring(k), 2)
+end })

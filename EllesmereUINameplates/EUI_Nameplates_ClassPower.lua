@@ -1,3 +1,36 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_ClassPower.lua
+--
+--  Class power on the target plate.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local type = type
+local PP = EllesmereUI.PP
+local UnitHealthMax = UnitHealthMax
+local C_UnitAuras = C_UnitAuras
+local UnitIsUnit = UnitIsUnit
+local Enum = Enum
+local _, PLAYER_CLASS = UnitClass("player")
+
+local defaults, GetClassPowerClassColors = I.defaults, I.GetClassPowerClassColors
+local GetClassPowerCustomColor = I.GetClassPowerCustomColor
+local GetShowClassPower, SetClassPowerTopPush = I.GetShowClassPower, I.SetClassPowerTopPush
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
+-- Assigned below; Layout holds the forward declaration its own readers use.
+local GetClassPowerTopPush
+-- Name and Cast keep a copy of classPowerType and add a setter here.
+local classPowerTypeSetters = {}
+
 -------------------------------------------------------------------------------
 --  Class Power Display (combo points, holy power, chi, etc.). Zero cost when disabled: no
 --  events registered, no frames created. When on, a single watcher handles player
@@ -756,6 +789,7 @@ GetClassPowerTopPush = function(plate)
     local h = ns.CP_SHAPE.SQUARE[ns.GetClassPowerShape()] and CP_PIP_W or CP_PIP_H
     return h * cpScale + cpYOff
 end
+SetClassPowerTopPush(GetClassPowerTopPush)
 
 -- Find the target plate and update pips
 local function RefreshClassPower()
@@ -817,6 +851,7 @@ local function EnableClassPowerWatcher()
     end
 
     classPowerType = info[1]
+    for i = 1, #classPowerTypeSetters do classPowerTypeSetters[i](classPowerType) end
     classPowerMax = info[2]
     -- Druid Resto: cat form required. Feral always shows. On Forever there are no
     -- specs to tell them apart and combo points are cat-only for every druid.
@@ -948,3 +983,9 @@ local function MaybeDarken(r, g, b, inCombat)
     end
     return DarkenColor(r, g, b)
 end
+
+I.ApplyClassPowerSetting, I.EnsureClassPowerPips = ApplyClassPowerSetting, EnsureClassPowerPips
+I.GetClassPowerTopPush, I.HideClassPowerOnPlate = GetClassPowerTopPush, HideClassPowerOnPlate
+I.MaybeDarken, I.UpdateClassPowerOnPlate = MaybeDarken, UpdateClassPowerOnPlate
+I.classPowerTypeSetters = classPowerTypeSetters
+I.broken = false

@@ -1,3 +1,29 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Init.lua
+--
+--  Spec preset login, OnInitialize, OnEnable, the range features and hiding
+--  enemy plates out of combat.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, ipairs, type = pairs, ipairs, type
+local PP = EllesmereUI.PP
+local UnitCanAttack = UnitCanAttack
+
+local defaults, ENP, GetNPOutline, SetFSFont = I.defaults, I.ENP, I.GetNPOutline, I.SetFSFont
+local GetTextSlot, SetupAuraCVars = I.GetTextSlot, I.SetupAuraCVars
+local ApplyClassPowerSetting = I.ApplyClassPowerSetting
+local RefreshThreatCache, SetProfile = I.RefreshThreatCache, I.SetProfile
+local SetRawSetTex = I.SetRawSetTex
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 -------------------------------------------------------------------------------
 --  SPEC PRESET LOGIN HANDLER
@@ -130,6 +156,7 @@ do
         -- Re-read the profile reference: a spec swap may have changed the active
         -- profile, and _C() color lookups would read the old spec's stale data.
         p = ENP.db.profile
+        SetProfile(p)
         RefreshThreatCache()
         -- If the framework handler is registered, let it handle this
         if EllesmereUI and EllesmereUI._specSwitchRegistry
@@ -149,6 +176,7 @@ local npAddon = ENP
 function npAddon:OnInitialize()
     ENP.db = EllesmereUI.Lite.NewDB("EllesmereUINameplatesDB", { profile = defaults })
     p = ENP.db.profile
+    SetProfile(p)
     ns.db = ENP.db
     -- Non-Target Opacity: derive the cached value at login (no plates exist yet,
     -- so the apply loop no-ops; SetUnit fades new plates as they spawn).
@@ -165,6 +193,7 @@ function npAddon:OnEnable()
     if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
     p = ENP.db.profile
+    SetProfile(p)
     -- A profile already on a stock style gets its one-time bar texture seed
     -- before the first plate builds (the Style page seeds on the switch);
     -- its own textures go to the EllesmereUI slot first, so a switch back
@@ -204,7 +233,7 @@ function npAddon:OnEnable()
         end
         ns.NP_ForeverWatchLevels()
     end
-    RawSetTex = (PP and PP.RawSetTexture) or function(t, v) t:SetTexture(v) end
+    SetRawSetTex((PP and PP.RawSetTexture) or function(t, v) t:SetTexture(v) end)
     SetupAuraCVars()
     ApplyClassPowerSetting()
     -- Apply spec-assigned preset on login (before UI is opened)
@@ -462,3 +491,4 @@ end)
 ns._oocPlatesCtl:RegisterEvent("PLAYER_LOGIN")
 
 
+I.broken = false

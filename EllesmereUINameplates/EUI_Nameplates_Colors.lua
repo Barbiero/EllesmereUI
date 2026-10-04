@@ -1,3 +1,31 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Colors.lua
+--
+--  Threat context, quest mob detection and the plate colors (class, threat,
+--  reaction).
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, ipairs, type = pairs, ipairs, type
+local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
+local UnitIsEnemy, UnitIsTapDenied = UnitIsEnemy, UnitIsTapDenied
+local UnitAffectingCombat, UnitClassification = UnitAffectingCombat, UnitClassification
+local UnitReaction = UnitReaction
+local UnitIsPlayer, UnitClass = UnitIsPlayer, UnitClass
+local Enum = Enum
+
+local defaults, GetTextSlot, IsComboHealthText = I.defaults, I.GetTextSlot, I.IsComboHealthText
+local MaybeDarken = I.MaybeDarken
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
 -- Cached threat-context state; updated at zone transitions and spec changes
 local _inThreatContent = false
 local _isTankRole      = false
@@ -966,3 +994,7 @@ local function GetReactionColor(unit)
     local eic = _C(owBasic and "owBasicColor" or "enemyInCombat")
     return MaybeDarken(eic.r, eic.g, eic.b, inCombat)
 end
+
+I._C, I.GetReactionColor, I.questMobCache = _C, GetReactionColor, questMobCache
+I.RefreshThreatCache = RefreshThreatCache
+I.broken = false

@@ -1,3 +1,29 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Overlays.lua
+--
+--  Lazily built overlays (glow, low health, near aggro, highlight, arrows,
+--  focus), the threat percent text, the threat gap, hover and target overlay.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, type = pairs, type
+local PP = EllesmereUI.PP
+local UnitIsUnit = UnitIsUnit
+local UnitClass = UnitClass
+local _, PLAYER_CLASS = UnitClass("player")
+
+local defaults, GetFont, GetNPOutline = I.defaults, I.GetFont, I.GetNPOutline
+local HP_BAR_SLOTS, SetFSFont = I.HP_BAR_SLOTS, I.SetFSFont
+local GetHealthBarWidth = I.GetHealthBarWidth
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 -------------------------------------------------------------------------------
 --  Lazy-creation helpers for target-only/focus-only UI objects: needed on 1 plate at a time,
@@ -773,3 +799,8 @@ ns.EnsureTargetOverlay = function(plate)
     ApplyOverlayGeometry(plate.targetOverlayFill, plate.targetOverlayBg, plate.health, true)
     plate.targetClipBg:Hide()
 end
+
+I.ApplyOverlayGeometry, I.EnsureArrows = ApplyOverlayGeometry, EnsureArrows
+I.EnsureFocusOverlay, I.EnsureGlow = EnsureFocusOverlay, EnsureGlow
+I.EnsureTargetHighlight, I.OverlayBgAlpha = EnsureTargetHighlight, OverlayBgAlpha
+I.broken = false

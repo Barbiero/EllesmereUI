@@ -1,3 +1,50 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Plate.lua
+--
+--  Blizzard frame hiding, the cast fallback frame, text helpers and the
+--  NameplateFrame mixin: cast text, appearance, target of target, SetUnit,
+--  ClearUnit.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, type = pairs, type
+local PP = EllesmereUI.PP
+local UnitName = UnitName
+local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
+local UnitIsPlayer = UnitIsPlayer
+local UnitClassBase = UnitClassBase
+local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
+
+local defaults, GetNPOutline, HP_BAR_SLOTS = I.defaults, I.GetNPOutline, I.HP_BAR_SLOTS
+local SetFSFont, ApplyHealthBarTexture = I.SetFSFont, I.ApplyHealthBarTexture
+local GetAuraSlotOffsets, GetAuraSlots = I.GetAuraSlotOffsets, I.GetAuraSlots
+local GetAuraSpacing, GetBuffIconSize = I.GetAuraSpacing, I.GetBuffIconSize
+local GetCastBarHeight, GetCCIconSize = I.GetCastBarHeight, I.GetCCIconSize
+local GetDebuffIconSize, GetEnemyNameTextSize = I.GetDebuffIconSize, I.GetEnemyNameTextSize
+local GetFocusCastHeight, GetHealthBarHeight = I.GetFocusCastHeight, I.GetHealthBarHeight
+local GetHealthBarWidth, GetHitboxYShift = I.GetHealthBarWidth, I.GetHitboxYShift
+local GetNameplateYOffset, GetNameYOffset = I.GetNameplateYOffset, I.GetNameYOffset
+local GetShowCastIcon, GetStackSpacingScale = I.GetShowCastIcon, I.GetStackSpacingScale
+local GetTextSlot, GetTextSlotColor = I.GetTextSlot, I.GetTextSlotColor
+local GetTextSlotOffsets, GetTextSlotSize = I.GetTextSlotOffsets, I.GetTextSlotSize
+local IsComboHealthText, PositionAuraSlot = I.IsComboHealthText, I.PositionAuraSlot
+local NotifyCastEnded, GetClassPowerTopPush = I.NotifyCastEnded, I.GetClassPowerTopPush
+local HideClassPowerOnPlate = I.HideClassPowerOnPlate
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
+-- Pre-hook SetTexture for pooled aura-slot icons (snap-disabled at creation, so
+-- the pixel-snap hook is pure overhead). Upgraded to PP.RawSetTexture in
+-- OnEnable; starts as a plain wrapper so it is never nil.
+local RawSetTex = function(t, v) t:SetTexture(v) end
+
 local hookedUFs = {}
 local hookedHighlights = {}
 local hookedSoftTargetIcons = {}
@@ -198,7 +245,7 @@ if EllesmereUI.IS_FOREVER then
 end
 ns.HideBlizzardFrame = HideBlizzardFrame
 local castFallbackFrame = CreateFrame("Frame")
-local fallbackCastCount = 0
+I.fallbackCastCount = 0
 local _fallbackPlates = {}
 castFallbackFrame._textAccum = 0.1
 castFallbackFrame:SetScript("OnUpdate", function(self, elapsed)
@@ -226,9 +273,9 @@ castFallbackFrame:SetScript("OnUpdate", function(self, elapsed)
                 plate.isCasting = false
                 plate._castFallback = nil
                 _fallbackPlates[plate] = nil
-                fallbackCastCount = fallbackCastCount - 1
-                if fallbackCastCount <= 0 then
-                    fallbackCastCount = 0
+                I.fallbackCastCount = I.fallbackCastCount - 1
+                if I.fallbackCastCount <= 0 then
+                    I.fallbackCastCount = 0
                     castFallbackFrame:Hide()
                 end
                 NotifyCastEnded(plate)
@@ -1052,8 +1099,8 @@ function NameplateFrame:ClearUnit()
         if self._castFallback then
             self._castFallback = nil
             _fallbackPlates[self] = nil
-            fallbackCastCount = fallbackCastCount - 1
-            if fallbackCastCount <= 0 then fallbackCastCount = 0; castFallbackFrame:Hide() end
+            I.fallbackCastCount = I.fallbackCastCount - 1
+            if I.fallbackCastCount <= 0 then I.fallbackCastCount = 0; castFallbackFrame:Hide() end
         end
         NotifyCastEnded(self)
     end
@@ -1173,3 +1220,8 @@ function NameplateFrame:ClearUnit()
         self._stackBounds:Hide()
     end
 end
+
+I._fallbackPlates, I.castFallbackFrame = _fallbackPlates, castFallbackFrame
+I.NameplateFrame = NameplateFrame
+I.SetRawSetTex = function(f) RawSetTex = f end
+I.broken = false

@@ -1,3 +1,24 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Styles.lua
+--
+--  Stock styles (Blizzard and Classic art), the Forever level box, Blizzard
+--  cast art, bar textures and the absorb style.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, ipairs, type = pairs, ipairs, type
+local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
+
+local defaults = I.defaults
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 -------------------------------------------------------------------------------
 --  Stock styles (Global Settings > Style). Blizzard Style: the stock
@@ -1076,3 +1097,6 @@ function ns.ApplyAbsorbStyleAll()
         ns.ApplyAbsorbStyle(plate)
     end
 end
+
+I.ApplyHealthBarTexture, I.NoTintFlag = ApplyHealthBarTexture, NoTintFlag
+I.broken = false

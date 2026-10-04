@@ -1,3 +1,28 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_CastState.lua
+--
+--  Non-target opacity, the hover effect, the kick watcher, cast notifications
+--  and the aura CVars.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs, type = pairs, type
+local UnitIsUnit, UnitCanAttack = UnitIsUnit, UnitCanAttack
+local C_NamePlate = C_NamePlate
+local NamePlateConstants, Enum = NamePlateConstants, Enum
+
+local defaults, GetHealthBarWidth = I.defaults, I.GetHealthBarWidth
+local ApplyOverlayGeometry, OverlayBgAlpha = I.ApplyOverlayGeometry, I.OverlayBgAlpha
+local GetActiveKickSpell = I.GetActiveKickSpell
+
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 
 -------------------------------------------------------------------------------
 --  Non-Target Opacity: while the player has a target, every skinned plate that is not the
@@ -345,3 +370,7 @@ local function SetupAuraCVars()
     end
     ns.ApplyNamePlateClickArea = ApplyNamePlateClickArea
 end
+
+I.NotifyCastEnded, I.NotifyCastStarted = NotifyCastEnded, NotifyCastStarted
+I.SetupAuraCVars = SetupAuraCVars
+I.broken = false

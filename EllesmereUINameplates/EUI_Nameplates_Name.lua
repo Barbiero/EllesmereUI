@@ -1,3 +1,47 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Nameplates_Name.lua
+--
+--  NameplateFrame: name, classification, faction, raid icon, target and hover
+--  extras.
+--  Reads the earlier nameplate files through ns and ns._npInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._npInternals
+-- EllesmereUINameplates.lua or an earlier nameplate file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ipairs, type = ipairs, type
+local PP = EllesmereUI.PP
+local UnitName = UnitName
+local UnitIsUnit = UnitIsUnit
+local UnitClassification = UnitClassification
+local GetRaidTargetIndex, SetRaidTargetIconTexture = GetRaidTargetIndex, SetRaidTargetIconTexture
+
+local defaults, GetNPOutline, HP_BAR_SLOTS = I.defaults, I.GetNPOutline, I.HP_BAR_SLOTS
+local SetFSFont, EstimateHealthTextWidth = I.SetFSFont, I.EstimateHealthTextWidth
+local GetAuraSlotOffsets, GetClassificationSlot = I.GetAuraSlotOffsets, I.GetClassificationSlot
+local GetDebuffYOffset, GetHealthBarWidth = I.GetDebuffYOffset, I.GetHealthBarWidth
+local GetHideEnemyNameWhileCasting = I.GetHideEnemyNameWhileCasting
+local GetNameYOffset, GetRaidMarkerPos = I.GetNameYOffset, I.GetRaidMarkerPos
+local GetRaidMarkerSize, GetRareEliteIconSize = I.GetRaidMarkerSize, I.GetRareEliteIconSize
+local GetShowCastIcon, GetShowClassPower = I.GetShowCastIcon, I.GetShowClassPower
+local GetSideAuraXOffset, GetSlotOffsets = I.GetSideAuraXOffset, I.GetSlotOffsets
+local GetTextSlot, GetTextSlotOffsets = I.GetTextSlot, I.GetTextSlotOffsets
+local GetTextSlotSize, IsBorderEnabled = I.GetTextSlotSize, I.IsBorderEnabled
+local PositionArrowsOutsideAuras, EnsureArrows = I.PositionArrowsOutsideAuras, I.EnsureArrows
+local EnsureGlow, EnsureTargetHighlight = I.EnsureGlow, I.EnsureTargetHighlight
+local EnsureClassPowerPips = I.EnsureClassPowerPips
+local GetClassPowerTopPush = I.GetClassPowerTopPush
+local HideClassPowerOnPlate = I.HideClassPowerOnPlate
+local UpdateClassPowerOnPlate, NameplateFrame = I.UpdateClassPowerOnPlate, I.NameplateFrame
+
+local classPowerType
+I.classPowerTypeSetters[#I.classPowerTypeSetters + 1] = function(v) classPowerType = v end
+local p
+I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
+
 function NameplateFrame:UpdateName()
     local unit = self.unit
     if not unit then return end
@@ -715,3 +759,5 @@ function ns.ClearHoverExtras(plate)
     end
     plate:ApplyTarget()
 end
+
+I.broken = false
