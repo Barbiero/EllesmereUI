@@ -144,6 +144,16 @@ local EUI = EllesmereUI
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
+-- "Show Junk in Recent" (default on): when turned off, junk items (grey +
+-- player-marked) are kept out of the Recent Items section. Returns false on the
+-- default path with no IsJunk lookup, and is a no-op while the Junk Marker
+-- feature is off (IsJunk is false then). Shared by the grid and list recent
+-- gatherers. Core loads before Grid/List, so ns has it by the time they run.
+function ns.JunkHiddenFromRecent(itemID, quality)
+    if BP().bagJunkShowInRecent ~= false then return false end
+    return (EUI_CategoryManager and EUI_CategoryManager:IsJunk(itemID, quality)) or false
+end
+
 -- Uninstall EUI: Sort to Bottom flips Blizzard's own sort direction, so the
 -- player's is handed back, as turning the option off does.
 EUI.OnUninstall(function()

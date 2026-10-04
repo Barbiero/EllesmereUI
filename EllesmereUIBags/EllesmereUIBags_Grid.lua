@@ -877,7 +877,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local recentItems = {}
             if EUI_Bags._recentItems then
                 for _, d in ipairs(tempItems) do
-                    if d.info and d.info.itemID and EUI_Bags._recentItems[d.info.itemID] then
+                    if d.info and d.info.itemID and EUI_Bags._recentItems[d.info.itemID]
+                       and not ns.JunkHiddenFromRecent(d.info.itemID, d.info.quality) then
                         recentItems[#recentItems + 1] = d
                     end
                 end
@@ -1001,7 +1002,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             RenderJunkSection = function()
                 if #junkItems == 0 then return end
                 PreCacheSortFields(junkItems)
-                SortJunkByVendor(junkItems)
+                if BP().bagJunkSortByValue then
+                    SortJunkByVendor(junkItems)
+                else
+                    table.sort(junkItems, VisualSortCompare)
+                end
                 RenderBagGrid(EllesmereUI.L("Junk") .. " (" .. #junkItems .. ")", junkItems)
             end
             -- Top placement: below the Pinned Items section (drawn above), before
@@ -1110,9 +1115,10 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         end
         for i = 1, #cats do
             if #itemsByCat[i] > 0 and not cats[i].groupName and not cats[i].isRecent then
-                if cats[i].isJunk then
-                    -- Junk orders by vendor value, not the saved drag order --
-                    -- same as the grouped-member and selected-category paths.
+                if cats[i].isJunk and BP().bagJunkSortByValue then
+                    -- Opt-in: order Junk by vendor value instead of the saved drag
+                    -- order -- same as the grouped-member and selected-category
+                    -- paths. Off -> Junk behaves like any other category.
                     PreCacheSortFields(itemsByCat[i])
                     SortJunkByVendor(itemsByCat[i])
                 else
@@ -1392,7 +1398,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                    and (BP().bagShowRecentItems ~= false) then
                     local recentItems = {}
                     for _, data in ipairs(displayItems) do
-                        if data.info and data.info.itemID and EUI_Bags._recentItems[data.info.itemID] then
+                        if data.info and data.info.itemID and EUI_Bags._recentItems[data.info.itemID]
+                           and not ns.JunkHiddenFromRecent(data.info.itemID, data.info.quality) then
                             recentItems[#recentItems + 1] = data
                         end
                     end
@@ -1493,7 +1500,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
 
                 if #memberItems > 0 then
                     PreCacheSortFields(memberItems)
-                    if memberCat and memberCat.isJunk then
+                    if memberCat and memberCat.isJunk and BP().bagJunkSortByValue then
                         SortJunkByVendor(memberItems)
                     else
                         table.sort(memberItems, VisualSortCompare)
@@ -1574,7 +1581,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             if #displayItems > 0 then
                 if not (selCat and selCat.isRecent) then
                     PreCacheSortFields(displayItems)
-                    if selCat and selCat.isJunk then
+                    if selCat and selCat.isJunk and BP().bagJunkSortByValue then
                         SortJunkByVendor(displayItems)
                     else
                         table.sort(displayItems, VisualSortCompare)

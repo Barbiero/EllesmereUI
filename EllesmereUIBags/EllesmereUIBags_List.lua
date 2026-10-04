@@ -900,7 +900,8 @@ function ns.RenderListView(items, opts)
             if pinnedSet and ns.IsItemPinned(pinnedSet, d.itemLink, d.info.itemID) then
                 Add("pinned", "", d)
             end
-            if recentSet and recentSet[d.info.itemID] then
+            if recentSet and recentSet[d.info.itemID]
+               and not ns.JunkHiddenFromRecent(d.info.itemID, d.info.quality) then
                 Add("recent", "", d)
             end
             if slotView then

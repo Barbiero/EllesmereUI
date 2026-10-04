@@ -959,14 +959,14 @@ initFrame:SetScript("OnEvent", function(self)
                           get=function() return db.profile.bagJunkNoSellSummary == true end,
                           set=function(v) db.profile.bagJunkNoSellSummary = v and true or nil end },
                         { type="toggle", label="Add Junk Category to One Bag",
-                          tooltip="In the One Bag view, pull junk items out of the merged Main Bags grid into their own Junk category at the bottom (sorted by vendor value).",
+                          tooltip="In the One Bag view, pull junk items out of the merged Main Bags grid into their own Junk section at the bottom.",
                           get=function() return db.profile.bagJunkOneBag == true end,
                           set=function(v)
                               db.profile.bagJunkOneBag = v and true or nil
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
                         { type="toggle", label="Add Junk Category to MultiBag",
-                          tooltip="In the MultiBag view, pull junk items out of the per-bag grids into their own Junk category at the bottom (sorted by vendor value).",
+                          tooltip="In the MultiBag view, pull junk items out of the per-bag grids into their own Junk section at the bottom.",
                           get=function() return db.profile.bagJunkMultiBag == true end,
                           set=function(v)
                               db.profile.bagJunkMultiBag = v and true or nil
@@ -977,6 +977,20 @@ initFrame:SetScript("OnEvent", function(self)
                           get=function() return db.profile.bagJunkAtTop == true end,
                           set=function(v)
                               db.profile.bagJunkAtTop = v and true or nil
+                              if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          end },
+                        { type="toggle", label="Sort Junk by Vendor Value",
+                          tooltip="Order the Junk category by vendor sell value, most valuable first, instead of the drag/visual order other categories use. Off by default so Junk behaves like any other category.",
+                          get=function() return db.profile.bagJunkSortByValue == true end,
+                          set=function(v)
+                              db.profile.bagJunkSortByValue = v and true or nil
+                              if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
+                          end },
+                        { type="toggle", label="Show Junk in Recent",
+                          tooltip="Include junk items (grey, and items you have marked) in the Recent Items section. Turn off to keep newly looted junk out of Recent.",
+                          get=function() return db.profile.bagJunkShowInRecent ~= false end,
+                          set=function(v)
+                              db.profile.bagJunkShowInRecent = v and true or false
                               if _G.EUI_Bags and _G.EUI_Bags.RefreshInventory then _G.EUI_Bags:RefreshInventory() end
                           end },
                         { type="dropdown", label="Junk Icon Corner",
