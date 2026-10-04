@@ -1887,9 +1887,8 @@ initFrame:SetScript("OnEvent", function(self)
         local REQ = "Enable Run Summary"
 
         -----------------------------------------------------------------
-        --  Top action buttons: Show Preview + Clear Run History, the same
-        --  pair layout as the Action Bars page's Quick Keybind / Blizzard
-        --  Style buttons.
+        --  Top action buttons: Show Preview + Clear Run History, two 312x38
+        --  buttons centred with a 40px gap.
         -----------------------------------------------------------------
         do
             local PPn = EllesmereUI.PanelPP

@@ -907,7 +907,7 @@ local function CreateMover(barKey)
 
         local ddBg = UM.growDropdownFrame:CreateTexture(nil, "BACKGROUND")
         ddBg:SetAllPoints()
-        ddBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+        ddBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
         EllesmereUI.MakeBorder(UM.growDropdownFrame, 1, 1, 1, 0.20)
 
         local ddY = -4
@@ -2149,7 +2149,7 @@ local function CreateMover(barKey)
 
                     local ddBg = UM.anchorDropdownFrame:CreateTexture(nil, "BACKGROUND")
                     ddBg:SetAllPoints()
-                    ddBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+                    ddBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
                     EllesmereUI.MakeBorder(UM.anchorDropdownFrame, 1, 1, 1, 0.20)
 
                     local ddY = -4
@@ -2537,7 +2537,7 @@ local function CreateMover(barKey)
     do
         local bg = cogBtn:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+        bg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
         cogBtn._bg = bg
         local brd = EllesmereUI.MakeBorder(cogBtn, 1, 1, 1, 0.20)
         cogBtn._brd = brd
@@ -2548,7 +2548,7 @@ local function CreateMover(barKey)
         icon:SetAlpha(0.7)
         cogBtn._icon = icon
         cogBtn:SetScript("OnEnter", function(self)
-            self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.98)
+            self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.98)
             self._brd:SetColor(1, 1, 1, 0.30)
             self._icon:SetAlpha(1)
             mover:SetFrameLevel(mover._raisedLevel + 100)
@@ -2556,7 +2556,7 @@ local function CreateMover(barKey)
             if not UM.darkOverlaysEnabled then mover:SetAlpha(MOVER_HOVER) end
         end)
         cogBtn:SetScript("OnLeave", function(self)
-            self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+            self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
             self._brd:SetColor(1, 1, 1, 0.20)
             self._icon:SetAlpha(0.7)
         end)
@@ -2575,7 +2575,7 @@ local function CreateMover(barKey)
 
     -- Re-set cogBtn hover scripts now that fade helpers are in scope
     cogBtn:SetScript("OnEnter", function(self)
-        self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.98)
+        self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.98)
         self._brd:SetColor(1, 1, 1, 0.30)
         self._icon:SetAlpha(1)
         -- Restore mover highlight immediately (mover:OnLeave resets it when mouse moves to cog)
@@ -2584,7 +2584,7 @@ local function CreateMover(barKey)
         if not UM.darkOverlaysEnabled then mover:SetAlpha(MOVER_HOVER) end
     end)
     cogBtn:SetScript("OnLeave", function(self)
-        self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+        self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
         self._brd:SetColor(1, 1, 1, 0.20)
         self._icon:SetAlpha(0.7)
     end)
@@ -2599,7 +2599,7 @@ local function CreateMover(barKey)
     snapDD:SetSize(DD_W, 30)
     local snapDDBg = snapDD:CreateTexture(nil, "BACKGROUND")
     snapDDBg:SetAllPoints()
-    snapDDBg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+    snapDDBg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
     snapDD._bg = snapDDBg
     local snapDDBrd = EllesmereUI.MakeBorder(snapDD, 1, 1, 1, 0.20)
     snapDD._brd = snapDDBrd
@@ -2619,14 +2619,14 @@ local function CreateMover(barKey)
             EllesmereUI.ShowWidgetTooltip(self, "This feature requires Snap Elements to be enabled")
             return
         end
-        self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.98)
+        self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.98)
         self._brd:SetColor(1, 1, 1, 0.30)
         snapDDLbl:SetTextColor(1, 1, 1, 0.60)
     end)
     snapDD:SetScript("OnLeave", function(self)
         EllesmereUI.HideWidgetTooltip()
         if not UM.snapEnabled then return end
-        self._bg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+        self._bg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
         self._brd:SetColor(1, 1, 1, 0.20)
         snapDDLbl:SetTextColor(1, 1, 1, 0.50)
     end)
@@ -2635,12 +2635,12 @@ local function CreateMover(barKey)
     -- Helper: apply grayed-out or normal visual state to the dropdown
     local function RefreshSnapDDState()
         if not UM.snapEnabled then
-            snapDDBg:SetColorTexture(0.075, 0.113, 0.141, 0.50)
+            snapDDBg:SetColorTexture(0.103, 0.095, 0.088, 0.50)
             snapDDBrd:SetColor(1, 1, 1, 0.07)
             snapDDLbl:SetTextColor(1, 1, 1, 0.20)
             snapDDArrow:SetAlpha(0.10)
         else
-            snapDDBg:SetColorTexture(0.075, 0.113, 0.141, 0.9)
+            snapDDBg:SetColorTexture(0.103, 0.095, 0.088, 0.9)
             snapDDBrd:SetColor(1, 1, 1, 0.20)
             snapDDLbl:SetTextColor(1, 1, 1, 0.50)
             snapDDArrow:SetAlpha(1)
@@ -2697,7 +2697,7 @@ local function CreateMover(barKey)
         -- Background + border
         local menuBg = snapMenu:CreateTexture(nil, "BACKGROUND")
         menuBg:SetAllPoints()
-        menuBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+        menuBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
         EllesmereUI.MakeBorder(snapMenu, 1, 1, 1, 0.20)
 
         local ITEM_H = 24
@@ -2850,7 +2850,7 @@ local function CreateMover(barKey)
                 regSub:SetPoint("TOPLEFT", rgItem, "TOPRIGHT", 2, 0)
                 local rsBg = regSub:CreateTexture(nil, "BACKGROUND")
                 rsBg:SetAllPoints()
-                rsBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+                rsBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
                 EllesmereUI.MakeBorder(regSub, 1, 1, 1, 0.20)
                 local rsYOff = -4
                 for _, eInfo in ipairs(gElems) do
@@ -3043,7 +3043,7 @@ local function CreateMover(barKey)
 
         local menuBg = cogMenu:CreateTexture(nil, "BACKGROUND")
         menuBg:SetAllPoints()
-        menuBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+        menuBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
         EllesmereUI.MakeBorder(cogMenu, 1, 1, 1, 0.20)
 
         local ITEM_H = 24
@@ -3926,7 +3926,7 @@ local function CreateMover(barKey)
                 seSub:SetPoint("TOPLEFT", seItem, "TOPRIGHT", 2, 0)
                 local seBg = seSub:CreateTexture(nil, "BACKGROUND")
                 seBg:SetAllPoints()
-                seBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+                seBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
                 EllesmereUI.MakeBorder(seSub, 1, 1, 1, 0.20)
                 -- Two rows can be active at once: a primary edge plus the cross-axis
                 -- one. Center is active exactly while neither exists.
@@ -4158,7 +4158,7 @@ local function CreateMover(barKey)
                         sub:SetPoint("BOTTOMLEFT", item, "BOTTOMRIGHT", 2, 0)
                         local sBg = sub:CreateTexture(nil, "BACKGROUND")
                         sBg:SetAllPoints()
-                        sBg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+                        sBg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
                         EllesmereUI.MakeBorder(sub, 1, 1, 1, 0.20)
                         local entries = buildEntries()
                         local rsY = -4

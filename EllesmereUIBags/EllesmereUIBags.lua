@@ -434,13 +434,19 @@ local _openItemPanels = {}
 local _anyItemPanelOpen = false
 -- Unmerge state the CURRENT painted layout was built with; bags OnShow compares against it so a flip while hidden still repaints (closing a mailbox hides both).
 local _paintedPanelOpen = false
--- Returns true when the aggregate state flipped, so the caller can refresh.
+-- Returns true when the aggregate state flipped and the bags' view merges, so
+-- the caller can refresh. A view that does not merge paints the same either
+-- way: its painted state just follows, so neither this nor OnShow repaints.
 local function SetItemPanelOpen(key, open)
     _openItemPanels[key] = open or nil
     local any = next(_openItemPanels) ~= nil
     if any == _anyItemPanelOpen then return false end
     _anyItemPanelOpen = any
-    return true
+    local merges
+    if EUI_Bags.IsListMode() then merges = BP().bagListMergeDuplicates == true
+    else merges = BP().bagMergeDuplicates ~= false end
+    if not merges then _paintedPanelOpen = any end
+    return merges
 end
 
 -- Pre-cache sort fields onto item data tables to avoid API calls in comparator.
@@ -6054,7 +6060,10 @@ function EUI_Bags:RefreshInventory()
                     -- The List view's iLvl column always needs the real level
                     d._giIlvl = isGear and (BP().showItemlevelInBags ~= false or EUI_Bags.IsListMode())
                         and GetItemLevelAtLocation(loc, itemLink) or nil
-                    if isGear and GetUpgradeTrack then
+                    -- Upgrade tracks: the grid's item level colour and rank; the
+                    -- List view only while its Track column shows or sorts.
+                    if isGear and GetUpgradeTrack
+                        and (not EUI_Bags.IsListMode() or ns.ListUsesColumn("track")) then
                         local rankText, trackColor = GetUpgradeTrack(itemLink)
                         if rankText and rankText ~= "" then
                             d._giTrackRank = rankText
@@ -6354,6 +6363,10 @@ function EUI_Bags:RefreshInventory()
     if child then
         child:SetWidth(gridW + gridPadX * 2 + scrollbarPad)
     end
+
+    -- Both views below paint with the current panel state, merging or not
+    -- (slot views and an unmerged list never reach MergeDuplicates)
+    _paintedPanelOpen = _anyItemPanelOpen
 
     -- List display (latched per session): rows replace the grid; the column
     -- header bar takes the top of the scroll area
