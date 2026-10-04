@@ -1,3 +1,44 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookReanchor.lua
+--
+--  The entry pool, sorting and CollectAndReanchor.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ECME = ns.ECME
+local barDataByKey = ns.barDataByKey
+local cdmBarFrames = ns.cdmBarFrames
+local cdmBarIcons = ns.cdmBarIcons
+local _ecmeFC = ns._ecmeFC
+local FC = ns.FC
+local GetTime = GetTime
+
+local hookFrameData, VIEWER_TO_BAR = I.hookFrameData, I.VIEWER_TO_BAR
+local IsRouteMapBuilt, ResolveCDIDToBar = I.IsRouteMapBuilt, I.ResolveCDIDToBar
+local ResolveFrameSpellID, ResolveSpellSettings = I.ResolveFrameSpellID, I.ResolveSpellSettings
+local IsFrameIncluded, CategorizeFrame = I.IsFrameIncluded, I.CategorizeFrame
+local DecorateFrame, _trinketFrames = I.DecorateFrame, I._trinketFrames
+local _trinketItemCache, ApplySpellDesaturation = I._trinketItemCache, I.ApplySpellDesaturation
+local GetOrCreateTrinketFrame = I.GetOrCreateTrinketFrame
+local UpdateTrinketCooldown, UpdateTrinketFrame = I.UpdateTrinketCooldown, I.UpdateTrinketFrame
+local _injectedCustomBuffFrames, _presetFrames = I._injectedCustomBuffFrames, I._presetFrames
+local _RegisterPresetLive = I._RegisterPresetLive
+local GetOrCreateCustomBuffFrame = I.GetOrCreateCustomBuffFrame
+local GetOrCreateEmptySlotFrame = I.GetOrCreateEmptySlotFrame
+local GetOrCreateItemPresetFrame = I.GetOrCreateItemPresetFrame
+local GetOrCreatePlaceholderFrame = I.GetOrCreatePlaceholderFrame
+local HideAllInjectedCustomBuffs = I.HideAllInjectedCustomBuffs
+local HideAllPlaceholders = I.HideAllPlaceholders
+local ResolvePlaceholderIconSID = I.ResolvePlaceholderIconSID
+local _customAuraTimers, ApplyPresetGCDSwipe = I._customAuraTimers, I.ApplyPresetGCDSwipe
+local PotSwap = I.PotSwap
+
 -------------------------------------------------------------------------------
 --  Entry Pool + Sorting
 -------------------------------------------------------------------------------
@@ -79,9 +120,6 @@ end
 --  4. Decorate, sort, assign to icon slots, layout
 --  5. Alpha 0 for unclaimed, alpha 1 for claimed
 -------------------------------------------------------------------------------
-local reanchorDirty = false
-local reanchorFrame = nil
-local viewerHooksInstalled = false
 
 local function CollectAndReanchor()
     local p = ECME.db and ECME.db.profile
@@ -94,7 +132,7 @@ local function CollectAndReanchor()
     -- attempt a fresh rebuild now. Test the build sentinel, NOT the
     -- diversion maps (which can legitimately be empty for users with no
     -- diversions) and NOT _cdidRouteMap (lazy cache, empty post-build).
-    if not _routeMapBuilt and ns.RebuildSpellRouteMap then
+    if not IsRouteMapBuilt() and ns.RebuildSpellRouteMap then
         ns.RebuildSpellRouteMap()
     end
 
@@ -2271,3 +2309,5 @@ local function CollectAndReanchor()
 end
 ns.CollectAndReanchor = CollectAndReanchor
 
+I.CollectAndReanchor = CollectAndReanchor
+I.broken = false

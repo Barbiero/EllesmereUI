@@ -1,3 +1,21 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookPressMirror.lua
+--
+--  Mirror Key Presses.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local barDataByKey = ns.barDataByKey
+local cdmBarIcons = ns.cdmBarIcons
+local _ecmeFC = ns._ecmeFC
+local GetTime = GetTime
+
 -------------------------------------------------------------------------------
 --  Mirror Key Presses  (per-bar: barData.pressMirror -- set in CDM Bars > Extras)
 --
@@ -469,3 +487,4 @@ do
         end
     end)
 end
+I.broken = false

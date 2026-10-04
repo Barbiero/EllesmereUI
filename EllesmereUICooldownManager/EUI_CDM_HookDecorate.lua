@@ -1,3 +1,32 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookDecorate.lua
+--
+--  DecorateFrame and CategorizeFrame.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local barDataByKey = ns.barDataByKey
+local GetCDMFont = ns.GetCDMFont
+local _ecmeFC = ns._ecmeFC
+local FC = ns.FC
+
+local _playerClass, hookFrameData = I._playerClass, I.hookFrameData
+local ResolveCDIDToBar, ResolveFrameSpellID = I.ResolveCDIDToBar, I.ResolveFrameSpellID
+local ResolveSpellSettings, ApplyCdmChargeStyle = I.ResolveSpellSettings, I.ApplyCdmChargeStyle
+local ApplyCdmEdge, ApplyMaxStacksGlow = I.ApplyCdmEdge, I.ApplyMaxStacksGlow
+local CdmChargeInfoFor, CdmFrameIsActive = I.CdmChargeInfoFor, I.CdmFrameIsActive
+local CdmStaleLinkedSpell, EvalMaxStacksFrame = I.CdmStaleLinkedSpell, I.EvalMaxStacksFrame
+local HideBlizzardDecorations = I.HideBlizzardDecorations
+local WatchMaxStacksFrame, ApplyCustomIcon = I.WatchMaxStacksFrame, I.ApplyCustomIcon
+local ApplyOnlyNumbers, ArmCdStateEval = I.ApplyOnlyNumbers, I.ArmCdStateEval
+local TryHookSwiftmend = I.TryHookSwiftmend
+
 -------------------------------------------------------------------------------
 --  DecorateFrame
 --  Add our visual overlays to a CDM frame (one-time per frame).
@@ -1514,3 +1543,5 @@ local function CategorizeFrame(frame, viewerBarKey)
     return viewerBarKey, displaySID, baseSID
 end
 
+I.CategorizeFrame, I.DecorateFrame = CategorizeFrame, DecorateFrame
+I.broken = false

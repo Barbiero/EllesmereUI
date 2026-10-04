@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookIconStyle.lua
+--
+--  The active aura cache, IsFrameIncluded, hiding Blizzard's decorations, stock
+--  icon art and the charge cooldown style.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local barDataByKey = ns.barDataByKey
+local _ecmeFC = ns._ecmeFC
+local FC = ns.FC
+
+local hookFrameData, ResolveSpellSettings = I.hookFrameData, I.ResolveSpellSettings
+
 -------------------------------------------------------------------------------
 --  Active aura cache (consumed by bar glow overlays)
 --  Maintained by the 0.1s buff ticker, NOT here: it walks viewer pools cheaply
@@ -505,3 +525,10 @@ function ns.WatchMaxStacksIfEnabled(frame)
     end
 end
 
+I._activeCache, I._activeStacksCache = _activeCache, _activeStacksCache
+I.ApplyCdmChargeStyle, I.ApplyCdmEdge = ApplyCdmChargeStyle, ApplyCdmEdge
+I.ApplyMaxStacksGlow, I.CdmChargeInfoFor = ApplyMaxStacksGlow, CdmChargeInfoFor
+I.CdmFrameIsActive, I.CdmStaleLinkedSpell = CdmFrameIsActive, CdmStaleLinkedSpell
+I.EvalMaxStacksFrame, I.HideBlizzardDecorations = EvalMaxStacksFrame, HideBlizzardDecorations
+I.IsFrameIncluded, I.WatchMaxStacksFrame = IsFrameIncluded, WatchMaxStacksFrame
+I.broken = false

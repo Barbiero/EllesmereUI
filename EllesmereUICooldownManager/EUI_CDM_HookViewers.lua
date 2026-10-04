@@ -1,3 +1,34 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookViewers.lua
+--
+--  Position re-snap, the reanchor queue, SetupViewerHooks with the buff ticker
+--  and the Edit Mode lock.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ECME = ns.ECME
+local cdmBarFrames = ns.cdmBarFrames
+local cdmBarIcons = ns.cdmBarIcons
+local _ecmeFC = ns._ecmeFC
+local GetTime = GetTime
+
+local GetViewerFrame, hookFrameData = I.GetViewerFrame, I.hookFrameData
+local VIEWER_NAMES, ResolveFrameSpellID = I.VIEWER_NAMES, I.ResolveFrameSpellID
+local _activeCache, _activeStacksCache = I._activeCache, I._activeStacksCache
+local _smHookedIcons, SwiftmendEnabled = I._smHookedIcons, I.SwiftmendEnabled
+local IsPresetCdDirty, ProcessPresetCooldowns = I.IsPresetCdDirty, I.ProcessPresetCooldowns
+local CollectAndReanchor, UpdateCustomBuffBars = I.CollectAndReanchor, I.UpdateCustomBuffBars
+
+local reanchorDirty = false
+local reanchorFrame = nil
+local viewerHooksInstalled = false
+
 -------------------------------------------------------------------------------
 --  Lightweight position re-snap: re-applies stored _cdmAnchor on all claimed
 --  icons without re-enumerating viewers or re-categorizing frames.
@@ -406,11 +437,11 @@ function ns.SetupViewerHooks()
                 -- so an uncapped drain runs at full tick cadence. Casts bypass the cap
                 -- (the racial listener's fast lane zeroes ns._pcLast), and swipes are
                 -- engine-animated once pushed, so the slow lane is imperceptible.
-                if _presetCdDirty and _btNow - (ns._pcLast or 0) >= 1 then
+                if IsPresetCdDirty() and _btNow - (ns._pcLast or 0) >= 1 then
                     ns._pcLast = _btNow
                     ProcessPresetCooldowns()
                 end
-                if _presetCdDirty then
+                if IsPresetCdDirty() then
                     ns._btCleanFires = 0
                 elseif (ns._btCleanFires or 0) < 10 then
                     ns._btCleanFires = (ns._btCleanFires or 0) + 1
@@ -1099,3 +1130,4 @@ _G._ECDM_ScanSwiftmend = function()
     end
 end
 
+I.broken = false

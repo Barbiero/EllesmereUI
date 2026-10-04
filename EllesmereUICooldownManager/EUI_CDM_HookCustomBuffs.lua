@@ -1,3 +1,27 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookCustomBuffs.lua
+--
+--  UpdateCustomBuffBars and the aura-tracked custom buffs.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ECME = ns.ECME
+local barDataByKey = ns.barDataByKey
+local cdmBarFrames = ns.cdmBarFrames
+local cdmBarIcons = ns.cdmBarIcons
+local GetTime = GetTime
+
+local _playerClass, ResolveSpellSettings = I._playerClass, I.ResolveSpellSettings
+local DecorateFrame, _AC, _presetFrames = I.DecorateFrame, I._AC, I._presetFrames
+local _customAuraTimers, _pendingCastIDs = I._customAuraTimers, I._pendingCastIDs
+local QueueCustomBuffUpdate = I.QueueCustomBuffUpdate
+
 -------------------------------------------------------------------------------
 --  UpdateCustomBuffBars
 --  Custom Aura bars use UNIT_SPELLCAST_SUCCEEDED to detect usage,
@@ -999,3 +1023,5 @@ function ns.RefreshAuraCustomStyle(barKey)
     rec.styleSig = sig
 end
 
+I.UpdateCustomBuffBars = UpdateCustomBuffBars
+I.broken = false

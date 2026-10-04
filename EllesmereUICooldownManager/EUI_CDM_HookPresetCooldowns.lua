@@ -1,3 +1,26 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookPresetCooldowns.lua
+--
+--  Dynamic potion display and the cooldown drain for EUI's own preset
+--  frames (ProcessPresetCooldowns and its event lanes).
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ECME = ns.ECME
+local barDataByKey = ns.barDataByKey
+local _ecmeFC = ns._ecmeFC
+local GetTime = GetTime
+
+local FD, CdmChargeInfoFor, PresetKeepsColor = I.FD, I.CdmChargeInfoFor, I.PresetKeepsColor
+local _pcActive, _presetFrames = I._pcActive, I._presetFrames
+local ApplyItemQualityPip = I.ApplyItemQualityPip
+
 -- ---------------------------------------------------------------------------
 -- Dynamic potion display for every pot preset carrying a displayOrder (Light's
 -- Potential, Potion of Recklessness, health). The preset icon resolves to the best
@@ -982,3 +1005,9 @@ _spellCastListener:SetScript("OnEvent", function(_, _, _, _, spellID)
     end
 end)
 
+I._customAuraTimers, I._pendingCastIDs = _customAuraTimers, _pendingCastIDs
+I.ApplyPresetGCDSwipe, I.PotSwap = ApplyPresetGCDSwipe, PotSwap
+I.ProcessPresetCooldowns = ProcessPresetCooldowns
+I.QueueCustomBuffUpdate = QueueCustomBuffUpdate
+I.IsPresetCdDirty = ns._isPresetCdDirty
+I.broken = false

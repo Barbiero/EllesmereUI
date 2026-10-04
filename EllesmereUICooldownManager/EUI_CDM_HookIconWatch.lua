@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookIconWatch.lua
+--
+--  Per-spell icon watchers: ready sound, charge text, cooldown state effects,
+--  Swiftmend brightness, custom icons and icon-art suppression.
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local barDataByKey = ns.barDataByKey
+local _ecmeFC = ns._ecmeFC
+local GetTime = GetTime
+
+local _isDruid, GetViewerFrame, hookFrameData = I._isDruid, I.GetViewerFrame, I.hookFrameData
+local IsCDMSettingsOpen, ResolveFrameSpellID = I.IsCDMSettingsOpen, I.ResolveFrameSpellID
+local ResolveSpellSettings, CdmChargeInfoFor = I.ResolveSpellSettings, I.CdmChargeInfoFor
+
 -------------------------------------------------------------------------------
 --  Audio Effect on CD Ready -- per-spell (CD/utility bars only)
 --  Plays a sound the moment a spell becomes ready. Edge-detected with an arm
@@ -1028,3 +1050,7 @@ local function ApplyOnlyNumbers(frame, fd, barData)
 end
 ns.ApplyOnlyNumbers = ApplyOnlyNumbers
 
+I._smHookedIcons, I.ApplyCustomIcon = _smHookedIcons, ApplyCustomIcon
+I.ApplyOnlyNumbers, I.ArmCdStateEval = ApplyOnlyNumbers, ArmCdStateEval
+I.SwiftmendEnabled, I.TryHookSwiftmend = SwiftmendEnabled, TryHookSwiftmend
+I.broken = false

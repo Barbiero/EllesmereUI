@@ -1,3 +1,21 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_CDM_HookResolve.lua
+--
+--  Spell id resolution and the spell route map (which bar a cooldown id
+--  belongs to).
+--  Reads the earlier hook files through ns and ns._hookInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._hookInternals
+-- EllesmereUICdmHooks.lua or an earlier hook file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ECME = ns.ECME
+local ResolveInfoSpellID = ns.ResolveInfoSpellID
+local _ecmeFC = ns._ecmeFC
+
 -------------------------------------------------------------------------------
 --  Spell ID Resolution
 -------------------------------------------------------------------------------
@@ -1062,3 +1080,7 @@ end
 ns.ResolveCDIDToBar = ResolveCDIDToBar
 ns._cdidRouteMap = _cdidRouteMap
 
+I.ResolveCDIDToBar, I.ResolveFrameSpellID = ResolveCDIDToBar, ResolveFrameSpellID
+I.ResolveSpellSettings = ResolveSpellSettings
+I.IsRouteMapBuilt = function() return _routeMapBuilt end
+I.broken = false
