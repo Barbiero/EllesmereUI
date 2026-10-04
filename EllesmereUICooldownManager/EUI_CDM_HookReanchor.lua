@@ -2306,6 +2306,7 @@ local function CollectAndReanchor()
     -- Claims just settled: retire the proc-alert child map so the next alert
     -- rebuilds it against the fresh claim set.
     if ns._cdmClaimGen then ns._cdmClaimGen = ns._cdmClaimGen + 1 end
+    if ns.RefreshStaleCDMKeybinds then ns.RefreshStaleCDMKeybinds() end
 end
 ns.CollectAndReanchor = CollectAndReanchor
 

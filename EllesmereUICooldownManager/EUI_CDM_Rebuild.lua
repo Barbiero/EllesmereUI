@@ -760,9 +760,10 @@ local function ApplyCachedKeybinds()
         for _, icon in ipairs(icons) do
             local ifd = _getFD(icon)
             local kbText = ifd and ifd.keybindText or icon._keybindText
+            local ifc = _ecmeFC[icon]
+            local sid = ifc and ifc.spellID
+            if ifc then ifc.keybindSid = sid end
             if kbText then
-                local ifc = _ecmeFC[icon]
-                local sid = ifc and ifc.spellID
                 if bd and bd.showKeybind and sid then
                     local key = ResolveCDMKeybind(sid)
                     -- Item presets: the resolved display variant first (pot presets may be showing another rank/Fleeting/the swapped-in partner pot), then the static alt ids.
@@ -807,6 +808,20 @@ end
 ns.UpdateCDMKeybinds = UpdateCDMKeybinds
 -- Expose apply-only for the tick loop (new spellID assigned to an icon mid-session)
 ns.ApplyCachedKeybinds = ApplyCachedKeybinds
+-- Reanchor edge: Blizzard reuses viewer frames, so an icon can come back
+-- holding another spell with no binding or slot event behind it. Compare-only
+-- unless an icon's spell differs from the one its text was resolved for.
+ns.RefreshStaleCDMKeybinds = function()
+    for _, icons in pairs(cdmBarIcons) do
+        for i = 1, #icons do
+            local ifc = _ecmeFC[icons[i]]
+            if ifc and ifc.spellID ~= ifc.keybindSid then
+                ApplyCachedKeybinds()
+                return
+            end
+        end
+    end
+end
 ns.CDMKeybindCache = _cdmKeybindCache
 
 end -- keybind cache block
