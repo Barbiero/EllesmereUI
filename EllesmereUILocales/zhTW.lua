@@ -3624,6 +3624,7 @@ L["Scan all equipped gear costs at the Item Upgrade NPC.\nScans each slot one at
 L["Scan at Upgrader for exact costs"] = "在升級 NPC 處掃描以取得精確花費"
 L["Scanning..."]                   = "掃描中..."
 L["Scenarios"]                     = "戰役"
+L["Scenario"]                      = "戰役"
 L["Second Timer"]                  = "計時器二"
 L["Secondary Stat Display"]        = "次要屬性顯示"
 L["Secondary Stats"]               = "次要屬性"

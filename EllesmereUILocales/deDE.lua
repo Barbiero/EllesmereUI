@@ -5253,6 +5253,7 @@ L["Scan all equipped gear costs at the Item Upgrade NPC.\nScans each slot one at
 L["Scan at Upgrader for exact costs"] = "Beim Aufwerter für genaue Kosten scannen"
 L["Scanning..."] = "Scanne..."
 L["Scenarios"] = "Szenarien"
+L["Scenario"] = "Szenario"
 L["Score"] = "Wertung"
 L["Screen layer the bar renders on; changing a grouped bar changes its whole group."] = "Bildschirmschicht (Strata), auf der die Leiste gerendert wird; das Ändern einer gruppierten Leiste ändert ihre gesamte Gruppe."
 L["Screen layer this bar and its icons render on."] = "Bildschirmschicht (Strata), auf der diese Leiste und ihre Symbole gerendert werden."

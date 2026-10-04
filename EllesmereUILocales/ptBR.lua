@@ -4717,6 +4717,7 @@ L["Automatically starts and stops combat logging when entering or leaving a logg
 L["Mythic+ Dungeons"] = "Masmorras Mítica+"
 L["Normal Raid"] = "Raide Normal"
 L["Scenarios"] = "Cenários"
+L["Scenario"] = "Cenário"
 L["Auto-Log Triggers"] = "Gatilhos de Registro Automático"
 L["Delays stopping combat logging by 30 seconds after leaving an instance. Recommended for Warcraft Recorder compatibility."] = "Atrasa em 30 segundos o encerramento do registro de combate após sair de uma instância. Recomendado para compatibilidade com o Warcraft Recorder."
 L["Warcraft Recorder Compatibility"] = "Compatibilidade com o Warcraft Recorder"
