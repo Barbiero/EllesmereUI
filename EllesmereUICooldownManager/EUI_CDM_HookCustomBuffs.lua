@@ -15,12 +15,12 @@ local ECME = ns.ECME
 local barDataByKey = ns.barDataByKey
 local cdmBarFrames = ns.cdmBarFrames
 local cdmBarIcons = ns.cdmBarIcons
+local _, _playerClass = UnitClass("player")
 local GetTime = GetTime
 
-local _playerClass, ResolveSpellSettings = I._playerClass, I.ResolveSpellSettings
-local DecorateFrame, _AC, _presetFrames = I.DecorateFrame, I._AC, I._presetFrames
-local _customAuraTimers, _pendingCastIDs = I._customAuraTimers, I._pendingCastIDs
-local QueueCustomBuffUpdate = I.QueueCustomBuffUpdate
+local ResolveSpellSettings, DecorateFrame, _AC = I.ResolveSpellSettings, I.DecorateFrame, I._AC
+local _presetFrames, _customAuraTimers = I._presetFrames, I._customAuraTimers
+local _pendingCastIDs, QueueCustomBuffUpdate = I._pendingCastIDs, I.QueueCustomBuffUpdate
 
 -------------------------------------------------------------------------------
 --  UpdateCustomBuffBars

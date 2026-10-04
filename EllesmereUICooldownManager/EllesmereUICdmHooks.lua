@@ -19,13 +19,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 
-local ECME               = ns.ECME
-local barDataByKey        = ns.barDataByKey
-local cdmBarFrames        = ns.cdmBarFrames
 local cdmBarIcons         = ns.cdmBarIcons
 local MAIN_BAR_KEYS       = ns.MAIN_BAR_KEYS
-local ResolveInfoSpellID  = ns.ResolveInfoSpellID
-local GetCDMFont          = ns.GetCDMFont
 
 local floor   = math.floor
 local GetTime = GetTime
@@ -377,10 +372,6 @@ function ns._PandemicWindowSet(self)
     if fd then fd._panStale = nil end
 end
 
--- External frame cache from main file
-local _ecmeFC = ns._ecmeFC
-local FC = ns.FC
-
 local function FD(f)
     local d = hookFrameData[f]
     if not d then d = {}; hookFrameData[f] = d end
@@ -492,16 +483,8 @@ local function IsCDMSettingsOpen()
 end
 
 -- Main-chunk locals the EUI_CDM_Hook*.lua files re-import by name.
--- broken: true while an EUI_CDM_Hook*.lua file loads; a file that fails leaves
--- it set, and the files behind it return at their first lines.
-ns._hookInternals = {
-    _isDruid = _isDruid, _playerClass = _playerClass, FD = FD, GetViewerFrame = GetViewerFrame,
+ns._NewInternals("_hookInternals", {
+    _isDruid = _isDruid, FD = FD, GetViewerFrame = GetViewerFrame,
     hookFrameData = hookFrameData, IsCDMSettingsOpen = IsCDMSettingsOpen,
     VIEWER_NAMES = VIEWER_NAMES, VIEWER_TO_BAR = VIEWER_TO_BAR,
-    broken = false,
-}
--- A re-import of a name this table lacks fails where the part file loads,
--- not later as a nil upvalue inside one of its functions.
-setmetatable(ns._hookInternals, { __index = function(_, k)
-    error("ns._hookInternals has no entry " .. tostring(k), 2)
-end })
+})

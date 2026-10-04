@@ -22,7 +22,7 @@ local GetViewerFrame, hookFrameData = I.GetViewerFrame, I.hookFrameData
 local VIEWER_NAMES, ResolveFrameSpellID = I.VIEWER_NAMES, I.ResolveFrameSpellID
 local _activeCache, _activeStacksCache = I._activeCache, I._activeStacksCache
 local _smHookedIcons, SwiftmendEnabled = I._smHookedIcons, I.SwiftmendEnabled
-local IsPresetCdDirty, ProcessPresetCooldowns = I.IsPresetCdDirty, I.ProcessPresetCooldowns
+local ProcessPresetCooldowns = I.ProcessPresetCooldowns
 local CollectAndReanchor, UpdateCustomBuffBars = I.CollectAndReanchor, I.UpdateCustomBuffBars
 
 local reanchorDirty = false
@@ -437,11 +437,13 @@ function ns.SetupViewerHooks()
                 -- so an uncapped drain runs at full tick cadence. Casts bypass the cap
                 -- (the racial listener's fast lane zeroes ns._pcLast), and swipes are
                 -- engine-animated once pushed, so the slow lane is imperceptible.
-                if IsPresetCdDirty() and _btNow - (ns._pcLast or 0) >= 1 then
+                local presetDirty = ns._isPresetCdDirty()
+                if presetDirty and _btNow - (ns._pcLast or 0) >= 1 then
                     ns._pcLast = _btNow
                     ProcessPresetCooldowns()
+                    presetDirty = ns._isPresetCdDirty()
                 end
-                if IsPresetCdDirty() then
+                if presetDirty then
                     ns._btCleanFires = 0
                 elseif (ns._btCleanFires or 0) < 10 then
                     ns._btCleanFires = (ns._btCleanFires or 0) + 1

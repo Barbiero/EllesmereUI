@@ -1009,5 +1009,4 @@ I._customAuraTimers, I._pendingCastIDs = _customAuraTimers, _pendingCastIDs
 I.ApplyPresetGCDSwipe, I.PotSwap = ApplyPresetGCDSwipe, PotSwap
 I.ProcessPresetCooldowns = ProcessPresetCooldowns
 I.QueueCustomBuffUpdate = QueueCustomBuffUpdate
-I.IsPresetCdDirty = ns._isPresetCdDirty
 I.broken = false
