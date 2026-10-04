@@ -204,6 +204,10 @@ local function InRealInstancedContent()
     if C_Garrison and C_Garrison.IsOnGarrisonMap and C_Garrison.IsOnGarrisonMap() then
         return false
     end
+    -- Housing plots report as "scenario"; they belong to the open world.
+    if C_Housing and C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot() then
+        return false
+    end
 
     if _cachedIType == "party"
     or _cachedIType == "raid"
@@ -279,8 +283,9 @@ end
 
 -- Coarse buckets matching the options multi-select: open_world, raid_mythic,
 -- raid_heroic, raid_normal_lfr, dungeon_mythic (Mythic + M+), dungeon_nonmythic
--- (Heroic / Normal / Follower), timewalking, delve, lair. Returns nil for
--- unmapped instanced content (e.g. PvP) so reminders never silently vanish there.
+-- (Heroic / Normal / Follower), timewalking, delve, lair, scenario (any non-delve
+-- scenario). Returns nil for unmapped instanced content (e.g. PvP) so reminders
+-- never silently vanish there.
 function EABR.CurrentWhereBucket(inInstance)
     -- Lairs carry the World Tier flag instead of a difficulty id the allowlist
     -- knows; the instance gate keeps the flag from ever reclassifying the
@@ -295,6 +300,7 @@ function EABR.CurrentWhereBucket(inInstance)
     if cat == "r_normal" or cat == "r_lfr" then return "raid_normal_lfr" end
     if cat == "s_delve" then return "delve" end
     if not inInstance then return "open_world" end
+    if _cachedIType == "scenario" then return "scenario" end
     return nil
 end
 
@@ -2202,7 +2208,7 @@ local defaults = {
             -- (value false); an absent bucket = shown. Open world defaults
             -- off for raid buffs. Buckets: open_world, raid_mythic,
             -- raid_heroic, raid_normal_lfr, dungeon_mythic,
-            -- dungeon_nonmythic, timewalking, delve, in_combat.
+            -- dungeon_nonmythic, timewalking, delve, lair, scenario, in_combat.
             whereToShow = { open_world = false },
             -- Show When: othersMissing = remind when a groupmate lacks a
             -- buff I provide; iAmMissing = remind when I lack a buff a
