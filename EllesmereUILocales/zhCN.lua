@@ -3795,6 +3795,7 @@ L["Scan all equipped gear costs at the Item Upgrade NPC.\nScans each slot one at
 L["Scan all equipped gear costs at the Item Upgrade NPC.\nScans each slot one at a time — this can take up to 10 seconds.\nRequires the Item Upgrade window to be open.\n|cffff6060Item Upgrade window is not open.|r"] = "在物品升级 NPC 处扫描所有已装备的费用。\n逐一扫描每个槽位 — 这可能需要最多 10 秒。\n需要打开物品升级窗口。\n|cffff6060物品升级窗口未打开。|r"
 L["Scanning..."] = "扫描中..."
 L["Scenarios"] = "场景战役"
+L["Scenario"] = "场景战役"
 L["Shift + Left-Click Drag to permanently save a panel's position."] = "Shift + 左键拖拽以永久保存面板位置。"
 L["Show Calc Button on Character Sheet"] = "在角色面板上显示计算器按钮"
 L["Show Earned / Cap Column"] = "显示已获得/上限列"

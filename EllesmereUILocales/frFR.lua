@@ -3298,6 +3298,7 @@ L["Scan at Upgrader for exact costs"] = "Analyser chez l'améliorateur pour les 
 L["Scanning..."]                = "Analyse en cours..."
 L["Scans each slot one at a time — this can take up to 10 seconds."] = "Analyse chaque emplacement un par un — cela peut prendre jusqu'à 10 secondes."
 L["Scenarios"]                  = "Scénarios"
+L["Scenario"]                   = "Scénario"
 L["Scrapping Machine"]          = "Machine à recycler"
 L["Scroll to Bottom"]           = "Défiler jusqu'en bas"
 L["Scroll to Zoom"]             = "Faire défiler pour zoomer"
