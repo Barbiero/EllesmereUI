@@ -24,3 +24,6 @@ EllesmereUIForeverEssentials_ThreatFeed.lua
 
 # Loot (loot feed)
 EllesmereUIForeverEssentials_LootFeed.lua
+
+# Action Bars (spell uprank)
+EllesmereUIForeverEssentials_Uprank.lua
