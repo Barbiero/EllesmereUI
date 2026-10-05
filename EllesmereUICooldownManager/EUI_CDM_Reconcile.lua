@@ -75,7 +75,7 @@ function ns.ReseedAssignedSpellsFromLiveIcons(cdUtilOnly)
 
     -- Unlike every other assignedSpells mutation site (the picker's add/remove/move calls,
     -- BuildAllCDMBars), this one never marked the cached render-order map (spellOrder,
-    -- CdmHooks.lua ~7000) dirty -- so a spell this pass just materialized had no key in the
+    -- EUI_CDM_HookReanchor.lua) dirty -- so a spell this pass just materialized had no key in the
     -- STALE cache, fell through every OrderKeyFor match probe, and rendered via the raw
     -- layoutIndex spillover fallback (the same imprecise path #1211/#1420 already fixed once)
     -- instead of the position it was just given. Field-confirmed: Cobra Shot's assignedSpells
@@ -870,7 +870,7 @@ end
 --  This is what makes a dual-tracked spell (one stored id, a different id on
 --  every live frame) survivable once the pairing has been observed even a
 --  single time on this spec -- see the ban comment on
---  ns.SyncExtraBuffBarsWithViewer (EllesmereUICdmHooks.lua) for why a
+--  ns.SyncExtraBuffBarsWithViewer (EUI_CDM_HookViewers.lua) for why a
 --  presence-only prune is unsafe without it. Reuses `_IsUsableSID` from the
 --  hidden-channel reader above (single file-scope copy) and the shared
 --  `ArmCDMDropRegenWaiter` from ns.ReconcileAssignedSpellDrops's block

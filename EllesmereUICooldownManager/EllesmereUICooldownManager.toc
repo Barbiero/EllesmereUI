@@ -26,6 +26,17 @@ EUI_CDM_Events.lua
 EllesmereUICdmKeybindStyle.lua
 EllesmereUICdmRotationIcon.lua
 EllesmereUICdmHooks.lua
+EUI_CDM_HookResolve.lua
+EUI_CDM_HookIconStyle.lua
+EUI_CDM_HookIconWatch.lua
+EUI_CDM_HookDecorate.lua
+EUI_CDM_HookTrinkets.lua
+EUI_CDM_HookPresetFrames.lua
+EUI_CDM_HookPresetCooldowns.lua
+EUI_CDM_HookReanchor.lua
+EUI_CDM_HookCustomBuffs.lua
+EUI_CDM_HookViewers.lua
+EUI_CDM_HookPressMirror.lua
 EllesmereUICdmSpellPicker.lua
 EllesmereUICdmBarGlows.lua
 EllesmereUICdmBarGlowConditions.lua

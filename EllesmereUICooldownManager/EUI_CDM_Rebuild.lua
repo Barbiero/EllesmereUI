@@ -67,18 +67,18 @@ local function EnsureGhostBars()
 end
 ns.EnsureGhostBars = EnsureGhostBars
 
--- Exports for extracted files (EllesmereUICdmHooks.lua, EllesmereUICdmSpellPicker.lua)
+-- Exports for extracted files (EllesmereUICdmHooks.lua and EUI_CDM_Hook*.lua, EllesmereUICdmSpellPicker.lua)
 ns.MAIN_BAR_KEYS = MAIN_BAR_KEYS
 ns.GetCDMFont = GetCDMFont
 ns.ResolveInfoSpellID = ResolveInfoSpellID
 ns.ResolveChildSpellID = ResolveChildSpellID
 ns.ComputeTopRowStride = ComputeTopRowStride
--- Side-effect caches are now owned by EllesmereUICdmHooks.lua. The hooks file writes to ns._tick*
--- tables directly; these locals are populated from ns after the hooks file loads (in CDMFinishSetup). The ns._ecmeFC external frame cache is still owned by this file.
+-- Side-effect caches are now owned by EUI_CDM_HookIconStyle.lua. The hook files write to ns._tick*
+-- tables directly; these locals are populated from ns after the hook files load (in CDMFinishSetup). The ns._ecmeFC external frame cache is still owned by this file.
 ns._ecmeFC = _ecmeFC
 ns.FC = FC
 
--- Hook-based CDM Backend loaded from EllesmereUICdmHooks.lua
+-- Hook-based CDM Backend loaded from EllesmereUICdmHooks.lua and the EUI_CDM_Hook*.lua files
 local BuildCustomBarSpellSet -- forward declare (defined below)
 
 -------------------------------------------------------------------------------
@@ -106,7 +106,7 @@ ns.BuildCustomBarSpellSet = BuildCustomBarSpellSet
 
 -- (SnapshotBlizzardCDM / UpdateTrackedBarIcons removed -- replaced by hook-based CollectAndReanchor)
 
--- UpdateAllCDMBars: REMOVED. All recurring work is event-driven via hooks in EllesmereUICdmHooks.lua
+-- UpdateAllCDMBars: REMOVED. All recurring work is event-driven via hooks in EUI_CDM_HookViewers.lua
 -- -- CollectAndReanchor runs only when Blizzard fires OnCooldownIDSet, OnActiveStateChanged, Layout, or pool events. The stub exists only so any stale references don't error.
 local function UpdateAllCDMBars(dt) end
 
@@ -625,7 +625,7 @@ local function _ResolveSlotBinding(slot, key, tier)
         end
         -- For everything else `id` from GetActionInfo is NOT a reliable
         -- identifier -- resolve the real macro index via its name instead
-        -- (same workaround EllesmereUICdmHooks.lua's SlotSpellID already uses).
+        -- (same workaround EUI_CDM_HookPressMirror.lua's SlotSpellID already uses).
         local macroName = GetActionText(slot)
         local macroIndex = macroName and GetMacroIndexByName(macroName)
         if macroIndex and macroIndex > 0 then
@@ -760,9 +760,10 @@ local function ApplyCachedKeybinds()
         for _, icon in ipairs(icons) do
             local ifd = _getFD(icon)
             local kbText = ifd and ifd.keybindText or icon._keybindText
+            local ifc = _ecmeFC[icon]
+            local sid = ifc and ifc.spellID
+            if ifc then ifc.keybindSid = sid end
             if kbText then
-                local ifc = _ecmeFC[icon]
-                local sid = ifc and ifc.spellID
                 if bd and bd.showKeybind and sid then
                     local key = ResolveCDMKeybind(sid)
                     -- Item presets: the resolved display variant first (pot presets may be showing another rank/Fleeting/the swapped-in partner pot), then the static alt ids.
@@ -807,6 +808,20 @@ end
 ns.UpdateCDMKeybinds = UpdateCDMKeybinds
 -- Expose apply-only for the tick loop (new spellID assigned to an icon mid-session)
 ns.ApplyCachedKeybinds = ApplyCachedKeybinds
+-- Reanchor edge: Blizzard reuses viewer frames, so an icon can come back
+-- holding another spell with no binding or slot event behind it. Compare-only
+-- unless an icon's spell differs from the one its text was resolved for.
+ns.RefreshStaleCDMKeybinds = function()
+    for _, icons in pairs(cdmBarIcons) do
+        for i = 1, #icons do
+            local ifc = _ecmeFC[icons[i]]
+            if ifc and ifc.spellID ~= ifc.keybindSid then
+                ApplyCachedKeybinds()
+                return
+            end
+        end
+    end
+end
 ns.CDMKeybindCache = _cdmKeybindCache
 
 end -- keybind cache block

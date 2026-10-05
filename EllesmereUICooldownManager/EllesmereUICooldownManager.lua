@@ -10,6 +10,17 @@ local _, ns = ...
 if not (EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI.NewCombatQueue) then EUI_CLIENT_BLOCKED = true; return end -- stale-parent guard: a partially updated install (old parent, new child) goes dormant via the line-1 failsafe instead of erroring
 EllesmereUI._ModuleNS["EllesmereUICooldownManager"] = ns  -- LOD options files read this module ns via the registry
 
+-- ns[field] = t, the table a chain of split files re-imports main-chunk locals
+-- from. broken: true while a part file loads; a file that fails leaves it set
+-- and the files behind it return at their first lines. Reading a name the
+-- table lacks fails where the part file loads, not later as a nil upvalue.
+function ns._NewInternals(field, t)
+    t.broken = false
+    ns[field] = setmetatable(t, { __index = function(_, k)
+        error("ns." .. field .. " has no entry " .. tostring(k), 2)
+    end })
+end
+
 -- CPU-attribution shell pool: the engine bills a handler's call tree to the addon
 -- whose context created the frame, so frames built later under the parent's dispatch
 -- would bill the parent forever (see EllesmereUI_Ticker.lua). Pre-created here so they
@@ -801,9 +812,7 @@ local DEFAULTS = {
 -- Main-chunk locals the EUI_CDM_*.lua files re-import by name.
 -- inCombatSetters: a file that reads _inCombat keeps its own local and adds a
 -- setter here; the event frame writes through SetInCombat, which runs them all.
--- broken: true while an EUI_CDM_*.lua file loads; a file that fails leaves it
--- set, and the files behind it return at their first lines.
-ns._internals = {
+ns._NewInternals("_internals", {
     _bonusScanSeen = _bonusScanSeen, _cdmKeybindCache = _cdmKeybindCache,
     _cdmKeybindRank = _cdmKeybindRank, _cdmMouseState = _cdmMouseState,
     _cdmViewerNames = _cdmViewerNames, _ecmeFC = _ecmeFC, _getFD = _getFD,
@@ -818,10 +827,4 @@ ns._internals = {
         local list = ns._internals.inCombatSetters
         for i = 1, #list do list[i](v) end
     end,
-    broken = false,
-}
--- A re-import of a name this table lacks fails where the part file loads,
--- not later as a nil upvalue inside one of its functions.
-setmetatable(ns._internals, { __index = function(_, k)
-    error("ns._internals has no entry " .. tostring(k), 2)
-end })
+})
