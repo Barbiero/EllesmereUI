@@ -928,6 +928,64 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
+        -- Row: Auto Select Single Gossip (left, with cog)
+        local gossipRow
+        gossipRow, h = W:DualRow(parent, y,
+            { type="toggle", text="Auto Select Single Gossip",
+              tooltip="Automatically selects an NPC's dialog option when it is the only one. Skipped when the NPC offers a quest or has a quest ready to turn in.",
+              getValue=function()
+                  return EllesmereUIDB and EllesmereUIDB.autoGossip or false
+              end,
+              setValue=function(v)
+                  if not EllesmereUIDB then EllesmereUIDB = {} end
+                  EllesmereUIDB.autoGossip = v
+                  if EllesmereUI._applyAutoGossip then EllesmereUI._applyAutoGossip() end
+                  EllesmereUI:RefreshPage()
+              end },
+            { type="label", text="" }
+        );  y = y - h
+
+        if not EllesmereUI._prebuilding then
+            local leftRgn = gossipRow._leftRegion
+            local function gossipOff()
+                return not (EllesmereUIDB and EllesmereUIDB.autoGossip)
+            end
+
+            EllesmereUI.BuildInlineCog(leftRgn, {
+                title = "Auto Gossip Settings",
+                rows = {
+                    { type="toggle", label="Hold Shift to Skip",
+                      tooltip="Hold Shift when talking to an NPC to disable automatic gossip selection.",
+                      get=function()
+                          if not EllesmereUIDB then return true end
+                          return EllesmereUIDB.autoGossipShiftSkip ~= false
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.autoGossipShiftSkip = v
+                      end },
+                    { type="toggle", label="Disable in Instances",
+                      get=function()
+                          if not EllesmereUIDB then return true end
+                          return EllesmereUIDB.autoGossipDisableInstance ~= false
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.autoGossipDisableInstance = v
+                      end },
+                    { type="toggle", label="Ignore Low Level Quests",
+                      get=function()
+                          return EllesmereUIDB and EllesmereUIDB.autoGossipIgnoreTrivial or false
+                      end,
+                      set=function(v)
+                          if not EllesmereUIDB then EllesmereUIDB = {} end
+                          EllesmereUIDB.autoGossipIgnoreTrivial = v
+                      end },
+                },
+                gap = 9, disabled = gossipOff, disabledTooltip = "Auto Select Single Gossip",
+            })
+        end
+
         _, h = W:Spacer(parent, y, 20);  y = y - h
 
         ---------------------------------------------------------------------------
@@ -2547,6 +2605,10 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUIDB then
                 EllesmereUIDB.hideBlizzardPartyFrame = false
                 EllesmereUIDB.quickLoot = false
+                EllesmereUIDB.autoGossip = false
+                EllesmereUIDB.autoGossipShiftSkip = nil
+                EllesmereUIDB.autoGossipDisableInstance = nil
+                EllesmereUIDB.autoGossipIgnoreTrivial = nil
                 EllesmereUIDB.skipCinematics = false
                 EllesmereUIDB.skipCinematicsAuto = false
                 EllesmereUIDB.autoFillDelete = false
@@ -2615,6 +2677,7 @@ initFrame:SetScript("OnEvent", function(self)
             if EllesmereUI._applyQuickSignup then EllesmereUI._applyQuickSignup() end
             if EllesmereUI._applyPersistSignupNote then EllesmereUI._applyPersistSignupNote() end
             if EllesmereUI._applyQuickLoot then EllesmereUI._applyQuickLoot() end
+            if EllesmereUI._applyAutoGossip then EllesmereUI._applyAutoGossip() end
             if EllesmereUI._applyInstanceResetAnnounce then EllesmereUI._applyInstanceResetAnnounce() end
             if EllesmereUI._applyAutoOpenContainers then EllesmereUI._applyAutoOpenContainers() end
             if EllesmereUI._ShutdownShifter then EllesmereUI._ShutdownShifter() end

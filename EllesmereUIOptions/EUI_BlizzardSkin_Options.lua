@@ -763,6 +763,61 @@ initFrame:SetScript("OnEvent", function(self)
             })
         end
 
+        local ttBuffsRow
+        ttBuffsRow, h = W:DualRow(parent, y,
+            { type="toggle", text="Show Player Buffs",
+              tooltip="Shows a hovered player's buffs as icons on their tooltip. Use the arrows icon to set the position, icon size and offset.",
+              disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
+              getValue=function()
+                  return EllesmereUIDB and EllesmereUIDB.tooltipShowBuffs or false
+              end,
+              setValue=function(v)
+                  if not EllesmereUIDB then EllesmereUIDB = {} end
+                  EllesmereUIDB.tooltipShowBuffs = v
+                  if EllesmereUI._applyTooltipBuffs then EllesmereUI._applyTooltipBuffs() end
+                  EllesmereUI:RefreshPage()  -- update the position cog disabled state
+              end },
+            { type="label", text="" }
+        );  y = y - h
+
+        if not EllesmereUI._prebuilding then
+            local function ttBuffsOff()
+                return ttReskinOff() or not (EllesmereUIDB and EllesmereUIDB.tooltipShowBuffs)
+            end
+            local function setBuffs(key, v)
+                if not EllesmereUIDB then EllesmereUIDB = {} end
+                EllesmereUIDB[key] = v
+                if EllesmereUI._applyTooltipBuffs then EllesmereUI._applyTooltipBuffs() end
+            end
+            EllesmereUI.BuildInlineCog(ttBuffsRow._leftRegion, {
+                icon = EllesmereUI.DIRECTIONS_ICON, gap = 9,
+                disabled = ttBuffsOff,
+                disabledTooltip = function()
+                    return ttReskinOff() and "Reskin Tooltip" or "Show Player Buffs"
+                end,
+                title = "Tooltip Buffs",
+                rows = {
+                    { type="dropdown", label="Position",
+                      values={ bottom="Bottom", top="Top", left="Left", right="Right" },
+                      order={ "bottom", "top", "left", "right" },
+                      get=function() return EllesmereUIDB and EllesmereUIDB.tooltipBuffPosition or "bottom" end,
+                      set=function(v) setBuffs("tooltipBuffPosition", v) end },
+                    { type="slider", label="Icon Size", min=12, max=40, step=1,
+                      get=function() return EllesmereUIDB and EllesmereUIDB.tooltipBuffSize or 20 end,
+                      set=function(v) setBuffs("tooltipBuffSize", v) end },
+                    { type="slider", label="Icons Per Row", min=1, max=16, step=1,
+                      get=function() return EllesmereUIDB and EllesmereUIDB.tooltipBuffsPerRow or 8 end,
+                      set=function(v) setBuffs("tooltipBuffsPerRow", v) end },
+                    { type="slider", label="Offset X", min=-100, max=100, step=1,
+                      get=function() return EllesmereUIDB and EllesmereUIDB.tooltipBuffOffsetX or 0 end,
+                      set=function(v) setBuffs("tooltipBuffOffsetX", v) end },
+                    { type="slider", label="Offset Y", min=-100, max=100, step=1,
+                      get=function() return EllesmereUIDB and EllesmereUIDB.tooltipBuffOffsetY or 0 end,
+                      set=function(v) setBuffs("tooltipBuffOffsetY", v) end },
+                },
+            })
+        end
+
         -----------------------------------------------------------------------
         --  Blizzard HUD. Two on-screen elements that are not windows, so they
         --  get plain toggles here rather than cards on the Window Skins page.
@@ -3701,6 +3756,13 @@ initFrame:SetScript("OnEvent", function(self)
                 EllesmereUIDB.tooltipShowGuildRank = nil
                 EllesmereUIDB.tooltipShowMount = nil
                 EllesmereUIDB.tooltipShowTarget = nil
+                EllesmereUIDB.tooltipShowBuffs = nil
+                EllesmereUIDB.tooltipBuffPosition = nil
+                EllesmereUIDB.tooltipBuffSize = nil
+                EllesmereUIDB.tooltipBuffsPerRow = nil
+                EllesmereUIDB.tooltipBuffOffsetX = nil
+                EllesmereUIDB.tooltipBuffOffsetY = nil
+                if EllesmereUI._applyTooltipBuffs then EllesmereUI._applyTooltipBuffs() end
                 EllesmereUIDB.reskinQueuePopup = nil
                 EllesmereUIDB.resurrectAcceptGlow = nil
                 -- Clear any glow on a currently visible popup (the setting

@@ -452,7 +452,9 @@ function EllesmereUI.MatchGuard(barKey, axis, existingDisabled, existingTooltip)
         local target = getFn(barKey)
         if target then
             local name = (EllesmereUI.GetBarLabel and EllesmereUI.GetBarLabel(target)) or target
-            return axis .. " matched to " .. name .. ". Unmatch in Unlock Mode to edit."
+            return isWidth
+                and EllesmereUI.Lf("Width matched to %1$s. Unmatch in Unlock Mode to edit.", EllesmereUI.L(name))
+                or EllesmereUI.Lf("Height matched to %1$s. Unmatch in Unlock Mode to edit.", EllesmereUI.L(name))
         end
         if existingTooltip then
             return type(existingTooltip) == "function" and existingTooltip() or existingTooltip
