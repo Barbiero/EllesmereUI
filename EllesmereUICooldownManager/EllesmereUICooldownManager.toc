@@ -11,6 +11,18 @@
 
 # Main Lua
 EllesmereUICooldownManager.lua
+EUI_CDM_Store.lua
+EUI_CDM_Spec.lua
+EUI_CDM_Glows.lua
+EUI_CDM_Blizzard.lua
+EUI_CDM_Bars.lua
+EUI_CDM_Icons.lua
+EUI_CDM_FocusKick.lua
+EUI_CDM_Rebuild.lua
+EUI_CDM_Reconcile.lua
+EUI_CDM_Lifecycle.lua
+EUI_CDM_Rotation.lua
+EUI_CDM_Events.lua
 EllesmereUICdmKeybindStyle.lua
 EllesmereUICdmRotationIcon.lua
 EllesmereUICdmHooks.lua
