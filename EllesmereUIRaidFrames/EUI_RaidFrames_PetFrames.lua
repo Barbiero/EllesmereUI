@@ -1,3 +1,33 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_PetFrames.lua
+--
+--  Pet Frames: party and raid pets in one pet header, or beside their owner.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local tostring     = tostring
+local UnitExists            = UnitExists
+local UnitIsUnit            = UnitIsUnit
+local UnitInRange           = UnitInRange
+local IsInRaid              = IsInRaid
+local IsInGroup             = IsInGroup
+local InCombatLockdown      = InCombatLockdown
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local GetFFD, PixelSnap, ResolveHealthTexture = I.GetFFD, I.PixelSnap, I.ResolveHealthTexture
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Pet Frames: party and raid pets in one Blizzard pet header, beside the
 --  groups like Friendly Boss, or (Party tab, Beside Owner) one pet button
@@ -5,7 +35,6 @@
 --  click-cast only, on the FB visuals, painter and anchor; out of the raid
 --  routing maps, trackers of their own. Built on first Show Pets.
 -------------------------------------------------------------------------------
--- Scope block: 200-local main-chunk cap (see the FB block above).
 do
 local FB = ns._FB
 local PF = { buttons = {}, trackers = {}, byUnit = {}, ownerButtons = {}, ownerByUnit = {}, watching = false,
@@ -1554,3 +1583,4 @@ end
 
 end -- PF scope block
 
+I.broken = false

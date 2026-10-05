@@ -16,14 +16,14 @@ _G.EllesmereUIRaidFrames = ERF
 -- Parent-addon table cached on ns: hot event paths (UNIT_AURA,
 -- PLAYER_REGEN_DISABLED) reading the GLOBAL EllesmereUI from an event frame
 -- still in a secure execution context raise benign self-taint; table-field
--- reads do not. On ns to spare the main-chunk 200-local cap.
+-- reads do not.
 ns.EllesmereUI = EllesmereUI
 
 -- Addon name external nickname providers key us by. Suite = the brand
 -- "EllesmereUI" (what providers register support for); standalone = our
 -- renamed folder name (ADDON_NAME), the per-addon key. "Standalone" survives
 -- the standalone token rename, so detection is rename-immune and the
--- "EllesmereUI" literal is only reached in the suite. On ns (200-local cap).
+-- "EllesmereUI" literal is only reached in the suite.
 ns.NICK_ADDON = ADDON_NAME:find("Standalone") and ADDON_NAME or "EllesmereUI"
 
 -- Keep subgroup identity separate from its visual slot. Invalid imported
@@ -56,7 +56,7 @@ end
 --  over text; it outranks only neighbor BORDERS, so with negative spacing a
 --  neighbor's text/auras can clip it. Opt-out "Show Above Icons" (name cog)
 --  lifts a button's text carrier to ns.LVL_AURA + 6, above the aura band's
---  children. On `ns` (local cap), shared with EUI_RaidFrames_BuffManager.lua.
+--  children. On `ns`, shared with EUI_RaidFrames_BuffManager.lua.
 -------------------------------------------------------------------------------
 ns.LVL_DISPEL_OVERLAY = 7  -- Blizzard private-aura dispel gradient: below the border (+8) and name/health text (LVL_TEXT) so it renders BEHIND them (like the regular dispel overlay), but above the health bar so it stays visible. Per-slot private-aura icons stay above at LVL_AURA.
 ns.LVL_RAISE  = 10   -- hover/target/aggro-recolor border (strips +11: above base strips +9;
@@ -122,43 +122,17 @@ ns.CombatQueue = EllesmereUI.NewCombatQueue(ns.TakeShell())
 local PP           = nil  -- set in OnEnable once parent is ready
 local db           = nil
 local floor        = math.floor
-local max          = math.max
-local min          = math.min
-local abs          = math.abs
 local pairs        = pairs
 local ipairs       = ipairs
 local wipe         = wipe
 local type         = type
-local tostring     = tostring
-local select       = select
-local unpack       = unpack
-local tinsert      = table.insert
 
-local UnitHealth            = UnitHealth
-local UnitHealthMax         = UnitHealthMax
-local UnitPower             = UnitPower
-local UnitPowerMax          = UnitPowerMax
-local UnitPowerType         = UnitPowerType
-local UnitName              = UnitName
 local UnitClass             = UnitClass
-local UnitExists            = UnitExists
-local UnitIsConnected       = UnitIsConnected
-local UnitIsVisible         = UnitIsVisible
-local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
-local UnitHasIncomingResurrection = UnitHasIncomingResurrection
 local UnitThreatSituation   = UnitThreatSituation
-local UnitIsUnit            = UnitIsUnit
-local UnitInRange           = UnitInRange
-local UnitGetTotalAbsorbs   = UnitGetTotalAbsorbs
-local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
-local GetReadyCheckStatus   = GetReadyCheckStatus
-local C_IncomingSummon      = C_IncomingSummon
 local SUMMON_STATUS_PENDING  = Enum.SummonStatus and Enum.SummonStatus.Pending or 1
 local SUMMON_STATUS_ACCEPTED = Enum.SummonStatus and Enum.SummonStatus.Accepted or 2
 local SUMMON_STATUS_DECLINED = Enum.SummonStatus and Enum.SummonStatus.Declined or 3
-local GetRaidTargetIndex    = GetRaidTargetIndex
 local IsInRaid              = IsInRaid
-local IsInGroup             = IsInGroup
 local InCombatLockdown      = InCombatLockdown
 local GetNumGroupMembers    = GetNumGroupMembers
 local C_Timer               = C_Timer
@@ -166,7 +140,6 @@ local issecretvalue         = issecretvalue
 -- WoW Forever: no number under 10,000 abbreviates (EllesmereUI_NumberFormat.lua).
 local AbbreviateNumbers     = (EllesmereUI.IS_FOREVER and EllesmereUI.ForeverAbbreviateNumbers) or AbbreviateNumbers
 local CreateFrame           = CreateFrame
-local RAID_CLASS_COLORS     = RAID_CLASS_COLORS
 
 -- Absorb shield textures (must match UnitFrames exactly)
 local ABSORB_STYLE_TEX = {
@@ -317,7 +290,7 @@ local playerFriendlySpell = FRIENDLY_SPELL_BY_CLASS[playerClassToken]
 local THREAT_ACTIVE = { [2] = true, [3] = true }
 
 -- Combat indicator media + class sprite coords (shared with the Unit Frames
--- combat icon assets). Kept on `ns` to avoid the Lua 5.1 chunk local cap.
+-- combat icon assets).
 ns._COMBAT_MEDIA = "Interface\\AddOns\\EllesmereUI\\media\\combat\\"
 ns._COMBAT_CLASS_COORDS = EllesmereUI.CLASS_ICON_SPRITE_COORDS
 
@@ -832,7 +805,7 @@ local inCombat       = false
 --  | never; governs ONLY raid/party frame tooltips (gated in their own OnEnter,
 --  no global hook). Unset derives: showTooltip=false -> never; global "show in
 --  combat" -> always; else outOfCombat. `s` = a scaled raid/party/extra proxy
---  or db.profile. On ns so OnEnter can reach it (local cap).
+--  or db.profile. On ns so OnEnter can reach it.
 -------------------------------------------------------------------------------
 ns._ResolveTooltipMode = function(s)
     if not s then return "outOfCombat" end
@@ -1110,7 +1083,7 @@ ns.healthBarTextureOrder = healthBarTextureOrder
 -- Style page choice (Blizzard Style / Classic WoW UI, EUI_RaidFrames_Stock.lua):
 -- "eui" | "blizzard" | "classic", read from the profile flags once and
 -- latched for the session (every switch reloads). The runtime reads only
--- this, never the flags. On ns (200-local cap).
+-- this, never the flags.
 function ns.RF_Style()
     local v = ns._rfStyle
     if v then return v end
@@ -1197,7 +1170,7 @@ end
 
 -- Vertical health fill: SetOrientation drives the fill AXIS. Raid and party
 -- resolve through the caller's settings table (party gets its own when the
--- Health Bar section is unsynced). On ns (200-local cap).
+-- Health Bar section is unsynced).
 ns.RF_IsVerticalFill = function(s)
     return ((s or db.profile).healthVerticalFill) and true or false
 end
@@ -1223,7 +1196,6 @@ end
 -- texture paints -- missing health takes the bar colour and current health is
 -- left to the background. Raid and party resolve through the caller's settings
 -- table (party gets its own when the Health Bar section is unsynced).
--- On ns (200-local cap).
 ns.RF_IsInvertedFill = function(s)
     return ((s or db.profile).healthInvertFill) and true or false
 end
@@ -1517,3 +1489,45 @@ end
 -- Track current active tier so we know when to re-layout
 ns._currentSizeTier = 20
 
+-- Main-chunk locals the EUI_RaidFrames_*.lua files re-import by name.
+-- dbSetters and the five lists beside it: every file that reads one of
+-- these keeps its own copy and adds a setter here; each place that assigns
+-- it writes through the Set<Name> function built below, which runs them all.
+-- broken: true while an EUI_RaidFrames_*.lua file loads; a file that fails
+-- leaves it set, and the files behind it return at their first lines.
+ns._internals = {
+    AbbreviateNumbers = AbbreviateNumbers, ABSORB_STYLE_ALPHA = ABSORB_STYLE_ALPHA,
+    ABSORB_STYLE_TEX = ABSORB_STYLE_TEX, allButtons = allButtons, ApplyFont = ApplyFont,
+    ApplyRoleIcon = ApplyRoleIcon, defaults = defaults, DISPEL_COLORS = DISPEL_COLORS,
+    DISPEL_ICON_ATLAS = DISPEL_ICON_ATLAS, ERF = ERF, eventFrame = eventFrame, FFD = FFD,
+    GetFFD = GetFFD, InitHealthBarTextures = InitHealthBarTextures,
+    IsPowerBarEnabled = IsPowerBarEnabled, PixelSnap = PixelSnap,
+    playerFriendlySpell = playerFriendlySpell, playerRezSpell = playerRezSpell,
+    RAID_MARKER_TEXCOORDS = RAID_MARKER_TEXCOORDS, ResolveHealthTexture = ResolveHealthTexture,
+    separatedHdrs = separatedHdrs, SUMMON_STATUS_ACCEPTED = SUMMON_STATUS_ACCEPTED,
+    SUMMON_STATUS_DECLINED = SUMMON_STATUS_DECLINED,
+    SUMMON_STATUS_PENDING = SUMMON_STATUS_PENDING, unitToButton = unitToButton,
+    unitTrackers = unitTrackers,
+    dbSetters = { function(v) db = v end },
+    PPSetters = { function(v) PP = v end },
+    containerFrameSetters = { function(v) containerFrame = v end },
+    inCombatSetters = { function(v) inCombat = v end },
+    readyCheckActiveSetters = {},
+    framesVisibleSetters = {},
+    broken = false,
+}
+-- Set<Name> hands a new value to every copy registered in <name>Setters.
+for setter, listName in pairs({ SetDB = "dbSetters", SetPP = "PPSetters",
+        SetContainerFrame = "containerFrameSetters", SetInCombat = "inCombatSetters",
+        SetReadyCheckActive = "readyCheckActiveSetters",
+        SetFramesVisible = "framesVisibleSetters" }) do
+    local list = ns._internals[listName]
+    ns._internals[setter] = function(v)
+        for i = 1, #list do list[i](v) end
+    end
+end
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._internals, { __index = function(_, k)
+    error("ns._internals has no entry " .. tostring(k), 2)
+end })

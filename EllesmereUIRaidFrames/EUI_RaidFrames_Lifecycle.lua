@@ -1,3 +1,44 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Lifecycle.lua
+--
+--  OnInitialize, OnEnable and the Party Mode spin.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitExists            = UnitExists
+local InCombatLockdown      = InCombatLockdown
+local C_Timer               = C_Timer
+
+local allButtons, defaults, ERF, eventFrame = I.allButtons, I.defaults, I.ERF, I.eventFrame
+local InitHealthBarTextures, IsPowerBarEnabled = I.InitHealthBarTextures, I.IsPowerBarEnabled
+local PixelSnap, separatedHdrs, unitTrackers = I.PixelSnap, I.separatedHdrs, I.unitTrackers
+local StyleButton, RebuildUnitMap = I.StyleButton, I.RebuildUnitMap
+local UpdateAllButtons, CreateHeaders = I.UpdateAllButtons, I.CreateHeaders
+local LayoutGroups, ReloadFrames = I.LayoutGroups, I.ReloadFrames
+local UpdateVisibility, OnEvent = I.UpdateVisibility, I.OnEvent
+local RegisterWithUnlockMode, SetDB, SetPP = I.RegisterWithUnlockMode, I.SetDB, I.SetPP
+local SetInCombat = I.SetInCombat
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local PP
+I.PPSetters[#I.PPSetters + 1] = function(v) PP = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+local inCombat = false
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) inCombat = v end
+local framesVisible = false
+I.framesVisibleSetters[#I.framesVisibleSetters + 1] = function(v) framesVisible = v end
+
 -------------------------------------------------------------------------------
 --  Lifecycle: OnInitialize (ADDON_LOADED - SavedVariables available)
 -------------------------------------------------------------------------------
@@ -8,7 +49,7 @@ function ERF:OnInitialize()
         or (rawDB.profiles and not next(rawDB.profiles))
 
     self.db = EllesmereUI.Lite.NewDB("EllesmereUIRaidFramesDB", defaults, true)
-    db = self.db
+    SetDB(self.db)
     ns.db = db
     ns._PreviewBind(db, PP, containerFrame)
 
@@ -43,7 +84,7 @@ end
 --  Lifecycle: OnEnable (PLAYER_LOGIN - game data available)
 -------------------------------------------------------------------------------
 function ERF:OnEnable()
-    PP = EllesmereUI.PanelPP or EllesmereUI.PP
+    SetPP(EllesmereUI.PanelPP or EllesmereUI.PP)
     ns._PreviewBind(db, PP, containerFrame)
 
     -- First-install default position: left edge of frame at 200px from screen
@@ -456,7 +497,7 @@ function ERF:OnEnable()
         -- state from the lockdown, and let the combat edge set the visibility
         -- flags the two passes below skip in combat.
         if InCombatLockdown() then
-            inCombat = true
+            SetInCombat(true)
             ns._RFCombatVisEdge()
             -- Members assigned while the flag was still down (the first half
             -- second) were kept out of the map; the raid branch below rebuilds too.
@@ -586,7 +627,6 @@ end
 --  Each set's shown buttons orbit the centre of its container, so the 5-slot
 --  party box turns around its third frame. homeInCombat puts the secure
 --  buttons back on the header layout for each fight.
---  do/end scope: 200-local main-chunk cap.
 -------------------------------------------------------------------------------
 do
     -- A header's shown buttons, in child order.
@@ -638,3 +678,5 @@ do
         end,
     })
 end
+
+I.broken = false

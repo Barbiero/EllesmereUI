@@ -1,3 +1,48 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Visibility.lua
+--
+--  Range fading, the ghost aura safety net and UpdateVisibility.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitExists            = UnitExists
+local UnitIsConnected       = UnitIsConnected
+local UnitIsVisible         = UnitIsVisible
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitIsUnit            = UnitIsUnit
+local UnitInRange           = UnitInRange
+local IsInRaid              = IsInRaid
+local IsInGroup             = IsInGroup
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local C_Timer               = C_Timer
+
+local allButtons, FFD, GetFFD, separatedHdrs = I.allButtons, I.FFD, I.GetFFD, I.separatedHdrs
+local unitToButton, RebuildUnitMap = I.unitToButton, I.RebuildUnitMap
+local UpdateAllButtons, LayoutGroups = I.UpdateAllButtons, I.LayoutGroups
+local SetFramesVisible, SetRangeUpdate = I.SetFramesVisible, I.SetRangeUpdate
+-- nil for a class without one: read past the guard on the table
+local playerFriendlySpell = rawget(I, "playerFriendlySpell")
+local playerRezSpell = rawget(I, "playerRezSpell")
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+
+-- Assigned below; EUI_RaidFrames_Reload.lua holds the forward declaration
+-- ReloadFrames calls through.
+local RangeUpdate
+
 -------------------------------------------------------------------------------
 --  Range fading
 --  Event-driven via UNIT_IN_RANGE_UPDATE for the standard ~40yd interact range
@@ -6,9 +51,8 @@
 --  the tighter friendly-spell range (Evoker/Rogue) and re-syncing a revived unit
 --  back to that tight range. Pure classes with no rez run fully event-driven.
 -------------------------------------------------------------------------------
--- Wrapped in a do-block so these helpers stay out of the main chunk's 200-local
--- cap; only Start/StopRangeTicker (+ the forward-declared RangeUpdate) need to
--- be reachable from later code.
+-- Wrapped in a do-block; only Start/StopRangeTicker (+ RangeUpdate, declared in
+-- this file's header) need to be reachable from later code.
 local StartRangeTicker, StopRangeTicker
 do
 local rangeTicker = nil
@@ -135,6 +179,7 @@ RangeUpdate = function()
     for unit, btn in pairs(ns._xfUnitToButton) do UpdateButtonRange(unit, btn) end
     ns._PF_RangeSeed()
 end
+SetRangeUpdate(RangeUpdate)
 ns._RangeSeedAll = RangeUpdate
 
 local function RangeRefineAll()
@@ -163,7 +208,7 @@ function StopRangeTicker()
     for _, btn in pairs(ns._partyUnitToButton) do ApplyRangeAlpha(btn, 1) end
     for _, btn in pairs(ns._xfUnitToButton) do ApplyRangeAlpha(btn, 1) end
 end
-end  -- range fading section (do-block keeps its locals out of the 200-cap)
+end  -- range fading section
 
 -------------------------------------------------------------------------------
 --  Ghost aura safety net
@@ -250,6 +295,7 @@ end
 --  Visibility: show/hide based on solo/group/raid setting
 -------------------------------------------------------------------------------
 local framesVisible = false
+I.framesVisibleSetters[#I.framesVisibleSetters + 1] = function(v) framesVisible = v end
 
 -- True when the player is inside an arena instance. Arena puts you in a RAID
 -- group, but we deliberately show our PARTY frames there (the party header is
@@ -371,7 +417,7 @@ local function UpdateVisibility()
     -- though IsInRaid() returns true.
     local visible = ns._RFVisWanted()
     local wasVisible = framesVisible
-    framesVisible = visible
+    SetFramesVisible(visible)
     ns._raidFramesVisible = visible  -- mirror for readers outside this file (the FrameSort provider)
     -- Raid frames coming or going is the one change a tracker cannot learn from
     -- its own roster events (mirrors the party call in _UpdatePartyVisibility).
@@ -443,3 +489,7 @@ local function UpdateVisibility()
 end
 ns.UpdateVisibility = UpdateVisibility
 
+I.RangeUpdate, I.StartGhostTicker = RangeUpdate, StartGhostTicker
+I.StartRangeTicker, I.StopGhostTicker = StartRangeTicker, StopGhostTicker
+I.StopRangeTicker, I.UpdateVisibility = StopRangeTicker, UpdateVisibility
+I.broken = false

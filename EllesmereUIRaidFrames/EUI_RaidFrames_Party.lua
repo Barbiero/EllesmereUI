@@ -1,3 +1,35 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Party.lua
+--
+--  The party container, the party header, the party settings proxy and the
+--  indicator auto-resize.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local type         = type
+local UnitClass             = UnitClass
+local IsInGroup             = IsInGroup
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local CreateFrame           = CreateFrame
+
+local GetFFD, PixelSnap, UpdateButton = I.GetFFD, I.PixelSnap, I.UpdateButton
+local UpdateReadyCheck = I.UpdateReadyCheck
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+
 -------------------------------------------------------------------------------
 --  Unlock mode registration
 -------------------------------------------------------------------------------
@@ -25,7 +57,7 @@ ns._partyFramesVisible = false
 --  Per-section sync: partySyncSections[sectionKey] = true (synced) or false
 --  (custom). Party buttons read "party_<key>" only for keys whose section
 --  is unsynced. Falls through to raid value otherwise.
---  ALL tables/functions stored on ns to avoid 200-local cap.
+--  ALL tables/functions stored on ns.
 -------------------------------------------------------------------------------
 ns._PARTY_KEY_SECTION = {}
 
@@ -763,3 +795,4 @@ ns._SizePartyContainer = function(bw, bh, cs, unitGrowth)
     end
 end
 
+I.broken = false

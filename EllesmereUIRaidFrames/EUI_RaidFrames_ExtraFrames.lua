@@ -1,3 +1,36 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_ExtraFrames.lua
+--
+--  Extra Frames: duplicates of chosen raid members.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local UnitIsUnit            = UnitIsUnit
+local IsInRaid              = IsInRaid
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local C_Timer               = C_Timer
+local CreateFrame           = CreateFrame
+
+local allButtons, ApplyFont, GetFFD = I.allButtons, I.ApplyFont, I.GetFFD
+local IsPowerBarEnabled, PixelSnap = I.IsPowerBarEnabled, I.PixelSnap
+local unitToButton, StyleButton, UpdateButton = I.unitToButton, I.StyleButton, I.UpdateButton
+local UpdateReadyCheck = I.UpdateReadyCheck
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Extra Frames (raid only): 1:1 duplicates of chosen raid members (Show
 --  Tanks + hotkey-toggled players, up to XF.CAP). Attached positions stack
@@ -13,7 +46,6 @@
 --  via shared FB.Anchor; unit assignment is OOC, dirty-deferred through
 --  combat. Excluded from preview/unlock mode like FB.
 -------------------------------------------------------------------------------
--- Scope block: 200-local main-chunk cap (see the FB block above).
 do
 local XF = { buttons = {}, trackers = {} }
 ns._XF = XF
@@ -605,3 +637,4 @@ do
 end
 end -- XF scope block
 
+I.broken = false

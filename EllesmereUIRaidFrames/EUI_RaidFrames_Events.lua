@@ -1,3 +1,41 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Events.lua
+--
+--  OnEvent: the handler of the event frame and of every unit tracker.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitHasIncomingResurrection = UnitHasIncomingResurrection
+local InCombatLockdown      = InCombatLockdown
+local C_Timer               = C_Timer
+
+local allButtons, GetFFD, unitToButton = I.allButtons, I.GetFFD, I.unitToButton
+local RebuildUnitMap, UpdateButton = I.RebuildUnitMap, I.UpdateButton
+local UpdateReadyCheck, LayoutGroups = I.UpdateReadyCheck, I.LayoutGroups
+local ReloadFrames, RangeUpdate = I.ReloadFrames, I.RangeUpdate
+local UpdateVisibility, SetInCombat = I.UpdateVisibility, I.SetInCombat
+local SetReadyCheckActive = I.SetReadyCheckActive
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local inCombat = false
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) inCombat = v end
+local readyCheckActive = false
+I.readyCheckActiveSetters[#I.readyCheckActiveSetters + 1] = function(v) readyCheckActive = v end
+local framesVisible = false
+I.framesVisibleSetters[#I.framesVisibleSetters + 1] = function(v) framesVisible = v end
+
 -------------------------------------------------------------------------------
 --  Event handlers
 -------------------------------------------------------------------------------
@@ -67,7 +105,7 @@ local function OnEvent(self, event, arg1, ...)
             end -- prediction view-gate else
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
-        inCombat = true
+        SetInCombat(true)
         -- HARD INVARIANT: the real party/raid frames must never be left hidden
         -- when a pull starts. Every restore op reached from here is combat-legal
         -- (SetAlpha on our own containers; Hide/SetParent on our own non-secure
@@ -84,7 +122,7 @@ local function OnEvent(self, event, arg1, ...)
         if ns._UpdateLeaderIcons then ns._UpdateLeaderIcons() end
         if ns._CombatIconEnabled() and ns._UpdateCombatIcons then ns._UpdateCombatIcons() end
     elseif event == "PLAYER_REGEN_ENABLED" then
-        inCombat = false
+        SetInCombat(false)
         local frameStrataDirty = ns._frameStrataDirty
         if frameStrataDirty and ns.ApplyFrameStrata then ns.ApplyFrameStrata() end
         -- Combat ended: restore any role/leader icons suppressed during combat.
@@ -519,7 +557,7 @@ local function OnEvent(self, event, arg1, ...)
     elseif event == "PLAYER_TARGET_CHANGED" then
         ns._UpdateTargetBorders()
     elseif event == "READY_CHECK" then
-        readyCheckActive = true
+        SetReadyCheckActive(true)
         for _, btn in ipairs(allButtons) do
             local u = btn:GetAttribute("unit")
             if u and btn:IsVisible() then UpdateReadyCheck(btn, u) end
@@ -532,7 +570,7 @@ local function OnEvent(self, event, arg1, ...)
         local btn = unitToButton[arg1] or ns._partyUnitToButton[arg1]
         if btn then UpdateReadyCheck(btn, arg1) end
     elseif event == "READY_CHECK_FINISHED" then
-        readyCheckActive = false
+        SetReadyCheckActive(false)
         C_Timer.After(5, function()
             if not readyCheckActive then
                 -- Re-evaluate rather than force-hide: a unit may have an incoming
@@ -689,3 +727,5 @@ local function OnEvent(self, event, arg1, ...)
     end
 end
 
+I.OnEvent = OnEvent
+I.broken = false

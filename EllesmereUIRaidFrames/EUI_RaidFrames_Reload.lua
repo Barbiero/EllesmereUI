@@ -1,3 +1,39 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Reload.lua
+--
+--  ReloadFrames, the raid size tiers and the tier offset.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor        = math.floor
+local min          = math.min
+local pairs        = pairs
+local ipairs       = ipairs
+local type         = type
+local UnitExists            = UnitExists
+local InCombatLockdown      = InCombatLockdown
+
+local allButtons, ApplyFont, eventFrame = I.allButtons, I.ApplyFont, I.eventFrame
+local GetFFD, IsPowerBarEnabled, PixelSnap = I.GetFFD, I.IsPowerBarEnabled, I.PixelSnap
+local ResolveHealthTexture, unitToButton = I.ResolveHealthTexture, I.unitToButton
+local LayoutTopNameBar, StyleButton = I.LayoutTopNameBar, I.StyleButton
+local RebuildUnitMap, UpdateAllButtons = I.RebuildUnitMap, I.UpdateAllButtons
+local LayoutGroups, MOVER_GROUPS = I.LayoutGroups, I.MOVER_GROUPS
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+
+-- Assigned in EUI_RaidFrames_Visibility.lua (see SetRangeUpdate).
+local RangeUpdate
+
 -------------------------------------------------------------------------------
 --  Reload: re-apply all settings to existing buttons
 -------------------------------------------------------------------------------
@@ -840,3 +876,6 @@ ns._ApplyTierOffset = function()
     end
 end
 
+I.ReloadFrames = ReloadFrames
+I.SetRangeUpdate = function(f) RangeUpdate = f end
+I.broken = false

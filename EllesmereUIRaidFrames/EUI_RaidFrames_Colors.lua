@@ -1,3 +1,40 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Colors.lua
+--
+--  Health percent and the class, health, name and power colors, the display
+--  name, the top name bar, power text and level text.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local wipe         = wipe
+local type         = type
+local tostring     = tostring
+local UnitHealth            = UnitHealth
+local UnitPower             = UnitPower
+local UnitPowerType         = UnitPowerType
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsConnected       = UnitIsConnected
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
+local InCombatLockdown      = InCombatLockdown
+local issecretvalue         = issecretvalue
+
+local AbbreviateNumbers, ApplyFont, defaults = I.AbbreviateNumbers, I.ApplyFont, I.defaults
+local DISPEL_COLORS, GetFFD, PixelSnap = I.DISPEL_COLORS, I.GetFFD, I.PixelSnap
+local unitToButton = I.unitToButton
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Color helpers
 -------------------------------------------------------------------------------
@@ -155,7 +192,7 @@ end
 -- Centralized so the full update and the lightweight UNIT_HEALTH update (which owns
 -- death/resurrect transitions) stay in lockstep -- else a resurrect arriving only via UNIT_HEALTH
 -- strands the tint. Colors overridable via the Status Colors swatch in Extras; inline fallbacks
--- allocate only when the DB key is missing. On ns (local cap).
+-- allocate only when the DB key is missing.
 function ns._ApplyHealthBg(d, health, s, unit, connected, deadOrGhost)
     local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
     local bg = d.bg
@@ -301,7 +338,7 @@ end
 -- UTF-8 aware character-count cap for an in-frame display name. Shared by the
 -- live frames (via ResolveDisplayName) and every preview surface. Skips secret
 -- strings entirely (#, string.byte and string.sub all throw on secrets), so a
--- secret name shows verbatim and uncapped. nameMaxLength 0 = off. On ns (local cap).
+-- secret name shows verbatim and uncapped. nameMaxLength 0 = off.
 -- Takes the caller's settings table `s` so a party override applies correctly.
 function ns.CapName(display, s)
     if type(display) ~= "string" then return display end
@@ -328,7 +365,6 @@ end
 -- WoW Forever Name Format (the Name Text cog, nameFormat): the character name's
 -- first or last word; unset or "full" shows it whole. Nicknames are never
 -- shortened. Defined only on Forever, so elsewhere a name pays one nil test.
--- On ns (local cap).
 if ns.EllesmereUI.IS_FOREVER then
     function ns.RF_FormatName(display, s)
         local mode = s and s.nameFormat
@@ -339,7 +375,7 @@ end
 
 -- Fraction of the frame width the NAME text may fill before auto-truncating
 -- (1.0 = full width). Every name-width SetWidth routes through this knob;
--- health text keeps its own inline budget. On ns (local cap).
+-- health text keeps its own inline budget.
 ns.RF_NAME_WIDTH_FRACTION = 1.0
 
 -- Display name for a unit. Nickname sources in order: Northern Sky Raid Tools (NSAPI), MethodInternal
@@ -820,7 +856,7 @@ end
 -- power on exactly those edges -- so the per-tick UNIT_POWER_UPDATE path pushes
 -- the value alone. Stamps d._pwType (nil = not derived for this occupant).
 -- force = full paint: settings may have changed, so the bg re-tints even when
--- the type/darken stamps still match. On ns (200-local cap).
+-- the type/darken stamps still match.
 ns._RFPowerTypeEdge = function(d, unit, force)
     local pType = UnitPowerType(unit) or 0
     local pr, pg, pb = GetPowerColor(unit)
@@ -847,8 +883,7 @@ end
 --  time a shown power bar paints with a mode set. d._pwtMode (the mode, nil = no
 --  text shown) is the one field the per-tick power paths and the UNIT_HEALTH
 --  path test; the colour rides the identity edge above, the value rides every
---  power value push, and dead/offline blanks it as Health Text. On ns
---  (200-local cap).
+--  power value push, and dead/offline blanks it as Health Text.
 -------------------------------------------------------------------------------
 
 -- Power text in one of its modes (Health Text's minus Missing). pct: the bar's percent
@@ -960,7 +995,7 @@ end
 --  runs with a spot set. d._lvlOn is true while it shows. UNIT_LEVEL (a level-only
 --  repaint, ns._RFRepaintLevel) is registered only while some view shows the level.
 --  The level is the effective one (scaled content), like the suite's other level
---  texts. On ns (200-local cap).
+--  texts.
 -------------------------------------------------------------------------------
 
 -- The attached positions and their formats: known level, unknown ("??") level.
@@ -1049,3 +1084,9 @@ ns._RFLevelText = function(d, s, unit, r, g, b)
     fs:SetTextColor(r, g, b)
 end
 
+I.GetClassicHealthCurve, I.GetDispelColor = GetClassicHealthCurve, GetDispelColor
+I.GetHealthColor, I.GetHealthTextColor = GetHealthColor, GetHealthTextColor
+I.GetNameColor, I.GetPowerColor = GetNameColor, GetPowerColor
+I.GetSafeHealthPercent, I.GetTopNameBarColor = GetSafeHealthPercent, GetTopNameBarColor
+I.LayoutTopNameBar, I.ResolveDisplayName = LayoutTopNameBar, ResolveDisplayName
+I.broken = false

@@ -1,3 +1,29 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Absorb.lua
+--
+--  Absorb styles, the absorb, heal absorb and heal prediction bars, their
+--  position and UpdateAbsorb.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local UnitHealthMax         = UnitHealthMax
+local UnitGetTotalAbsorbs   = UnitGetTotalAbsorbs
+local UnitGetTotalHealAbsorbs = UnitGetTotalHealAbsorbs
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local ABSORB_STYLE_ALPHA, ABSORB_STYLE_TEX = I.ABSORB_STYLE_ALPHA, I.ABSORB_STYLE_TEX
+local GetFFD, PixelSnap = I.GetFFD, I.PixelSnap
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Absorb style application. Single-fill styles match the unit-frame look; the
 --  RF-only compound "Blizzard (Modern)" style layers a tiled stripe fill over a
@@ -630,7 +656,7 @@ end
 --  topLeft / rightVertical / leftVertical (vertical side bar; fill direction
 --  from the per-bar grow-direction setting, default up).
 -------------------------------------------------------------------------------
--- Absorb / Heal Absorb Bar position resolvers + strip layout. On ns (local cap). The legacy
+-- Absorb / Heal Absorb Bar position resolvers + strip layout. The legacy
 -- absorbBarEnabled boolean maps to "aboveRight"/"none"; absorbBarPosition wins once set.
 ns.GetAbsorbBarPosition = function(s)
     local p = s and s.absorbBarPosition
@@ -699,7 +725,7 @@ end
 -------------------------------------------------------------------------------
 --  Update absorb bar for a button
 -------------------------------------------------------------------------------
--- Absorb paint helpers (on ns: this file sits at the 200-local cap). Every
+-- Absorb paint helpers (on ns). Every
 -- absorb child is toggled by UpdateAbsorb alone -- creation hides them and the
 -- style appliers never touch visibility -- so a stamped Show/Hide is exact:
 -- nil = fresh frame, always pushes. Ranges: max health reads PLAIN for group
@@ -1207,4 +1233,5 @@ local function UpdateAbsorb(button, unit, now)
     end
 end
 
-
+I.CreateAbsorbBar, I.UpdateAbsorb = CreateAbsorbBar, UpdateAbsorb
+I.broken = false

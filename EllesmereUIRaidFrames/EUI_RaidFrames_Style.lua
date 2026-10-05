@@ -1,3 +1,39 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Style.lua
+--
+--  The debuff grid layout, right-click camera movement, StyleButton and the
+--  secure half of the button setup.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor        = math.floor
+local max          = math.max
+local min          = math.min
+local abs          = math.abs
+local pairs        = pairs
+local ipairs       = ipairs
+local UnitExists            = UnitExists
+local IsInRaid              = IsInRaid
+local GetNumGroupMembers    = GetNumGroupMembers
+local C_Timer               = C_Timer
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local ApplyFont, defaults, GetFFD, PixelSnap = I.ApplyFont, I.defaults, I.GetFFD, I.PixelSnap
+local ResolveHealthTexture, unitToButton = I.ResolveHealthTexture, I.unitToButton
+local CreateAbsorbBar, UpdateAbsorb = I.CreateAbsorbBar, I.UpdateAbsorb
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local PP
+I.PPSetters[#I.PPSetters + 1] = function(v) PP = v end
+
 -------------------------------------------------------------------------------
 --  Debuff grid layout (shared by the live render and the options preview)
 -------------------------------------------------------------------------------
@@ -9,7 +45,7 @@
 -- last paint renders. The budget is the backstop for a genuine event storm
 -- (a raid-wide shield landing on everyone in one frame); the belt below
 -- spreads its own marks across ticks so it never fills the budget itself.
--- The flush frame is hidden whenever the set is empty. On ns (200-local cap).
+-- The flush frame is hidden whenever the set is empty.
 ns._abDirty = {}
 ns._abFlushBudget = 20
 ns._abFlush = CreateFrame("Frame")
@@ -87,7 +123,7 @@ end
 
 -- Effective icon size for dispellable debuffs routed to their own anchor ("Dispellable Debuff
 -- Location"): 0 = match the main Debuff Size. Reads scaled proxies transparently (the key is in
--- INDICATOR_SCALE_KEYS; 0 scales to 0, so the match sentinel survives). On ns (200-local cap).
+-- INDICATOR_SCALE_KEYS; 0 scales to 0, so the match sentinel survives).
 function ns.DispellableDebuffSize(s)
     local v = s.dispellableDebuffSize
     if v and v > 0 then return v end
@@ -1159,3 +1195,5 @@ ns._StyleButtonSecure = function(button)
     end
 end
 
+I.StyleButton = StyleButton
+I.broken = false

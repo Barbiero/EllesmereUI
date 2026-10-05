@@ -1,3 +1,39 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_BossFrames.lua
+--
+--  Friendly Boss Frames: five secure unit buttons for boss1 to boss5.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitIsUnit            = UnitIsUnit
+local IsInRaid              = IsInRaid
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local C_Timer               = C_Timer
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local ApplyFont, GetFFD, PixelSnap = I.ApplyFont, I.GetFFD, I.PixelSnap
+local ResolveHealthTexture, separatedHdrs = I.ResolveHealthTexture, I.separatedHdrs
+local GetHealthTextColor, GetNameColor = I.GetHealthTextColor, I.GetNameColor
+local GetSafeHealthPercent, ResolveDisplayName = I.GetSafeHealthPercent, I.ResolveDisplayName
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local PP
+I.PPSetters[#I.PPSetters + 1] = function(v) PP = v end
+
 -------------------------------------------------------------------------------
 --  Friendly Boss Frames (any group): five standalone secure unit buttons for
 --  boss1-boss5. A secure visibility driver on [@bossN,help] is the entire
@@ -11,7 +47,7 @@
 --  unlock mode (Free Move uses its own drag overlay). Display "healers"
 --  builds/activates only on a healer spec.
 -------------------------------------------------------------------------------
--- do/end scope keeps FB off the main chunk's 200-local cap; closures below keep it alive after the block closes.
+-- do/end scope; closures below keep FB alive after the block closes.
 do
 local FB = { buttons = {}, trackers = {} }
 ns._FB = FB
@@ -1035,3 +1071,4 @@ end
 
 end -- FB scope block
 
+I.broken = false

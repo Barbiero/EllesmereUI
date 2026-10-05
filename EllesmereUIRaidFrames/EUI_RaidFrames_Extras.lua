@@ -1,3 +1,43 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Extras.lua
+--
+--  The healer mana text display and the frame-provider APIs for external
+--  trackers.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local type         = type
+local select       = select
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsUnit            = UnitIsUnit
+local IsInRaid              = IsInRaid
+local IsInGroup             = IsInGroup
+local InCombatLockdown      = InCombatLockdown
+local C_Timer               = C_Timer
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+local RAID_CLASS_COLORS     = RAID_CLASS_COLORS
+
+local allButtons, ApplyFont, ApplyRoleIcon = I.allButtons, I.ApplyFont, I.ApplyRoleIcon
+local defaults, DISPEL_ICON_ATLAS, GetFFD = I.defaults, I.DISPEL_ICON_ATLAS, I.GetFFD
+local IsPowerBarEnabled, ResolveHealthTexture = I.IsPowerBarEnabled, I.ResolveHealthTexture
+local GetDispelColor, GetPowerColor = I.GetDispelColor, I.GetPowerColor
+local LayoutTopNameBar, LayoutGroups = I.LayoutTopNameBar, I.LayoutGroups
+local MOVER_GROUPS = I.MOVER_GROUPS
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 --  Healer Mana Text Display (Extras): one text row per group healer, riding
 --  the EXISTING per-unit trackers. UpdatePowerEventRegistration keeps
@@ -233,13 +273,6 @@ do
 end
 
 ns.GetFFD = GetFFD
--- Main-chunk locals EUI_RaidFrames_Preview.lua re-imports by name.
-ns._internals = {
-    ApplyFont = ApplyFont, ApplyRoleIcon = ApplyRoleIcon, DISPEL_ICON_ATLAS = DISPEL_ICON_ATLAS,
-    GetDispelColor = GetDispelColor, IsPowerBarEnabled = IsPowerBarEnabled, LayoutGroups = LayoutGroups,
-    LayoutTopNameBar = LayoutTopNameBar, MOVER_GROUPS = MOVER_GROUPS,
-    ResolveHealthTexture = ResolveHealthTexture, defaults = defaults,
-}
 
 -------------------------------------------------------------------------------
 --  External tracker integration (frame-provider APIs)
@@ -360,3 +393,4 @@ ns._RegisterTrackerProviders = function()
     end
 end
 
+I.broken = false

@@ -1,3 +1,38 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Sort.lua
+--
+--  Show Self First, the Prioritize Class lists, the FrameSort provider and
+--  ApplySortToHeaders.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local ipairs       = ipairs
+local wipe         = wipe
+local type         = type
+local tostring     = tostring
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsUnit            = UnitIsUnit
+local IsInRaid              = IsInRaid
+local IsInGroup             = IsInGroup
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local issecretvalue         = issecretvalue
+
+local separatedHdrs = I.separatedHdrs
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+
 -------------------------------------------------------------------------------
 --  Show Self First (raid, OOC only): the player's subgroup header sorts via a
 --  per-group nameList listing every member with the player first, so the
@@ -119,7 +154,7 @@ end
 -- localized name, enumerated via GetNumClasses + C_CreatureInfo.GetClassInfo
 -- so non-class entries (Adventurer/Traveler in LOCALIZED_CLASS_NAMES_MALE) are
 -- excluded. Also populates ns._classNameByToken (token -> localized name) for
--- the options list. Cached on ns (local cap).
+-- the options list. Cached on ns.
 function ns._GetDefaultClassOrder()
     if ns._defaultClassOrderCache then return ns._defaultClassOrderCache end
     local list, names = {}, {}
@@ -735,3 +770,5 @@ local function ApplySortToHeaders()
 end
 ns._ApplySortToHeaders = ApplySortToHeaders
 
+I.ApplySortToHeaders = ApplySortToHeaders
+I.broken = false

@@ -1,3 +1,36 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_PartyTargets.lua
+--
+--  Party Targets: a secure target button beside each party frame.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local max          = math.max
+local ipairs       = ipairs
+local wipe         = wipe
+local UnitName              = UnitName
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local IsInRaid              = IsInRaid
+local InCombatLockdown      = InCombatLockdown
+local C_Timer               = C_Timer
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local ApplyFont, PixelSnap = I.ApplyFont, I.PixelSnap
+local ResolveHealthTexture = I.ResolveHealthTexture
+local GetClassicHealthCurve = I.GetClassicHealthCurve
+local GetSafeHealthPercent = I.GetSafeHealthPercent
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+
 -------------------------------------------------------------------------------
 -- Party Targets (opt-in, Party-only)
 --
@@ -27,7 +60,6 @@ ns._ptEnabled = false
 ns._ptDesired = false
 ns._ptInclDesired = false
 
--- Scope block: 200-local main-chunk cap.
 do
 local EUI = ns.EllesmereUI
 -- Layout state (the last applied size, side, gaps and offsets: the layout's delta gate and the
@@ -955,3 +987,4 @@ function ns.PT_HidePreview()
 end
 end -- Party Targets scope block
 
+I.broken = false

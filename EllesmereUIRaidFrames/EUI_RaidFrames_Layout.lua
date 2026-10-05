@@ -1,3 +1,34 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Layout.lua
+--
+--  Header creation and LayoutGroups.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local abs          = math.abs
+local tostring     = tostring
+local IsInRaid              = IsInRaid
+local InCombatLockdown      = InCombatLockdown
+local GetNumGroupMembers    = GetNumGroupMembers
+local CreateFrame           = CreateFrame
+
+local allButtons, ApplyFont, PixelSnap = I.allButtons, I.ApplyFont, I.PixelSnap
+local separatedHdrs, ApplySortToHeaders = I.separatedHdrs, I.ApplySortToHeaders
+local SetContainerFrame = I.SetContainerFrame
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local PP
+I.PPSetters[#I.PPSetters + 1] = function(v) PP = v end
+local containerFrame
+I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
+
 -------------------------------------------------------------------------------
 --  Header creation
 -------------------------------------------------------------------------------
@@ -138,7 +169,7 @@ local function CreateHeaders()
     local s = db.profile
 
     -- Container frame for positioning (not secure, just holds headers)
-    containerFrame = CreateFrame("Frame", "EllesmereUIRaidFrameContainer", UIParent)
+    SetContainerFrame(CreateFrame("Frame", "EllesmereUIRaidFrameContainer", UIParent))
     ns._PreviewBind(db, PP, containerFrame)
     containerFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     containerFrame:SetSize(1, 1)
@@ -243,8 +274,7 @@ end
 -- Real layout work. Call only through LayoutGroups() below, which wraps this in a
 -- coalescing re-entrancy guard. Mutating secure group headers here (Hide/Show/
 -- SetAttribute) and resizing the container makes Blizzard re-anchor their children
--- synchronously, which can re-enter layout through our own hooks. Stored on ns
--- (not a new file-scope local) because this chunk is at the 200-local cap.
+-- synchronously, which can re-enter layout through our own hooks. Stored on ns.
 ns._LayoutGroupsImpl = function()
     if not containerFrame then return end
     if InCombatLockdown() then return end
@@ -497,7 +527,7 @@ end
 -- re-runs on return, bounded to 3 passes so a non-converging header feedback
 -- loop (SetAttribute/SetSize -> engine re-anchors children -> our hook -> here)
 -- can't spin into a watchdog kill. pcall clears the busy flag on error and
--- rethrows, so one error can't freeze every future layout. State on ns (local cap).
+-- rethrows, so one error can't freeze every future layout. State on ns.
 local function LayoutGroups()
     if ns._inLayoutGroups then
         ns._layoutGroupsDirty = true
@@ -525,5 +555,5 @@ local function LayoutGroups()
     end
 end
 
-local RangeUpdate  -- forward declaration (defined in Range fading section below)
-
+I.CreateHeaders, I.LayoutGroups, I.MOVER_GROUPS = CreateHeaders, LayoutGroups, MOVER_GROUPS
+I.broken = false

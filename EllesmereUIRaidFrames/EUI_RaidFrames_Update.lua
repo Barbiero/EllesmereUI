@@ -1,3 +1,56 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_RaidFrames_Update.lua
+--
+--  The ping marker, the role, leader and combat icons, UpdateButton, dispel
+--  detection, the ready check, the unit map and UpdateAllButtons.
+--  Reads the earlier Raid Frames files through ns and ns._internals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._internals
+-- EllesmereUIRaidFrames.lua or an earlier Raid Frames file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local pairs        = pairs
+local ipairs       = ipairs
+local wipe         = wipe
+local type         = type
+local tostring     = tostring
+local select       = select
+local UnitHealth            = UnitHealth
+local UnitPowerMax          = UnitPowerMax
+local UnitPowerType         = UnitPowerType
+local UnitClass             = UnitClass
+local UnitExists            = UnitExists
+local UnitIsConnected       = UnitIsConnected
+local UnitIsDeadOrGhost     = UnitIsDeadOrGhost
+local UnitHasIncomingResurrection = UnitHasIncomingResurrection
+local UnitIsUnit            = UnitIsUnit
+local GetReadyCheckStatus   = GetReadyCheckStatus
+local C_IncomingSummon      = C_IncomingSummon
+local GetRaidTargetIndex    = GetRaidTargetIndex
+local C_Timer               = C_Timer
+local issecretvalue         = issecretvalue
+local CreateFrame           = CreateFrame
+
+local AbbreviateNumbers, allButtons = I.AbbreviateNumbers, I.allButtons
+local ApplyRoleIcon, ERF, GetFFD, PixelSnap = I.ApplyRoleIcon, I.ERF, I.GetFFD, I.PixelSnap
+local RAID_MARKER_TEXCOORDS = I.RAID_MARKER_TEXCOORDS
+local SUMMON_STATUS_ACCEPTED = I.SUMMON_STATUS_ACCEPTED
+local SUMMON_STATUS_DECLINED = I.SUMMON_STATUS_DECLINED
+local SUMMON_STATUS_PENDING, unitToButton = I.SUMMON_STATUS_PENDING, I.unitToButton
+local unitTrackers, GetHealthColor = I.unitTrackers, I.GetHealthColor
+local GetHealthTextColor, GetNameColor = I.GetHealthTextColor, I.GetNameColor
+local GetPowerColor, GetSafeHealthPercent = I.GetPowerColor, I.GetSafeHealthPercent
+local GetTopNameBarColor, ResolveDisplayName = I.GetTopNameBarColor, I.ResolveDisplayName
+local UpdateAbsorb = I.UpdateAbsorb
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local inCombat = false
+I.inCombatSetters[#I.inCombatSetters + 1] = function(v) inCombat = v end
+
 -------------------------------------------------------------------------------
 --  Unit ping marker (parity with the default raid frames): when a group member
 --  is pinged, the marker Blizzard draws on its compact frame appears on that
@@ -91,7 +144,7 @@ ns._RFPingHide = function(button)
 end
 
 -- Atlas at native size, then scaled by the configured factor (each texture
--- keeps its own native proportions). On ns (200-local cap).
+-- keeps its own native proportions).
 ns._SetPingAtlas = function(tex, atlas, factor)
     tex:SetAtlas(atlas, true)
     if factor ~= 1 then
@@ -170,7 +223,7 @@ end
 -------------------------------------------------------------------------------
 --  Role icon show/hide decision. Shared by UpdateButton and the lightweight
 --  ns._UpdateRoleIcons combat-transition updater (lockstep). Honors the "Hide In
---  Combat" cog (hidden in combat, restored on PLAYER_REGEN_ENABLED). On ns (local cap).
+--  Combat" cog (hidden in combat, restored on PLAYER_REGEN_ENABLED).
 -------------------------------------------------------------------------------
 ns._UpdateRoleIcon = function(d, s, unit)
     local roleIcon = d.roleIcon
@@ -196,7 +249,7 @@ end
 -------------------------------------------------------------------------------
 --  Leader/assistant icon show/hide decision. Shared by UpdateButton and the
 --  lightweight ns._UpdateLeaderIcons combat-transition updater (lockstep). Honors
---  the "Show In Combat" cog (default on; off = hidden in combat). On ns (local cap).
+--  the "Show In Combat" cog (default on; off = hidden in combat).
 -------------------------------------------------------------------------------
 ns._UpdateLeaderIcon = function(d, s, unit)
     local leaderIcon = d.leaderIcon
@@ -356,7 +409,6 @@ end
 -- Power bar layout + value: role-gated show/hide, health-height reflow, then the
 -- value/color push. Split out of UpdateButton so the roster-state refresh
 -- (ns._RefreshRosterState) can re-evaluate the role gate without a full paint.
--- On ns (200-local cap).
 ns._PaintPower = function(button, d, s, unit)
     local power = d.power
     if power then
@@ -463,7 +515,7 @@ end
 -- roster event: leader/assist flag, assigned role (icon + role-gated power layout).
 -- Everything else on the button is driven by its own unit events and was current
 -- before the roster event, so the full paint (name resolution, absorb, texts,
--- marker, threat) is skipped. On ns (200-local cap).
+-- marker, threat) is skipped.
 ns._RefreshRosterState = function(button, d, s, unit)
     if not d.styled then return end
     ns._UpdateRoleIcon(d, s, unit)
@@ -476,7 +528,7 @@ end
 -- occupant changed) or a full pass inside the cycle: nothing left to do. A stable
 -- occupant (same guid as the hook's last full paint) gets the roster-state refresh.
 -- Anything else -- no painted occupant on record, secret guid -- takes the full
--- paint, exactly the old pass. On ns (200-local cap).
+-- paint, exactly the old pass.
 ns._RosterPassPaint = function(button, unit)
     local d = GetFFD(button)
     local armAt = ns._rosterArmAt
@@ -490,7 +542,7 @@ ns._RosterPassPaint = function(button, unit)
     end
 end
 
--- Second half of the full paint (after power + absorb). On ns (200-local cap).
+-- Second half of the full paint (after power + absorb).
 ns._PaintButtonTail = function(button, d, s, unit)
     local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
 
@@ -669,7 +721,7 @@ end
 
 -- UNIT_LEVEL: only the level repaints -- in front of the name (both name texts)
 -- or on its own spot, colours untouched; a button whose view shows no level is
--- left alone. On ns (200-local cap).
+-- left alone.
 ns._RFRepaintLevel = function(button)
     local unit = button:GetAttribute("unit")
     if not unit or not UnitExists(unit) then return end
@@ -747,6 +799,7 @@ end
 --  Ready check handling
 -------------------------------------------------------------------------------
 local readyCheckActive = false
+I.readyCheckActiveSetters[#I.readyCheckActiveSetters + 1] = function(v) readyCheckActive = v end
 
 -- Incoming-rez indicator state. UnitHasIncomingResurrection covers only the CAST
 -- window: it drops to false the moment the cast lands, while the target still has
@@ -1082,8 +1135,7 @@ end
 -- paths. The rez check runs only for dead units: a live unit can never carry an
 -- incoming resurrection (the offer latch also requires dead), so the C probe is
 -- skipped for the alive majority -- the same shape as Blizzard's
--- CompactUnitFrame, which never probes rez from its UNIT_HEALTH path. On ns
--- (200-local cap).
+-- CompactUnitFrame, which never probes rez from its UNIT_HEALTH path.
 ns._PaintStatusText = function(d, s, unit, connected, deadOrGhost)
     local statusText = d.statusText
     if not statusText then return end
@@ -1312,3 +1364,6 @@ ns._ResettleButtonHealth = function(button)
     end)
 end
 
+I.RebuildUnitMap, I.UpdateAllButtons = RebuildUnitMap, UpdateAllButtons
+I.UpdateButton, I.UpdateReadyCheck = UpdateButton, UpdateReadyCheck
+I.broken = false
