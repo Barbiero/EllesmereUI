@@ -1140,7 +1140,7 @@ function EQD:OnEnable()
     -- checkbox, a profile switch and a spec switch all reach -- so switching the
     -- module on mid-session still gets combat-deferred rebinding and
     -- stuck-palette cleanup, without a session that never enables it paying for
-    -- any of them. All it holds is the one empty frame the main chunk makes.
+    -- any of them. All it holds is the one empty frame the main file makes.
     if not p.enabled then return end
 
     for i = 1, PaletteCount() do EnsurePalette(i) end

@@ -854,25 +854,17 @@ ns._qdInternals = {
     liveViewSetters = {},
     scrollCatcherSetters = {},
     cancelButtonSetters = {},
-    SetDB = function(v)
-        local list = ns._qdInternals.dbSetters
-        for i = 1, #list do list[i](v) end
-    end,
-    SetLiveView = function(v)
-        local list = ns._qdInternals.liveViewSetters
-        for i = 1, #list do list[i](v) end
-    end,
-    SetScrollCatcher = function(v)
-        local list = ns._qdInternals.scrollCatcherSetters
-        for i = 1, #list do list[i](v) end
-    end,
-    SetCancelButton = function(v)
-        local list = ns._qdInternals.cancelButtonSetters
-        for i = 1, #list do list[i](v) end
-    end,
     SetUsableSlots = function(f) UsableSlots = f end,
     broken = false,
 }
+-- Set<Name> hands a new value to every copy registered in <name>Setters.
+for setter, listName in pairs({ SetDB = "dbSetters", SetLiveView = "liveViewSetters",
+        SetScrollCatcher = "scrollCatcherSetters", SetCancelButton = "cancelButtonSetters" }) do
+    local list = ns._qdInternals[listName]
+    ns._qdInternals[setter] = function(v)
+        for i = 1, #list do list[i](v) end
+    end
+end
 -- A re-import of a name this table lacks fails where the part file loads,
 -- not later as a nil upvalue inside one of its functions.
 setmetatable(ns._qdInternals, { __index = function(_, k)
