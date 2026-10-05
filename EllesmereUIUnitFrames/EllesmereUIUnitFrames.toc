@@ -12,6 +12,9 @@
 # Main Luas
 EUI_UnitFrames_Engine.lua
 EllesmereUIUnitFrames.lua
+EUI_UnitFrames_Layout.lua
+EUI_UnitFrames_Absorb.lua
+EUI_UnitFrames_Power.lua
 EUI_UnitFrames_Builders.lua
 EUI_UnitFrames_ClassPower.lua
 EUI_UnitFrames_Threat.lua
