@@ -207,7 +207,8 @@ local function InRealInstancedContent()
         return false
     end
     -- Housing plots report as "scenario"; they belong to the open world.
-    if C_Housing and C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot() then
+    if _cachedIType == "scenario" and C_Housing and C_Housing.IsInsideHouseOrPlot
+        and C_Housing.IsInsideHouseOrPlot() then
         return false
     end
 

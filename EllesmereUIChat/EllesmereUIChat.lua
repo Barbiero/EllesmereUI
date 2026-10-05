@@ -1115,6 +1115,10 @@ local function EnsureChatClampInsets()
     local l, r, t, b = cf1:GetClampRectInsets()
     if l ~= wl or r ~= wr or t ~= wt or b ~= wb then
         cf1:SetClampRectInsets(wl, wr, wt, wb)
+        -- A rect the clamp pinned under the other insets stays pinned until
+        -- the anchors are written again (they still read as ours), so the
+        -- next placement re-anchors instead of trusting its compare gate.
+        ns._chatReanchor = true
     end
 end
 
@@ -2006,8 +2010,11 @@ local function ApplyChatPosition()
         end
     end
     -- Compare-gated: once Edit Mode's own apply lands on our anchors (the
-    -- store carries them), there is nothing to write.
-    if not ChatAtTarget(cf1, n) then
+    -- store carries them), there is nothing to write -- unless the clamp
+    -- insets were just put back (EnsureChatClampInsets above): a rect pinned
+    -- under the other insets only lets go once the anchors are written again.
+    if ns._chatReanchor or not ChatAtTarget(cf1, n) then
+        ns._chatReanchor = nil
         ClearFramePoints(cf1)
         for i = 1, n do
             local t = chatTarget[i]
@@ -2020,6 +2027,11 @@ local function ApplyChatPosition()
         C_Timer.After(0, function()
             local cfg2 = ECHAT.DB()
             if not cfg2 or not cfg2.chatPosition or ns._chatSizingActive then return end
+            -- A rect pinned under other clamp insets is not where the anchors
+            -- put it: never save that spot. Re-anchor; that apply schedules
+            -- this pass again.
+            EnsureChatClampInsets()
+            if ns._chatReanchor then ApplyChatPosition() return end
             local l, b = cf1:GetLeft(), cf1:GetBottom()
             local issecret = _G.issecretvalue
             if not (l and b) or (issecret and (issecret(l) or issecret(b))) then return end
@@ -2173,6 +2185,16 @@ local function InstallChatAnchorGuard()
         local cfg = ECHAT.DB()
         if cfg and cfg.chatPosition then chatReassert:Show() end
     end)
+    -- Edit Mode also sets the clamp insets from its selection box (32-60px
+    -- past the window) on every layout apply and on entering Edit Mode,
+    -- which applies no anchor; a chat near a screen edge is then pinned
+    -- inward. The same re-assert puts our insets back and re-anchors.
+    if cf1.UpdateClampOffsets then
+        hooksecurefunc(cf1, "UpdateClampOffsets", function()
+            local cfg = ECHAT.DB()
+            if cfg and cfg.chatPosition then chatReassert:Show() end
+        end)
+    end
 end
 
 -- Kill Edit Mode's selection overlay for chat: the unit-frame treatment

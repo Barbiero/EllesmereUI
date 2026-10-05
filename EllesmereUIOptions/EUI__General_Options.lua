@@ -205,6 +205,17 @@ end
 -------------------------------------------------------------------------------
 EllesmereUI._WHATSNEW_PATCHES = {
     {
+        version = "9.3.8",
+        mini = true,
+        fixes = {
+            { module = "AuraBuff Reminders", text = "Reminders now follow Where to Show in Island Expeditions, Torghast and other scenarios, which get their own Scenario entry, and housing plots now count as Open World." },
+            { forever = true, module = "Bags", text = "The keyring button on the bag bar opens your keyring again instead of the bags." },
+            { module = "Chat", text = "Chat placed near the bottom or left edge of the screen no longer shifts up and to the right after logging in or opening Edit Mode." },
+            { module = "Mythic+ Tools", text = "Targeted Spell Bars now follow Where to Show in scenarios, which get their own Scenario entry, and housing plots now count as Open World." },
+            { module = "Localization", text = "Brazilian Portuguese translation updated for the latest options." },
+        },
+    },
+    {
         version = "9.3.7",
         features = {
             {
@@ -1651,37 +1662,6 @@ EllesmereUI._WHATSNEW_PATCHES = {
             { forever = true, module = "Resource Bars", text = "The Swing Timer now defaults to In Combat with Deplete Fill on, and a timer still set to Always moves to In Combat once." },
             { forever = true, module = "Unit Frames & Nameplates", text = "Player names now include the character's surname, as Blizzard's own frames show them." },
             { module = "Localization", text = "Brazilian Portuguese translations updated." },
-        },
-    },
-    {
-        version = "9.2.8",
-        mini = true,
-        features = {
-            {
-                module = "Nameplates",
-                title  = "Blizzard Border Dispel Glow",
-                desc   = "The Dispel Glow Style picker, and Unit Frames' Purgeable Buff Glow, can use Blizzard's own stealable border",
-                nav    = { module = "EllesmereUINameplates", page = "General",
-                           section = "EXTRA AURA OPTIONS", highlight = "Dispel Glow Style" },
-            },
-            {
-                -- The Custom Group Order toggle lives in the Show Groups row's cog.
-                module = "Raid Frames",
-                title  = "Custom Group Order",
-                desc   = "Drag the Show Groups list to show your separated raid groups in any order, from the Show Groups cog",
-                nav    = { module = "EllesmereUIRaidFrames", page = "Frames",
-                           section = "LAYOUT", highlight = "Show Groups" },
-            },
-        },
-        fixes = {
-            { forever = true, module = "Chat", text = "The chat sidebar no longer shows the M+ Portals button." },
-            { module = "Cooldown Manager", text = "Cancelling a color picker in a spell's settings menu now puts the swatch and the icon back to the old color." },
-            { module = "General", text = "Greyed-out cog and keybind buttons on the Unit Frames, Nameplates, Mythic Timer and Blizz UI Enhanced pages now say what they need when hovered, and a keybind button no longer leaves its tooltip up after you move the mouse away while it waits for a key." },
-            { forever = true, module = "General", text = "Your EllesmereUI settings now save between sessions, and the welcome and style pickers, the Profiles page and the Reload UI buttons are back now that Blizzard's client saves settings again." },
-            { module = "Nameplates", text = "The target highlight no longer sticks to a plate after you switch targets." },
-            { module = "Nameplates", text = "The target Hash Line now moves with your target, and a hover-enlarged border no longer carries over to the next mob's plate." },
-            { module = "Unit Frames", text = "Purgeable Buff Glow no longer lights up buffs on a friendly target or focus." },
-            { module = "Localization", text = "German, Brazilian Portuguese and Traditional Chinese translations updated." },
         },
     },
 }
