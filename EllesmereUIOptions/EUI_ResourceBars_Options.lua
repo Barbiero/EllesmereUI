@@ -1162,7 +1162,7 @@ initFrame:SetScript("OnEvent", function(self)
 
         local bg = bandPopup:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetColorTexture(0.06, 0.08, 0.10, 0.97)
+        bg:SetColorTexture(0.077, 0.068, 0.058, 0.97)
         PP.CreateBorder(bandPopup, 1, 1, 1, 0.18, 1, "BORDER", 7)
 
         local clickCatcher = CreateFrame("Button", nil, bandPopup)
@@ -1280,7 +1280,7 @@ initFrame:SetScript("OnEvent", function(self)
         _bandAddBtn = CreateFrame("Button", nil, bandPopup)
         PP.Size(_bandAddBtn, BAND_POPUP_W - BAND_PAD * 2, 26)
         _bandAddBtn:SetFrameLevel(bandPopup:GetFrameLevel() + 3)
-        local abg = EllesmereUI.SolidTex(_bandAddBtn, "BACKGROUND", 0.05, 0.07, 0.09, 0.92)
+        local abg = EllesmereUI.SolidTex(_bandAddBtn, "BACKGROUND", 0.069, 0.058, 0.047, 0.92)
         abg:SetAllPoints()
         _bandAddBtn._border = EllesmereUI.MakeBorder(_bandAddBtn, 1, 1, 1, 0.4, PP)
         local albl = EllesmereUI.MakeFont(_bandAddBtn, 12, nil, 1, 1, 1)
@@ -1548,7 +1548,7 @@ initFrame:SetScript("OnEvent", function(self)
             popup:Hide()
             PP.Size(popup, POPUP_W, 200)
             local bg = popup:CreateTexture(nil, "BACKGROUND")
-            bg:SetAllPoints(); bg:SetColorTexture(0.06, 0.08, 0.10, 0.97)
+            bg:SetAllPoints(); bg:SetColorTexture(0.077, 0.068, 0.058, 0.97)
             PP.CreateBorder(popup, 1, 1, 1, 0.18, 1, "BORDER", 7)
 
             -- Insertion line shown while dragging a row; theme accent, matches the raid "Sort By" reorder line
@@ -1597,7 +1597,7 @@ initFrame:SetScript("OnEvent", function(self)
             addBtn = CreateFrame("Button", nil, popup)
             PP.Size(addBtn, POPUP_W - BAND_PAD * 2, 26)
             addBtn:SetFrameLevel(popup:GetFrameLevel() + 3)
-            local abg = EllesmereUI.SolidTex(addBtn, "BACKGROUND", 0.05, 0.07, 0.09, 0.92)
+            local abg = EllesmereUI.SolidTex(addBtn, "BACKGROUND", 0.069, 0.058, 0.047, 0.92)
             abg:SetAllPoints()
             addBtn._border = EllesmereUI.MakeBorder(addBtn, 1, 1, 1, 0.4, PP)
             local albl = EllesmereUI.MakeFont(addBtn, 12, nil, 1, 1, 1)
@@ -1837,6 +1837,27 @@ initFrame:SetScript("OnEvent", function(self)
     local SPENDER_HELP_TIP =
         "Recolor the bar while a spell is castable (usable and off cooldown). The first castable spell in the list wins, so order = priority. Overrides threshold coloring while active; an active tracked buff from Buff Colors takes priority.\n"
         .. "For an ability that turns into another spell while active, enter the original spell's ID: its current form is checked."
+
+    -- Skins a small text button of the threshold settings (Bands, Buffs, Spenders):
+    -- a dark fill that lightens on hover, tip on hover. label comes localized.
+    local function SkinCardButton(btn, label, tip)
+        local bg = btn:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0.12, 0.12, 0.12, 0.8)
+        btn._border = EllesmereUI.MakeBorder(btn, 1, 1, 1, 0.08, PP)
+        local lbl = EllesmereUI.MakeFont(btn, 12, nil, 1, 1, 1)
+        lbl:SetAlpha(0.8)
+        lbl:SetPoint("CENTER")
+        lbl:SetText(label)
+        btn:SetScript("OnEnter", function(self)
+            bg:SetColorTexture(0.16, 0.16, 0.16, 0.9)
+            EllesmereUI.ShowWidgetTooltip(self, tip)
+        end)
+        btn:SetScript("OnLeave", function()
+            bg:SetColorTexture(0.12, 0.12, 0.12, 0.8)
+            EllesmereUI.HideWidgetTooltip()
+        end)
+    end
 
     -- Shared per-spec Threshold & Hash Lines editor, used by the power and health bar sections.
     -- The Settings button opens an in-page editor (same layout as the Class Resource one): a spec
@@ -2123,7 +2144,7 @@ initFrame:SetScript("OnEvent", function(self)
             backBtn:SetFrameLevel(thrPage:GetFrameLevel() + 2)
             local backBg = backBtn:CreateTexture(nil, "BACKGROUND")
             backBg:SetAllPoints()
-            backBg:SetColorTexture(0.06, 0.08, 0.10, 0.50)
+            backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
             local backBrd = EllesmereUI.MakeBorder(backBtn, 1, 1, 1, 0.12, PP)
             local backIcon = backBtn:CreateTexture(nil, "ARTWORK")
             backIcon:SetSize(14, 14)
@@ -2144,7 +2165,7 @@ initFrame:SetScript("OnEvent", function(self)
                 backLbl:SetAlpha(0.85)
             end)
             backBtn:SetScript("OnLeave", function()
-                backBg:SetColorTexture(0.06, 0.08, 0.10, 0.50)
+                backBg:SetColorTexture(0.077, 0.068, 0.058, 0.50)
                 backBrd:SetColor(1, 1, 1, 0.12)
                 backIcon:SetAlpha(0.6)
                 backLbl:SetAlpha(0.55)
@@ -2245,7 +2266,7 @@ initFrame:SetScript("OnEvent", function(self)
                 PP.Size(addBtn, ADD_W, BUTTON_H)
                 addBtn:SetPoint("LEFT", specDDHost, "RIGHT", GAP_L, 0)
                 addBtn:SetFrameLevel(ddRow:GetFrameLevel() + 2)
-                local addBg = EllesmereUI.SolidTex(addBtn, "BACKGROUND", 0.05, 0.07, 0.09, 0.92)
+                local addBg = EllesmereUI.SolidTex(addBtn, "BACKGROUND", 0.069, 0.058, 0.047, 0.92)
                 addBg:SetAllPoints()
                 addBtn._border = EllesmereUI.MakeBorder(addBtn, 1, 1, 1, 0.4, PP)
                 local addLbl = EllesmereUI.MakeFont(addBtn, 11, nil, 1, 1, 1)
@@ -2317,7 +2338,7 @@ initFrame:SetScript("OnEvent", function(self)
 
             local bg = specContainer:CreateTexture(nil, "BACKGROUND")
             bg:SetAllPoints()
-            bg:SetColorTexture(0.06, 0.08, 0.10, 0.95)
+            bg:SetColorTexture(0.077, 0.068, 0.058, 0.95)
             PP.CreateBorder(specContainer, 1, 1, 1, 0.15, 1, "BORDER", 7)
 
             local scrollFrame = CreateFrame("ScrollFrame", nil, specContainer)
@@ -2378,7 +2399,7 @@ initFrame:SetScript("OnEvent", function(self)
             PP.Size(detailC, contentHalfSize, specContainerH + FORMBAR_H + (ROW_H - INNERPAD))
             local dBg = detailC:CreateTexture(nil, "BACKGROUND")
             dBg:SetAllPoints()
-            dBg:SetColorTexture(0.06, 0.08, 0.10, 0.95)
+            dBg:SetColorTexture(0.077, 0.068, 0.058, 0.95)
             PP.CreateBorder(detailC, 1, 1, 1, 0.15, 1, "BORDER", 7)
             detailC:EnableMouse(true)
 
@@ -2509,7 +2530,7 @@ initFrame:SetScript("OnEvent", function(self)
             talentDis:EnableMouse(true)
             local talentDisTex = talentDis:CreateTexture(nil, "OVERLAY")
             talentDisTex:SetAllPoints()
-            talentDisTex:SetColorTexture(0.06, 0.08, 0.10, 0.6)
+            talentDisTex:SetColorTexture(0.077, 0.068, 0.058, 0.6)
             talentDis:SetScript("OnEnter", function()
                 EllesmereUI.ShowWidgetTooltip(talentDis, EllesmereUI.L("Talent gating is only available while playing this spec's class"))
             end)
@@ -2654,7 +2675,7 @@ initFrame:SetScript("OnEvent", function(self)
             threshDis:EnableMouse(true)
             local threshDisTex = threshDis:CreateTexture(nil, "OVERLAY")
             threshDisTex:SetAllPoints()
-            threshDisTex:SetColorTexture(0.06, 0.08, 0.10, 0.7)
+            threshDisTex:SetColorTexture(0.077, 0.068, 0.058, 0.7)
             threshDis:SetScript("OnEnter", function()
                 local tip = (threshRow._disTip == "MULTI") and BAND_REPLACES_TIP
                     or EllesmereUI.DisabledTooltip("Threshold Color")
@@ -2668,21 +2689,7 @@ initFrame:SetScript("OnEvent", function(self)
             PP.Size(bandsBtn, 60, 22)
             bandsBtn:SetPoint("RIGHT", multiRow, "RIGHT", 0, 0)
             bandsBtn:SetFrameLevel(multiRow:GetFrameLevel() + 4)
-            local bbBg = bandsBtn:CreateTexture(nil, "BACKGROUND")
-            bbBg:SetAllPoints()
-            bbBg:SetColorTexture(0.12, 0.12, 0.12, 0.8)
-            bandsBtn._border = EllesmereUI.MakeBorder(bandsBtn, 1, 1, 1, 0.08, PP)
-            local bbLbl = EllesmereUI.MakeFont(bandsBtn, 12, nil, 1, 1, 1)
-            bbLbl:SetAlpha(0.8); bbLbl:SetPoint("CENTER")
-            bbLbl:SetText(EllesmereUI.L("Bands"))
-            bandsBtn:SetScript("OnEnter", function(self)
-                bbBg:SetColorTexture(0.16, 0.16, 0.16, 0.9)
-                EllesmereUI.ShowWidgetTooltip(self, BAND_HELP_TIP)
-            end)
-            bandsBtn:SetScript("OnLeave", function()
-                bbBg:SetColorTexture(0.12, 0.12, 0.12, 0.8)
-                EllesmereUI.HideWidgetTooltip()
-            end)
+            SkinCardButton(bandsBtn, EllesmereUI.L("Bands"), BAND_HELP_TIP)
             bandsBtn:SetScript("OnClick", function(self)
                 if not CurEntry() then return end
                 ShowBandEditor({
@@ -2706,6 +2713,40 @@ initFrame:SetScript("OnEvent", function(self)
             multiToggle:HookScript("OnEnter", function(self) EllesmereUI.ShowWidgetTooltip(self, BAND_HELP_TIP) end)
             multiToggle:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
 
+            -- Row: Spender colors (toggle + Spenders editor button), power bar only
+            local spenderRow, spenderSnap
+            if cfg.showSpenders then
+                spenderRow = DRow("Spender Colors", ROWH)
+                local spBtn = CreateFrame("Button", nil, spenderRow)
+                PP.Size(spBtn, 60, 22)
+                spBtn:SetPoint("RIGHT", spenderRow, "RIGHT", 0, 0)
+                spBtn:SetFrameLevel(spenderRow:GetFrameLevel() + 4)
+                SkinCardButton(spBtn, EllesmereUI.L("Spenders"), "Choose the spells and their colors.")
+                spBtn:SetScript("OnClick", function(self)
+                    if not CurEntry() then return end
+                    ShowSpenderEditor({
+                        getBarData = cfg.getBarData, refreshFn = cfg.refreshFn,
+                        entryIdx = _selectedIdx, anchor = self,
+                    })
+                end)
+                local spToggle, _, spSnap = EllesmereUI.BuildToggleControl(
+                    spenderRow, DLVL + 4,
+                    function() local ent = CurEntry(); return ent and ent.spenderColorEnabled or false end,
+                    function(v)
+                        local ent = CurEntry(); if not ent then return end
+                        ent.spenderColorEnabled = v
+                        cfg.refreshFn()
+                    end,
+                    { sizeRatio = 0.95 }
+                )
+                spenderSnap = spSnap
+                spToggle:SetPoint("RIGHT", spBtn, "LEFT", -10, 0)
+                spToggle:HookScript("OnEnter", function(self)
+                    EllesmereUI.ShowWidgetTooltip(self, "Colors the bar while a chosen spell is ready.")
+                end)
+                spToggle:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            end
+
             -- Row: Recolor text instead of bar
             local textInsteadRow = DRow("Recolor Text Instead Of Bar", ROWH)
             local textInsteadToggle, _, textInsteadSnap = EllesmereUI.BuildToggleControl(
@@ -2715,6 +2756,12 @@ initFrame:SetScript("OnEvent", function(self)
                 { sizeRatio = 0.95 }
             )
             textInsteadToggle:SetPoint("RIGHT", textInsteadRow, "RIGHT", 0, 0)
+            if cfg.showSpenders then
+                textInsteadToggle:HookScript("OnEnter", function(self)
+                    EllesmereUI.ShowWidgetTooltip(self, "Also applies to Spender Colors.")
+                end)
+                textInsteadToggle:HookScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
+            end
 
             -- RefreshDetail: repaint the pane for the selected entry
             RefreshDetail = function()
@@ -2778,6 +2825,7 @@ initFrame:SetScript("OnEvent", function(self)
                 threshRow._lbl:SetText(EllesmereUI.L(cfg.thresholdLabel or "Threshold"))
 
                 hashSwatchSnap(); threshEnableSnap(); threshSwatchSnap(); multiSnap(); textInsteadSnap()
+                if spenderSnap then spenderSnap() end
 
                 -- Single threshold and multi-band are independent toggles; multi wins over single when both are on.
                 local entEnabled = ent.thresholdEnabled
@@ -2806,6 +2854,7 @@ initFrame:SetScript("OnEvent", function(self)
                 place(hashRow)
                 place(threshRow)
                 place(multiRow)
+                if spenderRow then place(spenderRow) end
                 place(textInsteadRow)
             end
             thrPage:Hide()
@@ -3045,7 +3094,7 @@ initFrame:SetScript("OnEvent", function(self)
                 if not _addNewBtn then
                     local b = CreateFrame("Button", nil, scrollChild)
                     PP.Size(b, contentHalfSize - 12, 30)
-                    local bbg = EllesmereUI.SolidTex(b, "BACKGROUND", 0.05, 0.07, 0.09, 0.92)
+                    local bbg = EllesmereUI.SolidTex(b, "BACKGROUND", 0.069, 0.058, 0.047, 0.92)
                     bbg:SetAllPoints()
                     b._border = EllesmereUI.MakeBorder(b, 1, 1, 1, 0.4, PP)
                     local blbl = EllesmereUI.MakeFont(b, 12, nil, 1, 1, 1)
@@ -3912,6 +3961,7 @@ initFrame:SetScript("OnEvent", function(self)
         BuildThresholdSettingsButton = BuildThresholdSettingsButton, RefreshPower = RefreshPower,
         RebuildPower = RebuildPower, RefreshClass = RefreshClass, RebuildClass = RebuildClass,
         ShowBandEditor = ShowBandEditor, ShowBuffEditor = ShowBuffEditor, ShowSpenderEditor = ShowSpenderEditor,
+        SkinCardButton = SkinCardButton,
         BAND_HELP_TIP = BAND_HELP_TIP, BAND_REPLACES_TIP = BAND_REPLACES_TIP, BUFF_HELP_TIP = BUFF_HELP_TIP,
         SPENDER_HELP_TIP = SPENDER_HELP_TIP, STAGGER_PCT_TIP = STAGGER_PCT_TIP, CLASS_COLORS = CLASS_COLORS,
         SIDE_PAD = SIDE_PAD, THR_BORDER_WHITE = THR_BORDER_WHITE, PAGE_DISPLAY = PAGE_DISPLAY,

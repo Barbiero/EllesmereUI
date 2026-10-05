@@ -1675,7 +1675,7 @@ qolFrame:SetScript("OnEvent", function(self)
 
                 local buttonBg = button:CreateTexture(nil, "BACKGROUND")
                 buttonBg:SetAllPoints()
-                buttonBg:SetColorTexture(0.02, 0.03, 0.04, 0.92)
+                buttonBg:SetColorTexture(0.030, 0.023, 0.018, 0.92)
                 local buttonBorder = EllesmereUI.MakeBorder(button, EG.r, EG.g, EG.b, 0.72, PP)
 
                 local buttonText = button:CreateFontString(nil, "OVERLAY")
@@ -1696,7 +1696,7 @@ qolFrame:SetScript("OnEvent", function(self)
                 copyBox:EnableMouse(true)
                 local copyBg = copyBox:CreateTexture(nil, "BACKGROUND")
                 copyBg:SetAllPoints()
-                copyBg:SetColorTexture(0.02, 0.03, 0.04, 1)
+                copyBg:SetColorTexture(0.030, 0.023, 0.018, 1)
                 EllesmereUI.MakeBorder(copyBox, EG.r, EG.g, EG.b, 0.9, PP)
                 copyBox:Hide()
 

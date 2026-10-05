@@ -1182,7 +1182,7 @@ local function CreateBlizzOwnedOverlay(def, parent)
     -- Background: same as regular movers
     local bg = ov:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.075, 0.113, 0.141, 0.95)
+    bg:SetColorTexture(0.103, 0.095, 0.088, 0.95)
     -- Border: accent at idle, white on hover
     local brd = EllesmereUI.MakeBorder(ov, ar, ag, ab, 0.6)
     ov._brd = brd

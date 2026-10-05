@@ -643,7 +643,7 @@ EllesmereUI._ELEMENT_SETTINGS_MAP = {
     ["EMT_FocusCastBar"]   = { module = "EllesmereUIMythicTimer",     page = "Target/Focus Bars", sectionName = "FOCUS CAST BAR",    highlightText = "Enable Focus Cast Bar" },
 
     -- Dragon Riding HUD (Blizz UI Enhanced > Dragon Riding page)
-    ["EDR_Cluster"]        = { module = "EllesmereUIBlizzardSkin",    page = "Dragon Riding",     sectionName = "GENERAL",           highlightText = "Enable Dragon Riding Bar" },
+    ["EDR_Cluster"]        = { module = "EllesmereUIBlizzardSkin",    page = "Dragon Riding",     sectionName = "GENERAL",           highlightText = "Enable Skyriding Bar" },
 
     -- Fixed-position tooltip anchor (Blizz UI Enhanced > Tooltips, Menus & Popups)
     ["EUI_TooltipAnchor"]  = { module = "EllesmereUIBlizzardSkin",    page = "Tooltips, Menus & Popups", sectionName = "BLIZZARD TOOLTIP", highlightText = "Anchor to Cursor" },

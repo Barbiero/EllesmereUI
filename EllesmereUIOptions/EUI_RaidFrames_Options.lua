@@ -56,7 +56,7 @@ function ns.RF_OptMoveFramesButton(row, rgn, opts)
     btn:SetFrameLevel(row:GetFrameLevel() + 5)
     local bbg = btn:CreateTexture(nil, "BACKGROUND")
     bbg:SetAllPoints()
-    bbg:SetColorTexture(0.06, 0.08, 0.10, 0.92)
+    bbg:SetColorTexture(0.077, 0.068, 0.058, 0.92)
     EllesmereUI.MakeBorder(btn, 1, 1, 1, 0.25)
     local lbl = btn:CreateFontString(nil, "OVERLAY")
     EllesmereUI.ApplyModuleFont(lbl, nil, 13, "raidFrames")
@@ -378,7 +378,7 @@ function ns.RF_BuildPartyTargets(parent, y, W)
         ns._PT_Layout()
         Preview()
     end
-    local DARK_TIP = "Not available in Dark Mode. Dark Mode colors can be adjusted in Global Settings -> Fonts & Colors."
+    local DARK_TIP = "Not available in Dark Mode. Dark Mode colors can be adjusted in Global Settings -> Colors."
 
     _, h = W:SectionHeader(parent, "PARTY TARGETS", y); y = y - h
 
@@ -1113,7 +1113,7 @@ initFrame:SetScript("OnEvent", function(self)
         panel:Hide()  -- shown once the overlay container is positioned
         panel:SetFrameLevel(testModeFrame:GetFrameLevel() + 5)
         local panelBg = panel:CreateTexture(nil, "BACKGROUND")
-        panelBg:SetAllPoints(); panelBg:SetColorTexture(15/255, 17/255, 22/255, 0.9)
+        panelBg:SetAllPoints(); panelBg:SetColorTexture(17/255, 15/255, 12/255, 0.9)
         EllesmereUI.MakeBorder(panel, 1, 1, 1, 0.1, PP)
 
         local function MakeFont(p, size, r, g, b, a)
