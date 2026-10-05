@@ -1929,7 +1929,7 @@ local function CreateMover(barKey)
                         CancelPickMode()
                         FlashRedBorder(self)
                         local tLabel = UM.GetBarLabel(targetKey) or targetKey
-                        RejectH.ShowTooltip("Elements cannot size match to\n" .. tLabel)
+                        RejectH.ShowTooltip(EllesmereUI.Lf("Elements cannot size match to\n%1$s", EllesmereUI.L(tLabel)))
                         return
                     end
                     if RejectH.IsActionBar(sourceKey) and not RejectH.IsActionBar(targetKey) then
@@ -1966,7 +1966,7 @@ local function CreateMover(barKey)
                         CancelPickMode()
                         FlashRedBorder(self)
                         local tLabel = UM.GetBarLabel(targetKey) or targetKey
-                        RejectH.ShowTooltip("Elements cannot size match to\n" .. tLabel)
+                        RejectH.ShowTooltip(EllesmereUI.Lf("Elements cannot size match to\n%1$s", EllesmereUI.L(tLabel)))
                         return
                     end
                     local hdb = MatchH.GetHeightMatchDB()
@@ -2011,7 +2011,7 @@ local function CreateMover(barKey)
                         CancelPickMode()
                         FlashRedBorder(self)
                         local targetLabel = UM.GetBarLabel(targetKey) or targetKey
-                        RejectH.ShowTooltip("Elements cannot be anchored to\n" .. targetLabel)
+                        RejectH.ShowTooltip(EllesmereUI.Lf("Elements cannot be anchored to\n%1$s", EllesmereUI.L(targetLabel)))
                         return
                     end
 
@@ -3207,8 +3207,9 @@ local function CreateMover(barKey)
                     box:SetTextColor(0.4, 0.4, 0.4, 0.7)
                     local targetName = UM.GetBarLabel(matchTarget) or matchTarget
                     box:SetScript("OnEnter", function()
-                        EllesmereUI.ShowWidgetTooltip(box,
-                            axis .. " matched to " .. targetName .. ". Unmatch to edit.")
+                        EllesmereUI.ShowWidgetTooltip(box, isWidth
+                            and EllesmereUI.Lf("Width matched to %1$s. Unmatch to edit.", EllesmereUI.L(targetName))
+                            or EllesmereUI.Lf("Height matched to %1$s. Unmatch to edit.", EllesmereUI.L(targetName)))
                     end)
                     box:SetScript("OnLeave", function() EllesmereUI.HideWidgetTooltip() end)
                 end
@@ -4254,7 +4255,7 @@ local function CreateMover(barKey)
                     if EllesmereUI._HasOverrideAnchor and EllesmereUI._HasOverrideAnchor(barKey, og.id) then
                         local gid = og.id
                         local gname = og.name or ("Group " .. tostring(gid))
-                        OvSubnavItem("Edit Override: " .. gname, function()
+                        OvSubnavItem(EllesmereUI.Lf("Edit Override: %1$s", gname), function()
                             return {
                                 { text = gname, title = true },
                                 { text = EllesmereUI.L("Edit Anchor"), fn = function()
