@@ -29,7 +29,11 @@ I.profileSetters[#I.profileSetters + 1] = function(v) p = v end
 -- Assigned below; Layout holds the forward declaration its own readers use.
 local GetClassPowerTopPush
 -- Name and Cast keep a copy of classPowerType and add a setter here.
-local classPowerTypeSetters = {}
+I.classPowerTypeSetters = {}
+local function SetClassPowerType(v)
+    local list = I.classPowerTypeSetters
+    for i = 1, #list do list[i](v) end
+end
 
 -------------------------------------------------------------------------------
 --  Class Power Display (combo points, holy power, chi, etc.). Zero cost when disabled: no
@@ -851,7 +855,7 @@ local function EnableClassPowerWatcher()
     end
 
     classPowerType = info[1]
-    for i = 1, #classPowerTypeSetters do classPowerTypeSetters[i](classPowerType) end
+    SetClassPowerType(classPowerType)
     classPowerMax = info[2]
     -- Druid Resto: cat form required. Feral always shows. On Forever there are no
     -- specs to tell them apart and combo points are cat-only for every druid.
@@ -987,5 +991,4 @@ end
 I.ApplyClassPowerSetting, I.EnsureClassPowerPips = ApplyClassPowerSetting, EnsureClassPowerPips
 I.GetClassPowerTopPush, I.HideClassPowerOnPlate = GetClassPowerTopPush, HideClassPowerOnPlate
 I.MaybeDarken, I.UpdateClassPowerOnPlate = MaybeDarken, UpdateClassPowerOnPlate
-I.classPowerTypeSetters = classPowerTypeSetters
 I.broken = false

@@ -155,8 +155,7 @@ do
         if unit ~= "player" then return end
         -- Re-read the profile reference: a spec swap may have changed the active
         -- profile, and _C() color lookups would read the old spec's stale data.
-        p = ENP.db.profile
-        SetProfile(p)
+        SetProfile(ENP.db.profile)
         RefreshThreatCache()
         -- If the framework handler is registered, let it handle this
         if EllesmereUI and EllesmereUI._specSwitchRegistry
@@ -175,8 +174,7 @@ end
 local npAddon = ENP
 function npAddon:OnInitialize()
     ENP.db = EllesmereUI.Lite.NewDB("EllesmereUINameplatesDB", { profile = defaults })
-    p = ENP.db.profile
-    SetProfile(p)
+    SetProfile(ENP.db.profile)
     ns.db = ENP.db
     -- Non-Target Opacity: derive the cached value at login (no plates exist yet,
     -- so the apply loop no-ops; SetUnit fades new plates as they spawn).
@@ -192,8 +190,7 @@ end
 function npAddon:OnEnable()
     if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
-    p = ENP.db.profile
-    SetProfile(p)
+    SetProfile(ENP.db.profile)
     -- A profile already on a stock style gets its one-time bar texture seed
     -- before the first plate builds (the Style page seeds on the switch);
     -- its own textures go to the EllesmereUI slot first, so a switch back

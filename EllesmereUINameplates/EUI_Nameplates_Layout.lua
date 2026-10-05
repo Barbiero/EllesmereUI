@@ -1272,7 +1272,7 @@ ns.StopDispelGlow = StopDispelGlow
 ns.StartDispelGlow = StartDispelGlow
 end -- do (glow engine)
 
--- Forward declaration (defined later in the class power section)
+-- Forward declaration (assigned in EUI_Nameplates_ClassPower.lua, see SetClassPowerTopPush)
 local GetClassPowerTopPush
 -- Position aura frames into a slot (top/left/right/topleft/topright/bottom).
 -- count: how many to show; sizeW/sizeH: icon dimensions; gap: gap between icons.
