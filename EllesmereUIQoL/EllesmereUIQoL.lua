@@ -1358,6 +1358,56 @@ qolFrame:SetScript("OnEvent", function(self)
     end
 
     ---------------------------------------------------------------------------
+    --  Auto Select Single Gossip -- picks the only gossip option. Skipped when
+    --  the NPC offers a quest or has one ready to turn in. GOSSIP_SHOW is
+    --  registered only while the toggle is on.
+    ---------------------------------------------------------------------------
+    do
+        local gossipFrame
+
+        local function OnGossipShow()
+            local db = EllesmereUIDB
+            if db.autoGossipShiftSkip ~= false and IsShiftKeyDown() then return end
+            if db.autoGossipDisableInstance ~= false and IsInInstance() then return end
+
+            local options = C_GossipInfo.GetOptions()
+            if not options or #options ~= 1 then return end
+
+            -- Trivial quests only stay ignorable if Quest Tracker auto-accept also ignores them.
+            local qtDB = _G._EQT_DB
+            local qt = qtDB and qtDB.profile and qtDB.profile.questTracker
+            local ignoreTrivial = db.autoGossipIgnoreTrivial
+                and not (qt and qt.enabled ~= false and qt.autoAccept and not qt.autoAcceptIgnoreTrivial)
+            for _, quest in ipairs(C_GossipInfo.GetAvailableQuests()) do
+                if not (ignoreTrivial and quest.isTrivial) then return end
+            end
+            local active = C_GossipInfo.GetActiveQuests()
+            for _, quest in ipairs(active) do
+                if quest.isComplete then return end
+            end
+
+            -- Blizzard already auto-selects this case itself.
+            if #active == 0 and C_GossipInfo.GetNumAvailableQuests() == 0
+                and options[1].selectOptionWhenOnlyOption then return end
+
+            C_GossipInfo.SelectOptionByIndex(options[1].orderIndex)
+        end
+
+        EllesmereUI._applyAutoGossip = function()
+            if EllesmereUIDB and EllesmereUIDB.autoGossip then
+                if not gossipFrame then
+                    gossipFrame = CreateFrame("Frame")
+                    gossipFrame:SetScript("OnEvent", OnGossipShow)
+                end
+                gossipFrame:RegisterEvent("GOSSIP_SHOW")
+            elseif gossipFrame then
+                gossipFrame:UnregisterEvent("GOSSIP_SHOW")
+            end
+        end
+        EllesmereUI._applyAutoGossip()
+    end
+
+    ---------------------------------------------------------------------------
     --  Auto-Fill Delete Confirmation
     ---------------------------------------------------------------------------
     do
