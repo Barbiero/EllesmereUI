@@ -2307,7 +2307,7 @@ local function CollectAndReanchor()
     -- rebuilds it against the fresh claim set.
     if ns._cdmClaimGen then ns._cdmClaimGen = ns._cdmClaimGen + 1 end
     if ns.RefreshStaleCDMKeybinds then ns.RefreshStaleCDMKeybinds() end
-    if ns.CdmReconcileFormWatch then ns.CdmReconcileFormWatch(usedFrames, unresolvedFrames) end
+    if ns.CdmReconcileFormWatch then ns.CdmReconcileFormWatch(usedFrames, unresolvedFrames, allActiveFrames) end
 end
 ns.CollectAndReanchor = CollectAndReanchor
 

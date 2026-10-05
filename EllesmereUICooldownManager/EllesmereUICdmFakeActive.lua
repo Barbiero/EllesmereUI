@@ -1000,7 +1000,11 @@ OnEvent = function(self, event, unit, _, spellID)
             ns.FakeActive_Rearm()
         end
     elseif _needForms and ns.CdmIsFormEvent(event) then
-        ns.CdmInvalidateFormState()
+        if event == "SPELL_DATA_LOAD_RESULT" or event == "SPELL_TEXT_UPDATE" then
+            if not ns.CdmInvalidateFormSpell(unit) then return end
+        else
+            ns.CdmInvalidateFormState()
+        end
         QueueCdStateEval()
     elseif event == "PLAYER_REGEN_ENABLED" or event == "SPELL_UPDATE_USABLE" then
         -- Combat end: cooldown reads were secret-dropped during combat, so any
@@ -1020,14 +1024,14 @@ UpdateListeners = function()
         else _events:UnregisterEvent("UNIT_AURA") end
         if _needCast then _events:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         else _events:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED") end
+        if _needForms ~= _formsArmed then ns.CdmSetFormEvents(_events, _needForms) end
+        _formsArmed = _needForms
         -- Combat end re-syncs cd-state once: cooldown reads secret-drop during
         -- combat, so the first plain read corrects anything painted fail-open.
         if #_cdStateRules > 0 then _events:RegisterEvent("PLAYER_REGEN_ENABLED")
         else _events:UnregisterEvent("PLAYER_REGEN_ENABLED") end
         if _needUsable then _events:RegisterEvent("SPELL_UPDATE_USABLE")
         else _events:UnregisterEvent("SPELL_UPDATE_USABLE") end
-        if _needForms or _formsArmed then ns.CdmSetFormEvents(_events, _needForms) end
-        _formsArmed = _needForms
         -- Trinket swaps only matter when the player actually uses custom states.
         if _hasUserRules then _events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
         else _events:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED") end

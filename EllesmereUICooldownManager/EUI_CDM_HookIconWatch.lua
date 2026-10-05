@@ -680,12 +680,19 @@ do
         if cache then wipe(cache) end
         names = nil
     end
+    function ns.CdmInvalidateFormSpell(sid)
+        if Secret(sid) or type(sid) ~= "number" or not cache or cache[sid] == nil then return false end
+        -- Both native and preset listeners must see the invalidation before repaint.
+        cache[sid] = "invalid"
+        return true
+    end
     function ns.CdmSetFormEvents(frame, enabled)
         if not events then
             if not enabled then return end
             events = { UPDATE_SHAPESHIFT_FORM = true, UPDATE_SHAPESHIFT_FORMS = true,
                 SPELLS_CHANGED = true, PLAYER_ENTERING_WORLD = true, PLAYER_TALENT_UPDATE = true,
-                TRAIT_CONFIG_UPDATED = true, SPELL_DATA_LOAD_RESULT = true, SPELL_TEXT_UPDATE = true }
+                TRAIT_CONFIG_UPDATED = true, PLAYER_REGEN_ENABLED = true,
+                SPELL_DATA_LOAD_RESULT = true, SPELL_TEXT_UPDATE = true }
         end
         if enabled then ns.CdmInvalidateFormState() end
         for event in pairs(events) do
@@ -695,19 +702,19 @@ do
     function ns.CdmIsFormEvent(event) return events and events[event] end
     local function FormNames()
         if names then return names end
-        names = {}
         local count = GetNumShapeshiftForms()
-        if Secret(count) then return names end
+        if Secret(count) or type(count) ~= "number" or count == 0 then return end
+        local found = {}
         for i = 1, count do
             local _, _, _, sid = GetShapeshiftFormInfo(i)
-            if not Secret(sid) and type(sid) == "number" then
-                local info = C_Spell.GetSpellInfo(sid)
-                local name = info and info.name
-                if not Secret(name) and type(name) == "string" and name ~= "" then
-                    names[#names + 1] = name
-                end
-            end
+            if Secret(sid) or type(sid) ~= "number" then return end
+            local info = C_Spell.GetSpellInfo(sid)
+            if Secret(info) or type(info) ~= "table" then return end
+            local name = info.name
+            if Secret(name) or type(name) ~= "string" or name == "" then return end
+            found[#found + 1] = name
         end
+        names = found
         return names
     end
     local function MatchesFormFormat(text, template)
@@ -730,7 +737,9 @@ do
             if not MatchesFormFormat(text, SPELL_REQUIRED_FORM)
                and not MatchesFormFormat(text, SPELL_REQUIRED_FORM_NOSPACE) then return false end
         end
-        for _, name in ipairs(FormNames()) do
+        local formNames = FormNames()
+        if not formNames then return nil end
+        for _, name in ipairs(formNames) do
             if text:find(name, 1, true) then return true end
         end
         return false
@@ -738,7 +747,9 @@ do
     function ns.CdmSpellOutsideForm(sid)
         if Secret(sid) or type(sid) ~= "number" or sid <= 0 then return false end
         if not cache then cache = {} end
-        if cache[sid] ~= nil then return cache[sid] end
+        local cached = cache[sid]
+        if cached ~= nil and cached ~= "invalid" then return cached == true end
+        cache[sid] = "uncertain"
         local ok, data = pcall(C_TooltipInfo.GetSpellByID, sid)
         if not ok or Secret(data) or type(data) ~= "table" then return false end
         local lines = data.lines
@@ -918,11 +929,11 @@ end
 -------------------------------------------------------------------------------
 do
     local watch = setmetatable({}, { __mode = "k" })  -- icon frame -> true
-    local eventFrame, flushFrame, formWatch
+    local eventFrame, flushFrame, formWatch, usableWatch
 
-    local function Flush(self, _, reconcileOnly, claimedFrames, unresolvedFrames)
+    local function Flush(self, _, reconcileOnly, claimedFrames, unresolvedFrames, activeFrames)
         if not reconcileOnly then self:Hide() end
-        local hasForms = false
+        local hasForms, hasUsable = false, false
         for frame in pairs(watch) do
             local fd = hookFrameData[frame]
             local fc = _ecmeFC[frame]
@@ -936,8 +947,8 @@ do
             end
             if (cse == "hiddenForm" or cse == "hiddenFormShift") and claimedFrames
                and not claimedFrames[frame] and not (unresolvedFrames and unresolvedFrames[frame]) then
-                -- Release the retired claim so paint hooks cannot re-watch it.
-                fc.barKey = nil
+                -- Inactive pool frames retain their prior claim for unresolved reacquisition.
+                if activeFrames and activeFrames[frame] then fc.barKey = nil end
                 cse = nil
             end
             if cse ~= "hiddenForm" and cse ~= "hiddenFormShift" then
@@ -945,6 +956,7 @@ do
                 if pending and pending.cse == "hiddenForm" then pending:Hide() end
             end
             if cse == "hiddenUnusable" or cse == "hiddenUnusableShift" then
+                hasUsable = true
                 if not reconcileOnly then
                     ArmCdStateEval(frame, fd, "hiddenOnCD", cse == "hiddenUnusableShift", nil, nil, true)
                 end
@@ -960,30 +972,46 @@ do
             formWatch = false
             ns.CdmReconcileFormWatch = nil
         end
-        if not next(watch) then eventFrame:UnregisterEvent("SPELL_UPDATE_USABLE"); self:Hide() end
+        if hasUsable and not usableWatch then
+            eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
+            usableWatch = true
+        elseif usableWatch and not hasUsable then
+            eventFrame:UnregisterEvent("SPELL_UPDATE_USABLE")
+            usableWatch = false
+        end
+        if not next(watch) then self:Hide() end
     end
 
     -- Called wherever the mode is resolved for an icon (SetDesaturated hook,
     -- RefreshCDMIconAppearance). One table read once the icon is watched.
     function ns.WatchCdUsable(frame, forms)
-        if watch[frame] and (not forms or formWatch) then return end
+        if watch[frame] and ((forms and formWatch) or (not forms and usableWatch)) then return end
         watch[frame] = true
         if not eventFrame then
             flushFrame = ns.TakeShell()
             flushFrame:Hide()
             flushFrame:SetScript("OnUpdate", Flush)
             eventFrame = ns.TakeShell()
-            eventFrame:SetScript("OnEvent", function(_, event)
-                if formWatch and ns.CdmIsFormEvent(event) then ns.CdmInvalidateFormState() end
+            eventFrame:SetScript("OnEvent", function(_, event, sid)
+                if formWatch and ns.CdmIsFormEvent(event) then
+                    if event == "SPELL_DATA_LOAD_RESULT" or event == "SPELL_TEXT_UPDATE" then
+                        if not ns.CdmInvalidateFormSpell(sid) then return end
+                    else
+                        ns.CdmInvalidateFormState()
+                    end
+                end
                 flushFrame:Show()
             end)
         end
-        eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
+        if not forms and not usableWatch then
+            eventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
+            usableWatch = true
+        end
         if forms and not formWatch then
             ns.CdmSetFormEvents(eventFrame, true)
             formWatch = true
-            ns.CdmReconcileFormWatch = function(claimedFrames, unresolvedFrames)
-                Flush(flushFrame, nil, true, claimedFrames, unresolvedFrames)
+            ns.CdmReconcileFormWatch = function(claimedFrames, unresolvedFrames, activeFrames)
+                Flush(flushFrame, nil, true, claimedFrames, unresolvedFrames, activeFrames)
             end
         end
     end
