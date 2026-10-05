@@ -346,6 +346,14 @@ local function BuildMainPage(pageName, parent, yOffset)
     local _, h
     local row
 
+    -- Both Group Growth menus grey out the grid flow while groups are merged,
+    -- where it would render as Right (ReadGroupGrowth).
+    local function GridFlowOff(v)
+        if v == "DOWNRIGHT" and SVal("mergeGroups", false) then
+            return EllesmereUI.DisabledTooltip("Merge Groups", "disabled")
+        end
+    end
+
     parent._showRowDivider = true
     local y = yOffset
 
@@ -573,6 +581,7 @@ local function BuildMainPage(pageName, parent, yOffset)
                               end },
                             { type="dropdown", label="Group Growth",
                               values=groupGrowthValues, order=groupGrowthOrder,
+                              itemDisabled=GridFlowOff,
                               get=function()
                                   local ov = db.profile.raidSizeOverrides
                                   return ReadGroupGrowth(
@@ -1009,6 +1018,7 @@ local function BuildMainPage(pageName, parent, yOffset)
 
     _, h = W:DualRow(parent, y,
         { type="dropdown", text="Group Growth", values=groupGrowthValues, order=groupGrowthOrder,
+          disabledValues=GridFlowOff,
           getValue=function() return ReadGroupGrowth(SVal("groupGrowth", "RIGHT")) end,
           setValue=function(v)
               db.profile.groupGrowth = v

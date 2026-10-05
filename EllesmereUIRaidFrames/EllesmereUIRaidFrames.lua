@@ -10371,6 +10371,10 @@ end
 -------------------------------------------------------------------------------
 local MOVER_GROUPS = 4
 
+-- The separated layout's group slot origins, refilled by every pass
+-- (ns._RFGroupFlow's out table).
+local groupFlowSlots = {}
+
 -- Real-frame group numbers (1-8): mirror the preview labels onto the actual
 -- frames when showGroupNumbers is on, anchoring each group's label to its
 -- first populated unit (shared groupNumberSize/Color). Raid + separated-groups
@@ -10561,7 +10565,7 @@ ns._LayoutGroupsImpl = function()
         -- (MOVER_GROUPS) set the normalization origin, so a group past the box
         -- keeps the same per-slot step instead of rescaling everything in front
         -- of it.
-        local slots, minX, maxY = ns._RFGroupFlow(groupGrowth, groupW, groupH, gs, 8)
+        local slots, minX, maxY = ns._RFGroupFlow(groupGrowth, groupW, groupH, gs, 8, groupFlowSlots)
 
         -- For UP/LEFT unit growth, pin each header by the corner its units
         -- grow away from: the offset moves (x, y) to that cell edge and the
@@ -11147,8 +11151,10 @@ ns._RF_GRID_ROWS = 2
 -- `count` slots are generated (LayoutGroups can place up to 8 visible groups
 -- into the 4-group box) but only the first MOVER_GROUPS of them -- what the box
 -- is actually sized for -- set the origin, so a group past the box keeps the
--- same per-slot step instead of rescaling the box in front of it.
-ns._RFGroupFlow = function(groupGrowth, groupW, groupH, gs, count)
+-- same per-slot step instead of rescaling the box in front of it. `out`, when
+-- given, is refilled in place (its slot pairs reused) and returned instead of a
+-- new table.
+ns._RFGroupFlow = function(groupGrowth, groupW, groupH, gs, count, out)
     local n = count or MOVER_GROUPS
     local stepX, stepY = 0, 0
     if groupGrowth == "DOWNRIGHT" then
@@ -11159,7 +11165,7 @@ ns._RFGroupFlow = function(groupGrowth, groupW, groupH, gs, count)
     elseif groupGrowth == "RIGHT" then  stepX =  (groupW + gs)
     else                                stepX = -(groupW + gs)   -- LEFT
     end
-    local slots, minX, maxY = {}, 0, 0
+    local slots, minX, maxY = out or {}, 0, 0
     for i = 0, n - 1 do
         local px, py
         if groupGrowth == "DOWNRIGHT" then
@@ -11168,7 +11174,12 @@ ns._RFGroupFlow = function(groupGrowth, groupW, groupH, gs, count)
         else
             px, py = i * stepX, i * stepY
         end
-        slots[i] = { px, py }
+        local p = slots[i]
+        if p then
+            p[1], p[2] = px, py
+        else
+            slots[i] = { px, py }
+        end
     end
     local nc = min(MOVER_GROUPS, n)
     for i = 0, nc - 1 do

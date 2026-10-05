@@ -137,6 +137,11 @@ local defaults = {
     -- is an empty list (EllesmereUINameplates_DebuffColors.lua).
     debuffColorsEnabled = false,
     debuffColorsPlayerOnly = true,
+    -- Debuff Coloring "Color Border": the color goes on the plate's border
+    -- instead of its health bar, plus whole pixels added to a Basic or Custom
+    -- Solid border while it shows.
+    debuffColorsBorder = false,
+    debuffColorsBorderExtra = 0,
     -- Blizzard Style (Global Settings > Style): the stock nameplate's bar,
     -- background, selection and cast bar art on our plates with every feature
     -- intact. Default OFF; reload-gated.

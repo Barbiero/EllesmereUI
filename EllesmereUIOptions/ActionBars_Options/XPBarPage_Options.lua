@@ -1039,8 +1039,8 @@ local function BuildXPBarPage(pageName, parent, yOffset)
             rawTooltip = _blizzDis })
     end
 
-    -- Quest XP Overlay (its cog: Completed Quests Only, Current Zone Only and
-    -- the completed / incomplete colours, green / gold at 60% until set).
+    -- Quest XP Overlay: the completed / incomplete colours as inline swatches
+    -- (green / gold at 60% until set, ns.XPQuestColor), the filters in its cog.
     local questRow
     questRow, h = W:DualRow(parent, y,
         { type="toggle", text="Quest XP Overlay",
@@ -1055,11 +1055,40 @@ local function BuildXPBarPage(pageName, parent, yOffset)
         EllesmereUI.BlankRowCfg());  y = y - h
     if chrome then
         local rgn = questRow._leftRegion
+        local function overlayOff() return _blizzDis() or not S().questOverlay end
+        EllesmereUI.BuildInlineSwatches(rgn, {
+            { tooltip = "Completed Color", hasAlpha = true,
+              getValue = function() return ns.XPQuestColor(S(), true) end,
+              setValue = function(r, g, b, a)
+                  S().questOverlayDoneColor = { r = r, g = g, b = b, a = a or 0.6 }
+                  ns.ApplyDataBarLayout(XP)
+              end },
+            { tooltip = "Incomplete Color", hasAlpha = true,
+              disabled = function() return S().questOverlayCompleted end,
+              disabledTooltip = function()
+                  if _blizzDis() then return BLIZZ_DIS_TIP end
+                  if not S().questOverlay then return "Quest XP Overlay" end
+                  return "Completed Quests Only"
+              end,
+              requireState = function()
+                  if S().questOverlay and not _blizzDis() then return "disabled" end
+              end,
+              rawTooltip = _blizzDis,
+              getValue = function() return ns.XPQuestColor(S(), false) end,
+              setValue = function(r, g, b, a)
+                  S().questOverlayColor = { r = r, g = g, b = b, a = a or 0.6 }
+                  ns.ApplyDataBarLayout(XP)
+              end },
+        }, { size = 20, disabled = overlayOff,
+            disabledTooltip = function()
+                if _blizzDis() then return BLIZZ_DIS_TIP end
+                return "Quest XP Overlay"
+            end,
+            rawTooltip = _blizzDis })
         EllesmereUI.BuildInlineCog(rgn, {
             title = "Quest XP Overlay",
-            anchorTo = rgn._control,
             captureRegion = rgn,
-            disabled = function() return _blizzDis() or not S().questOverlay end,
+            disabled = overlayOff,
             disabledTooltip = function()
                 if _blizzDis() then return BLIZZ_DIS_TIP end
                 return "Quest XP Overlay"
@@ -1072,34 +1101,13 @@ local function BuildXPBarPage(pageName, parent, yOffset)
                   set=function(v)
                       S().questOverlayCompleted = v or nil
                       ns.ApplyDataBarLayout(XP)
+                      EllesmereUI:RefreshPage()
                   end },
                 { type="toggle", label="Current Zone Only",
                   tooltip="Only counts quests in your current zone.",
                   get=function() return S().questOverlayZone end,
                   set=function(v)
                       S().questOverlayZone = v or nil
-                      ns.ApplyDataBarLayout(XP)
-                  end },
-                { type="colorpicker", label="Completed Color", hasAlpha=true,
-                  get=function()
-                      local c = S().questOverlayDoneColor
-                      if c then return c.r or 0, c.g or 127/255, c.b or 0, c.a or 0.6 end
-                      return 0, 127/255, 0, 0.6
-                  end,
-                  set=function(r, g, b, a)
-                      S().questOverlayDoneColor = { r = r, g = g, b = b, a = a or 0.6 }
-                      ns.ApplyDataBarLayout(XP)
-                  end },
-                { type="colorpicker", label="Incomplete Color", hasAlpha=true,
-                  disabled=function() return S().questOverlayCompleted end,
-                  disabledTooltip="Completed Quests Only", requireState="disabled",
-                  get=function()
-                      local c = S().questOverlayColor
-                      if c then return c.r or 1, c.g or 0.82, c.b or 0, c.a or 0.6 end
-                      return 1, 0.82, 0, 0.6
-                  end,
-                  set=function(r, g, b, a)
-                      S().questOverlayColor = { r = r, g = g, b = b, a = a or 0.6 }
                       ns.ApplyDataBarLayout(XP)
                   end },
             },

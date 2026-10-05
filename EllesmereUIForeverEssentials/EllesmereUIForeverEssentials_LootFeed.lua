@@ -26,7 +26,7 @@ local DEFAULTS = {
     minQuality = 0, showIlvl = true, showPrice = true,
     -- BOX: bordered rows, BAR: accent bar on a fading background, TRAY: icon
     -- tiles with a name row, TOAST: framed plates.
-    style = "BOX",
+    style = "BAR",
     width = 300, rowHeight = 36, maxRows = 6, duration = 5, grow = "UP",
     textSize = 13, barWidth = 3,
     bgR = 0.05, bgG = 0.05, bgB = 0.05, bgA = 0.3,
@@ -122,11 +122,16 @@ local function Accent()
     return 0.05, 0.82, 0.62
 end
 
+-- Gradient end colours, refilled for each paint (SetGradient copies them).
+local gradFrom, gradTo = CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, 0)
+
 -- Solid, or a two-colour fade to transparent (BAR).
 local function PaintBackground(tex, fade)
     local r, g, b, a = Get("bgR"), Get("bgG"), Get("bgB"), Get("bgA")
     tex:SetColorTexture(1, 1, 1, 1)
-    tex:SetGradient("HORIZONTAL", CreateColor(r, g, b, a), CreateColor(r, g, b, fade and 0 or a))
+    gradFrom:SetRGBA(r, g, b, a)
+    gradTo:SetRGBA(r, g, b, fade and 0 or a)
+    tex:SetGradient("HORIZONTAL", gradFrom, gradTo)
 end
 
 -- Item rows take their quality colour when quality colouring is on;
@@ -197,8 +202,9 @@ local function StyleRow(r)
         ToastChrome(r):SetShown(Get("borderSize") > 0)
         local a = Get("bgA")
         r.bg:SetColorTexture(1, 1, 1, 1)
-        r.bg:SetGradient("VERTICAL", CreateColor(TOAST_BOTTOM[1], TOAST_BOTTOM[2], TOAST_BOTTOM[3], a),
-            CreateColor(TOAST_TOP[1], TOAST_TOP[2], TOAST_TOP[3], a))
+        gradFrom:SetRGBA(TOAST_BOTTOM[1], TOAST_BOTTOM[2], TOAST_BOTTOM[3], a)
+        gradTo:SetRGBA(TOAST_TOP[1], TOAST_TOP[2], TOAST_TOP[3], a)
+        r.bg:SetGradient("VERTICAL", gradFrom, gradTo)
     else
         if r.outer then r.outer:Hide() end
         if not tray then PaintBackground(r.bg, bar) end
@@ -356,16 +362,20 @@ local function RowEnter(r)
         GameTooltip:SetHyperlink(d.link)
         GameTooltip:Show()
     elseif Get("style") == "TRAY" then
-        GameTooltip:SetOwner(r, "ANCHOR_LEFT")
-        GameTooltip:SetText(d.text, 1, 1, 1)
-        if d.sub then GameTooltip:AddLine(d.sub, 0.8, 0.8, 0.8) end
-        if d.value then GameTooltip:AddLine(d.value, 1, 1, 1) end
-        GameTooltip:Show()
+        local text = d.text
+        if d.sub then text = text .. "\n" .. EllesmereUI.COLOR_CODES.DIM .. d.sub .. "|r" end
+        if d.value then text = text .. "\n" .. d.value end
+        r.tip = true
+        EllesmereUI.ShowWidgetTooltip(r, text, { anchor = "left" })
     end
 end
 
 local function RowLeave(r)
     if GameTooltip:IsOwned(r) then GameTooltip:Hide() end
+    if r.tip then
+        r.tip = nil
+        EllesmereUI.HideWidgetTooltip()
+    end
     ArmFade(r)
 end
 
@@ -757,21 +767,21 @@ end
 --  drawn in the options content header. Built when the Loot page first
 --  opens; it never fades and listens to no events.
 -------------------------------------------------------------------------------
-local preview -- row set plus its view, caption and every row frame made so far
+local preview -- row set plus its view and every row frame made so far
+
+local requested = {} -- preview items asked of the client, once each
 
 -- The Preview samples, newest first, as data. An item the client has not
--- cached yet is requested and redraws the preview when it arrives.
+-- cached yet is asked for once a session and redraws the preview when its
+-- load ends; the client also calls back when the load fails, so asking again
+-- from the redraw would never stop.
 local function PreviewSamples()
-    local list = {}
+    local list, items = {}, Get("items")
     collect = list
-    if Get("items") then
+    if items then
         for i = 1, #PREVIEW_ITEMS, 2 do
             local link = "item:" .. PREVIEW_ITEMS[i]
-            if C_Item.GetItemInfo(link) then
-                ShowItem(link, PREVIEW_ITEMS[i + 1])
-            else
-                Item:CreateFromItemID(PREVIEW_ITEMS[i]):ContinueOnItemLoad(function() RefreshPreview() end)
-            end
+            if C_Item.GetItemInfo(link) then ShowItem(link, PREVIEW_ITEMS[i + 1]) end
         end
     end
     if Get("money") then ShowMoney(12345) end
@@ -781,6 +791,16 @@ local function PreviewSamples()
     end
     if Get("skills") then ShowSkill(EllesmereUI.L("Swords"), 42) end
     collect = nil
+    -- Asked for once the samples are in: the callback can run right away.
+    if items then
+        for i = 1, #PREVIEW_ITEMS, 2 do
+            local id = PREVIEW_ITEMS[i]
+            if not requested[id] and not C_Item.GetItemInfo(id) then
+                requested[id] = true
+                Item:CreateFromItemID(id):ContinueOnItemLoad(function() RefreshPreview() end)
+            end
+        end
+    end
     return list
 end
 
@@ -816,7 +836,7 @@ RefreshPreview = function(force)
     v.frame:SetSize(w, h)
     v.frame:SetScale(scale)
     Layout(v)
-    v.previewHeight = h * scale + 44
+    v.previewHeight = h * scale + 30
     v.view:SetHeight(v.previewHeight)
     if v.onHeightChanged then v.onHeightChanged(v.previewHeight) end
 end
@@ -828,12 +848,7 @@ local function CreateSettingsPreview(parent, availableWidth, onHeightChanged)
         v = { rows = {}, all = {} }
         v.view = CreateFrame("Frame", nil, parent)
         v.frame = CreateFrame("Frame", nil, v.view)
-        v.frame:SetPoint("CENTER", 0, 8)
-        v.caption = v.view:CreateFontString(nil, "OVERLAY")
-        v.caption:SetPoint("BOTTOM", 0, 6)
-        v.caption:SetTextColor(0.65, 0.65, 0.65)
-        StyleFont(v.caption, 10)
-        v.caption:SetText(EllesmereUI.L("Preview"))
+        v.frame:SetPoint("CENTER")
         v.view:SetScript("OnShow", function() RefreshPreview() end)
         preview = v
     end

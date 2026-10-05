@@ -303,7 +303,7 @@ local function BuildSelfCombatTextSection(parent, y)
         { type="toggle", text="Self Combat Text",
           tooltip="Shows your damage taken, healing, avoids and combat enter/leave above the player frame instead of Blizzard's combat text, whose other messages are hidden while this is on. Move it in Unlock Mode.",
           getValue=function() return not sctOff() end,
-          setValue=function(v) SCTSet("enabled", v); EllesmereUI:RefreshPage() end },
+          setValue=EllesmereUI.SectionToggleSetValue(function(v) SCTSet("enabled", v) end) },
         { type="slider", text="Combat Text Size", min=10, max=48, step=1,
           disabled=sctOff, disabledTooltip="Self Combat Text",
           getValue=function() return SCTGet("size") end,
@@ -322,11 +322,16 @@ local function BuildSelfCombatTextSection(parent, y)
                   get=function() return SCTGet("critScale") end,
                   set=function(v) SCTSet("critScale", v) end },
                 { type="toggle", label="Stagger Hits",
+                  tooltip="Spaces out hits that land together so none hides another.",
                   get=function() return SCTGet("stagger") end,
                   set=function(v) SCTSet("stagger", v) end },
             },
         })
     end
+
+    -- Section gate: the rows below exist only while Self Combat Text is on (the
+    -- toggle's SectionToggleSetValue rebuilds the page).
+    if sctOff() then return y end
 
     _, h = W:DualRow(parent, y,
         sctDropdown("Animation", "anim",
@@ -389,8 +394,9 @@ initFrame:SetScript("OnEvent", function(self)
         -- player's real EUI_* macros on bag/spec events), so the hidden search
         -- pre-build must never run it, and its rows are kept out of the search index so
         -- results can never point into it (the index would otherwise deep-link to rows
-        -- whose page state the factory manages itself).
-        if EllesmereUI.BuildMacroFactory and not EllesmereUI._prebuilding then
+        -- whose page state the factory manages itself). WoW Forever has no Macro
+        -- Factory: never built there, so none of its machinery runs.
+        if EllesmereUI.BuildMacroFactory and not EllesmereUI._prebuilding and not EllesmereUI.IS_FOREVER then
             EllesmereUI._searchIndexSuppress = true
             local mfH = EllesmereUI.BuildMacroFactory(parent, y, PP)
             EllesmereUI._searchIndexSuppress = nil
@@ -932,7 +938,7 @@ initFrame:SetScript("OnEvent", function(self)
         local gossipRow
         gossipRow, h = W:DualRow(parent, y,
             { type="toggle", text="Auto Select Single Gossip",
-              tooltip="Automatically selects an NPC's dialog option when it is the only one. Skipped when the NPC offers a quest or has a quest ready to turn in.",
+              tooltip="Picks an NPC's only dialog option for you.",
               getValue=function()
                   return EllesmereUIDB and EllesmereUIDB.autoGossip or false
               end,
@@ -942,7 +948,7 @@ initFrame:SetScript("OnEvent", function(self)
                   if EllesmereUI._applyAutoGossip then EllesmereUI._applyAutoGossip() end
                   EllesmereUI:RefreshPage()
               end },
-            { type="label", text="" }
+            EllesmereUI.BlankRowCfg()
         );  y = y - h
 
         if not EllesmereUI._prebuilding then
@@ -955,7 +961,6 @@ initFrame:SetScript("OnEvent", function(self)
                 title = "Auto Gossip Settings",
                 rows = {
                     { type="toggle", label="Hold Shift to Skip",
-                      tooltip="Hold Shift when talking to an NPC to disable automatic gossip selection.",
                       get=function()
                           if not EllesmereUIDB then return true end
                           return EllesmereUIDB.autoGossipShiftSkip ~= false
@@ -2549,11 +2554,12 @@ initFrame:SetScript("OnEvent", function(self)
     -- (its resident file returns at load, so the page builder never exists either).
     if not EllesmereUI.IS_FOREVER then pages[#pages + 1] = PAGE_UPGCALC end
     local searchTerms = { "brez", "bres", "battle res", "combat res", "cursor", "macro", "fps", "logging", "combat log", "warcraft logs", "upgrade", "ilvl", "item level", "crest", "upgrade calculator", "shifter", "move", "drag", "position", "demodal", "drift", "combat alert", "enter combat", "leave combat", "in combat", "combat text", "combat notification", "transform", "transforms", "costume", "disguise", "chef's hat", "noggenfogger", "target distance", "distance to target", "range text", "yard", "yards", "movement", "mobility", "gap closer", "blink", "gateway", "warlock gateway", "control shard", "time spiral", "free movement", "raid tools", "raid", "pull timer", "pull", "ready check", "role check", "raid marker", "target marker", "world marker", "flare", "disband", "convert to raid", "countdown" }
-    -- Terms for features WoW Forever does not have (the Battle Res indicator)
-    -- are dropped there, so a sidebar search for them does not list this
-    -- module; retail keeps the full list.
+    -- Terms for features WoW Forever does not have (the Battle Res indicator,
+    -- the Macro Factory) are dropped there, so a sidebar search for them does
+    -- not list this module; retail keeps the full list.
     if EllesmereUI.IS_FOREVER then
-        local foreverDrop = { ["brez"] = true, ["bres"] = true, ["battle res"] = true, ["combat res"] = true }
+        local foreverDrop = { ["brez"] = true, ["bres"] = true, ["battle res"] = true, ["combat res"] = true,
+            ["macro"] = true }
         for i = #searchTerms, 1, -1 do
             if foreverDrop[searchTerms[i]] then table.remove(searchTerms, i) end
         end

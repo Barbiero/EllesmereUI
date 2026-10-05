@@ -188,7 +188,6 @@ function npAddon:OnInitialize()
     )
 end
 function npAddon:OnEnable()
-    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
     SetProfile(ENP.db.profile)
     -- A profile already on a stock style gets its one-time bar texture seed
@@ -242,6 +241,9 @@ function npAddon:OnEnable()
     ns.NP_RefreshThreatPctFlag()
     ns.NP_RefreshThreatColorFlag()
     if ns.RangeText_Apply then ns.RangeText_Apply() end
+    -- Debuff coloring last: it reads the final profile, and Color Border reads
+    -- the plate style, which latches for the session on its first read.
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
 end
 
 -------------------------------------------------------------------------------

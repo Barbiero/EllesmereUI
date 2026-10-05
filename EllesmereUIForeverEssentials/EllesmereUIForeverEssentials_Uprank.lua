@@ -39,10 +39,10 @@ local function Uprank(newID)
     end
     if count > 0 then
         local rank = C_Spell.GetSpellSubtext(newID)
-        EllesmereUI.Print(("|cff00ff00[EllesmereUI]|r Upranked %s%s on %d action %s."):format(
-            C_Spell.GetSpellLink(newID) or name,
-            rank and rank ~= "" and " (" .. rank .. ")" or "",
-            count, count == 1 and "slot" or "slots"))
+        local spell = (C_Spell.GetSpellLink(newID) or name) .. (rank and rank ~= "" and " (" .. rank .. ")" or "")
+        local msg = count == 1 and EllesmereUI.Lf("Upranked %s on 1 action slot.", spell)
+            or EllesmereUI.Lf("Upranked %1$s on %2$d action slots.", spell, count)
+        EllesmereUI.Print(EllesmereUI.COLOR_CODES.BRAND .. "EllesmereUI:|r " .. msg)
     end
 end
 
@@ -89,9 +89,4 @@ EllesmereUI._SpellUprank = {
     Apply = Apply,
 }
 
-local boot = CreateFrame("Frame")
-boot:RegisterEvent("PLAYER_LOGIN")
-boot:SetScript("OnEvent", function(self)
-    self:UnregisterAllEvents()
-    Apply()
-end)
+F.Start(Apply)
