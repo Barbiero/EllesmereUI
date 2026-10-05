@@ -1,3 +1,30 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Actions.lua
+--
+--  Dynamic rez, the usability filter, ResolveAction, FireInsecure and what
+--  a slot shows: icon, spell id, cooldown, count, usability.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local tonumber, type, select = tonumber, type, select
+local GetCursorInfo = GetCursorInfo
+local InCombatLockdown = InCombatLockdown
+
+local ChildIndex, P, QUESTION_MARK = I.ChildIndex, I.P, I.QUESTION_MARK
+local ReadPalette, CycleNext, CycleSteps = I.ReadPalette, I.CycleNext, I.CycleSteps
+local MARKER_NAMES, MarkerIcon = I.MARKER_NAMES, I.MarkerIcon
+local RANDOM_FAVORITE_MOUNT, SpecIndexFor = I.RANDOM_FAVORITE_MOUNT, I.SpecIndexFor
+local WORLD_MARKER_ENGINE, SetUsableSlots = I.WORLD_MARKER_ENGINE, I.SetUsableSlots
+
+-- Assigned below with the usability filter; EllesmereUIQuickdraw.lua holds
+-- the forward declaration ChildSlots reads through.
+local UsableSlots
 
 -------------------------------------------------------------------------------
 --  Dynamic Rez
@@ -14,9 +41,9 @@
 --  to be changed together when a class gains or loses a rez.
 --
 --  One table rather than a local per entry point, and everything else scoped to
---  the do-block below. That is not tidiness: this file's main chunk sits within
---  a handful of Lua's ceiling of 200 locals, and neither a field nor a
---  block-local costs one of them.
+--  the do-block below. That is not tidiness: as one file the module's main
+--  chunk sat within a handful of Lua's ceiling of 200 locals, and neither a
+--  field nor a block-local costs one of them.
 -------------------------------------------------------------------------------
 local Rez = {}
 do
@@ -171,9 +198,9 @@ end
 local usableMemo = setmetatable({}, { __mode = "k" })
 
 -- KnownForm, SpellKnownHere and SlotUsable are private to UsableSlots, and
--- are scoped so they cost no main-chunk local: this file's main chunk is at
--- Lua's ceiling of 200 locals, and merging two features into it went over.
--- usableMemo stays outside the block -- PushAllPalettes wipes it.
+-- are scoped so they cost no main-chunk local: as one file the module's main
+-- chunk was at Lua's ceiling of 200 locals, and merging two features into it
+-- went over. usableMemo stays outside the block -- PushAllPalettes wipes it.
 do
 -- Is this one spell id in either of this character's books, player or pet?
 local function KnownForm(sid)
@@ -262,6 +289,7 @@ function UsableSlots(palette, p)
     return out or slots
 end
 end
+SetUsableSlots(UsableSlots)
 
 -- kind -> attribute triple for the secure button, plus an optional 4th value:
 -- a sibling attribute key that must be cleared because the same action type
@@ -796,8 +824,8 @@ end
 -- until their item has. A palette paints once per open, so an entry drawn ahead
 -- of its data kept the question mark for the whole of that open, and the second
 -- open was right only because the first one's failed lookup had fetched it.
--- Both ns-hosted for the reason ns.SetIconTexture is: this chunk is at Lua
--- 5.1's 200-local cap.
+-- Both ns-hosted for the reason ns.SetIconTexture is: as one file the module's
+-- main chunk was at Lua 5.1's 200-local cap.
 function ns.SlotDataReady(slot)
     if not slot then return true end
     local k = slot.kind
@@ -1038,3 +1066,9 @@ local function SlotFromCursor()
     return nil
 end
 ns.SlotFromCursor = SlotFromCursor
+
+I.FireInsecure, I.ResolveAction, I.Rez = FireInsecure, ResolveAction, Rez
+I.SlotCooldown, I.SlotCount, I.SlotDisplay = SlotCooldown, SlotCount, SlotDisplay
+I.SlotUsability, I.USABILITY_TINT, I.usableMemo = SlotUsability, USABILITY_TINT, usableMemo
+I.UsableSlots = UsableSlots
+I.broken = false

@@ -1,3 +1,19 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Slots.lua
+--
+--  The slot model: cycling marker entries, spec positions, dynamic
+--  professions, outfits and the interface panels.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local tonumber, type, select = tonumber, type, select
+local tinsert = table.insert
 
 -------------------------------------------------------------------------------
 --  Slot model
@@ -123,9 +139,9 @@ end
 -- character that cannot resolve it. Kept here rather than in the options page
 -- so the picker row and the placeholder cannot drift apart.
 --
--- On ns with no local alias, and called back through ns below: this file's
--- main chunk is at Lua's ceiling of 200 locals (see UsableSlots), and a local
--- here spends the last one.
+-- On ns with no local alias, and called back through ns below: written when
+-- the module was one file whose main chunk was at Lua's ceiling of 200 locals
+-- (see UsableSlots), where a local here spent the last one.
 ns.SpecPositionName = function(index)
     return EllesmereUI.Lf("Specialization %1$d", index or 0)
 end
@@ -137,10 +153,11 @@ end
 --  slot.extra its second non-passive spell. slot.specialization resolves the
 --  first known specialization ability for Mining, Herbalism, or Skinning.
 --  Unlearned positions and professions with no second ability resolve to nil
---  and go dark under Hide Unusable Entries. Resolvers live on ns (200-local
---  ceiling). SlotUsable, ResolveAction and SlotDisplay share a memo per
---  position and ability kind. PushAllPalettes wipes it beside usableMemo;
---  SPELLS_CHANGED covers the learn/unlearn edge.
+--  and go dark under Hide Unusable Entries. Resolvers live on ns (from the
+--  200-local ceiling of the module as one file). SlotUsable, ResolveAction
+--  and SlotDisplay share a memo per position and ability kind.
+--  PushAllPalettes wipes it beside usableMemo; SPELLS_CHANGED covers the
+--  learn/unlearn edge.
 -------------------------------------------------------------------------------
 do
     local cache = {}
@@ -262,9 +279,10 @@ end
 --  with no button to click fire from FireInsecure, out of combat only.
 -------------------------------------------------------------------------------
 do
-    -- Scoped, with the accessors on ns: the main chunk is at Lua's ceiling of
-    -- 200 locals (see UsableSlots). The ".png" on each name is not optional --
-    -- the client only finds a PNG by its full filename.
+    -- Scoped, with the accessors on ns: written when the module was one file
+    -- at Lua's ceiling of 200 main-chunk locals (see UsableSlots). The ".png"
+    -- on each name is not optional -- the client only finds a PNG by its full
+    -- filename.
     local ART = "Interface\\AddOns\\EllesmereUI\\media\\micromenu\\"
 
     -- button: the micro button to click; a LIST is tried in order, since the
@@ -465,3 +483,9 @@ do
         return out
     end
 end
+
+I.CycleNext, I.CyclePosBack, I.CycleSteps = CycleNext, CyclePosBack, CycleSteps
+I.MARKER_NAMES, I.MarkerIcon = MARKER_NAMES, MarkerIcon
+I.RANDOM_FAVORITE_MOUNT, I.SpecIndexFor = RANDOM_FAVORITE_MOUNT, SpecIndexFor
+I.WORLD_MARKER_ENGINE = WORLD_MARKER_ENGINE
+I.broken = false

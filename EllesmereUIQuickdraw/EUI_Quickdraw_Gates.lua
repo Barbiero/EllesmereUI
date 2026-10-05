@@ -1,3 +1,20 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Gates.lua
+--
+--  The arming gates: the enter and leave snippets, the claim gates and the
+--  lattice gates.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local LIVE_STRATA, MAX_LATTICE, REGION_MAX = I.LIVE_STRATA, I.MAX_LATTICE, I.REGION_MAX
+local EnsureScrollCatcher, EnsureSecureHeader = I.EnsureScrollCatcher, I.EnsureSecureHeader
+local ARM_CLAIM = I.ARM_CLAIM
 
 -------------------------------------------------------------------------------
 --  Arming gates -- the pass-through rule, and the exclusive-ground rule
@@ -104,7 +121,7 @@
 -- Wrapped in parentheses for the same reason LeaveSnippet's return is; see
 -- the note there.
 -- Wrapped in a block so the two shared FRAGMENTS below cost no main-chunk
--- local: this file sits within a couple of Lua's ceiling of 200.
+-- local: as one file the module sat within a couple of Lua's ceiling of 200.
 local EnterSnippet, LeaveSnippet
 do
 
@@ -453,7 +470,7 @@ local gatePools = {}
 
 -- The gate builders share GateMouse and LatticeSnippet, and nothing outside
 -- them uses either. Wrapped in a block so those two cost no main-chunk local:
--- this file sits within a couple of Lua's ceiling of 200.
+-- as one file the module sat within a couple of Lua's ceiling of 200.
 local EnsureGates, EnsureLatticeGates
 do
 -- Every gate wants MOTION and nothing else: it is a hover detector, and it must
@@ -684,3 +701,6 @@ function EnsureLatticeGates(index, btn)
     end
 end
 end
+
+I.EnsureGates, I.EnsureLatticeGates, I.gatePools = EnsureGates, EnsureLatticeGates, gatePools
+I.broken = false

@@ -1,5 +1,57 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Runtime.lua
+--
+--  ReleaseSecureState, the click handlers and secure buttons, the push
+--  onto the buttons, the override bindings, the events, ns.Refresh and
+--  the lifecycle.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
 
--- Declared up beside ns.Close, which is the only caller: the closes that never
+local min, max = math.min, math.max
+local pi = math.pi
+local tonumber, type = tonumber, type
+local GetBindingKey = GetBindingKey
+local InCombatLockdown = InCombatLockdown
+
+local BINDING_PREFIX, ChildIndex, DB_DEFAULTS = I.BINDING_PREFIX, I.ChildIndex, I.DB_DEFAULTS
+local EnsurePalette, EQD, MAX_CHILD_ROWS = I.EnsurePalette, I.EQD, I.MAX_CHILD_ROWS
+local MAX_LATTICE, MAX_PALETTES, MAX_SLOTS = I.MAX_LATTICE, I.MAX_PALETTES, I.MAX_SLOTS
+local MigrateActiveProfile = I.MigrateActiveProfile
+local MigrateLegacyProfile, P, PA = I.MigrateLegacyProfile, I.P, I.PA
+local PaletteCount, REGION_MAX, CyclePosBack = I.PaletteCount, I.REGION_MAX, I.CyclePosBack
+local CycleSteps, FireInsecure, ResolveAction = I.CycleSteps, I.FireInsecure, I.ResolveAction
+local usableMemo, UsableSlots, CANCEL_BUTTON = I.usableMemo, I.UsableSlots, I.CANCEL_BUTTON
+local CONFIRM_BUTTON, RefreshFonts = I.CONFIRM_BUTTON, I.RefreshFonts
+local secureButtons, views, FAN_CANCEL_REACH = I.secureButtons, I.views, I.FAN_CANCEL_REACH
+local GRID_REACH, CreateLiveView = I.GRID_REACH, I.CreateLiveView
+local EnsureScrollCatcher, EnsureSecureHeader = I.EnsureScrollCatcher, I.EnsureSecureHeader
+local ReleaseEscape, EnsureCancelButton = I.ReleaseEscape, I.EnsureCancelButton
+local LayoutModel, SNIPPET_POST, SNIPPET_PRE = I.LayoutModel, I.SNIPPET_POST, I.SNIPPET_PRE
+local EnsureGates, EnsureLatticeGates = I.EnsureGates, I.EnsureLatticeGates
+local gatePools, SetDB, SetReleaseSecureState = I.gatePools, I.SetDB, I.SetReleaseSecureState
+
+local db
+I.dbSetters[#I.dbSetters + 1] = function(v) db = v end
+local liveView
+I.liveViewSetters[#I.liveViewSetters + 1] = function(v) liveView = v end
+local scrollCatcher
+I.scrollCatcherSetters[#I.scrollCatcherSetters + 1] = function(v) scrollCatcher = v end
+local cancelButton
+I.cancelButtonSetters[#I.cancelButtonSetters + 1] = function(v) cancelButton = v end
+
+-- Assigned below; EUI_Quickdraw_Live.lua holds the forward declaration
+-- ns.Close calls through.
+local ReleaseSecureState
+local secureCloseDirty
+local bindOwner
+
+-- Declared beside ns.Close (EUI_Quickdraw_Live.lua): the closes that never
 -- see a key-up -- the open timeout, a zone change -- have to do here everything
 -- SNIPPET_POST would have done at a release, or the hold's state outlives the
 -- palette. The gates are the part that shows: a parent gate left up is a
@@ -58,6 +110,7 @@ function ReleaseSecureState(index)
         end
     end
 end
+SetReleaseSecureState(ReleaseSecureState)
 
 -- Defined with the push coalescer it belongs to, further down; declared here
 -- because the press below has to be able to land a pending push before it
@@ -420,7 +473,7 @@ local function PushPalette(index)
     pushedClaims[index] = gateMax
     -- The arming gates. Built out of combat like everything else here, grown
     -- to the same mark, and reused and merely repositioned afterwards. See the
-    -- "Arming gates" section above GetSecureButton for what they are for.
+    -- "Arming gates" section in EUI_Quickdraw_Gates.lua for what they are for.
     EnsureGates(index, btn, gateMax)
     btn:SetAttribute("eqdGateMax", gateMax)
 
@@ -932,7 +985,8 @@ function SetEventsEnabled(on)
         -- (Mainline/Blizzard_CompactRaidFrameManager.lua:282-283).
         --
         -- Inline rather than a named handler, unlike every registration above
-        -- it: the main chunk is at Lua's ceiling of 200 locals.
+        -- it: as one file the module's main chunk was at Lua's ceiling of 200
+        -- locals.
         EQD:RegisterEvent("RAID_TARGET_UPDATE", function()
             if liveView and liveView:GetFrame():IsShown() then
                 liveView:RefreshMarkerPips()
@@ -959,8 +1013,8 @@ function SetEventsEnabled(on)
         -- message -- the same answer a mount entry picked on another character
         -- already gives.
         --
-        -- Inline for the reason the registration above it is: the main chunk is
-        -- at Lua's ceiling of 200 locals.
+        -- Inline for the reason the registration above it is: as one file the
+        -- module's main chunk was at Lua's ceiling of 200 locals.
         EQD:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", function(_, _, unit, _, spellID)
             if unit ~= "player" or InCombatLockdown() then return end
             if type(spellID) ~= "number" or not C_MountJournal.GetMountFromSpell then
@@ -1064,7 +1118,7 @@ end
 
 function EQD:OnInitialize()
     MigrateLegacySV()
-    db = EllesmereUI.Lite.NewDB("EllesmereUIQuickdrawDB", DB_DEFAULTS)
+    SetDB(EllesmereUI.Lite.NewDB("EllesmereUIQuickdrawDB", DB_DEFAULTS))
     -- The profile itself is converted by P(), on first touch, so that switching
     -- profile mid-session converts the incoming one too. See MigrateNames.
     _G._EQD_AceDB = db
@@ -1095,3 +1149,4 @@ function EQD:OnEnable()
     SetEventsEnabled(true)
 end
 
+I.broken = false

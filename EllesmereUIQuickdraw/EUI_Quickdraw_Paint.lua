@@ -1,3 +1,34 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Paint.lua
+--
+--  PaintCell, Layout, the marker pips, live and pending icons, CellSlot,
+--  nest visibility and SetSelection.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, min, max, abs = math.floor, math.min, math.max, math.abs
+local sin, cos = math.sin, math.cos
+local tonumber = tonumber
+local tremove = table.remove
+local InCombatLockdown = InCombatLockdown
+-- Read every frame an open palette holds an entry whose icon can move under it
+-- -- see AdvanceLiveIcons.
+local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown =
+    IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
+
+local EnsurePalette, MAX_PALETTES, MAX_SLOTS = I.EnsurePalette, I.MAX_PALETTES, I.MAX_SLOTS
+local PA, ReadPalette, SelectColor, CycleNext = I.PA, I.ReadPalette, I.SelectColor, I.CycleNext
+local WORLD_MARKER_ENGINE, Rez, SlotCooldown = I.WORLD_MARKER_ENGINE, I.Rez, I.SlotCooldown
+local SlotCount, SlotDisplay, SlotUsability = I.SlotCount, I.SlotDisplay, I.SlotUsability
+local UsableSlots, ApplyIconCrop = I.UsableSlots, I.ApplyIconCrop
+local ApplySlotVisual, PaletteView = I.ApplySlotVisual, I.PaletteView
+local RefreshFonts, secureButtons = I.RefreshFonts, I.secureButtons
 
 -- Paint one cell from its slot. Shared by the palette's own entries and by the
 -- nested ones, which differ only in where they are placed and when they are
@@ -512,8 +543,8 @@ end
 -- spell was a marker that is on the ground.
 --
 -- A method rather than a local function, like MarkerPip's caller and
--- RefreshMarkerPips below: the main chunk is at Lua's ceiling of 200 locals
--- and has no room for another name.
+-- RefreshMarkerPips below: as one file the module's main chunk was at Lua's
+-- ceiling of 200 locals and had no room for another name.
 function PaletteView:MarkerPip(w, slot, iconSize)
     local pip = w.markerPip
     if not pip then return end
@@ -869,3 +900,5 @@ function PaletteView:SetSelection(index)
         self:HideNeedle()
     end
 end
+
+I.broken = false

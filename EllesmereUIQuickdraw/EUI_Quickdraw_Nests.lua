@@ -1,3 +1,25 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Nests.lua
+--
+--  The grid, the perimeter helpers and the nests of the block layouts:
+--  metrics, perimeter, halo, strip, cell child geometry, the nest hit test.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, ceil, min, max, abs = math.floor, math.ceil, math.min, math.max, math.abs
+local sin, cos, atan2, sqrt, pi = math.sin, math.cos, math.atan2, math.sqrt, math.pi
+local tsort = table.sort
+
+local MAX_SLOTS, NEST_BAND_DEFAULT = I.MAX_SLOTS, I.NEST_BAND_DEFAULT
+local PaletteView, AddRegion, CorridorBox = I.PaletteView, I.AddRegion, I.CorridorBox
+local EdgeBox, GraceBox, NestBBox = I.EdgeBox, I.GraceBox, I.NestBBox
+local ParentHoles, RunReach = I.ParentHoles, I.RunReach
 
 -------------------------------------------------------------------------------
 --  Grid
@@ -846,3 +868,7 @@ function PaletteView:NestHit(dx, dy, armed)
         end
     end
 end
+
+I.FAN_CANCEL_REACH, I.GRID_REACH = FAN_CANCEL_REACH, GRID_REACH
+I.NEST_DIM_ALPHA, I.NEST_DIM_SCALE = NEST_DIM_ALPHA, NEST_DIM_SCALE
+I.broken = false

@@ -1,3 +1,27 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Pointer.lua
+--
+--  The selection needle, the slam-open, the pointer, the hit test,
+--  AdvanceArc and SteerUnchanged.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, max, abs = math.floor, math.max, math.abs
+local sin, cos, atan2, sqrt, pi = math.sin, math.cos, math.atan2, math.sqrt, math.pi
+local GetCursorPosition = GetCursorPosition
+local GetTime = GetTime
+
+local SelectColor, TWO_PI, PaletteView = I.SelectColor, I.TWO_PI, I.PaletteView
+local SelectedZoom, FalloffK, FalloffRatios = I.SelectedZoom, I.FalloffK, I.FalloffRatios
+
+local scrollCatcher
+I.scrollCatcherSetters[#I.scrollCatcherSetters + 1] = function(v) scrollCatcher = v end
 
 -------------------------------------------------------------------------------
 --  Selection connector line -- the unlock-mode anchor line's exact look: a
@@ -421,3 +445,5 @@ function PaletteView:SteerUnchanged()
     self._steerArmed, self._steerWheel = armed, wheel
     return same
 end
+
+I.broken = false

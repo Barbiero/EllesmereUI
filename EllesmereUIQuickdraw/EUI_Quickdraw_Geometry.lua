@@ -1,7 +1,30 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Geometry.lua
+--
+--  Claim boxes (nest bounding box, corridor, carve, holes, AddRegion),
+--  ChildGeom, the arc geometry and the fan layout.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, min, max, abs = math.floor, math.min, math.max, math.abs
+local sin, cos, tan, pi = math.sin, math.cos, math.tan, math.pi
+local log = math.log
+
+local ChildIndex, ChildSlots, MAX_CHILD_ROWS = I.ChildIndex, I.ChildSlots, I.MAX_CHILD_ROWS
+local MAX_CHILDREN, MAX_SLOTS = I.MAX_CHILDREN, I.MAX_SLOTS
+local NEST_BAND_DEFAULT, PA, TWO_PI = I.NEST_BAND_DEFAULT, I.PA, I.TWO_PI
+local PaletteView, SelectedZoom = I.PaletteView, I.SelectedZoom
 
 -------------------------------------------------------------------------------
 --  A claim's true ground, as a small set of rects rather than one bounding
---  box -- see the "Arming gates" section further down for what these feed.
+--  box -- see the "Arming gates" section in EUI_Quickdraw_Gates.lua for what
+--  these feed.
 --  Shared by both the ARC claims (ChildGeom) and the block-layout ones
 --  (CellChildGeom): a nest that breaks out of its parent on one side leaves a
 --  bounding box across the two swallowing whatever plain ground of the block
@@ -314,8 +337,9 @@ do
 -- recovered from a pair of edges -- and a boundary this rests on cannot be left
 -- to land on the exact same float twice.
 --
--- Inside the block with its only caller, which is what keeps it off the main
--- chunk: this file sits within a couple of Lua's ceiling of 200 locals.
+-- Inside the block with its only caller, which is what kept it off the main
+-- chunk: as one file the module sat within a couple of Lua's ceiling of 200
+-- locals.
 local function BoxesTouch(a, b)
     local dx, dy = abs(a.x - b.x), abs(a.y - b.y)
     local sx, sy = a.hw + b.hw, a.hh + b.hh
@@ -900,3 +924,9 @@ function PaletteView:ApplyFanGeometry()
         end
     end
 end
+
+I.AddRegion, I.CorridorBox, I.EdgeBox, I.FalloffK = AddRegion, CorridorBox, EdgeBox, FalloffK
+I.FalloffRatios, I.FAN_EDIT_MIN_ALPHA = FalloffRatios, FAN_EDIT_MIN_ALPHA
+I.FAN_EDIT_MIN_SCALE, I.FanOffset, I.GraceBox = FAN_EDIT_MIN_SCALE, FanOffset, GraceBox
+I.NestBBox, I.ParentHoles, I.RunReach = NestBBox, ParentHoles, RunReach
+I.broken = false

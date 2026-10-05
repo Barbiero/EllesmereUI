@@ -1,8 +1,28 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Secure.lua
+--
+--  Secure activation: the layout model, ARM_CLAIM, the press, release and
+--  cancel snippets and the cancel button.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local MAX_LATTICE, PA, REGION_MAX = I.MAX_LATTICE, I.PA, I.REGION_MAX
+local CANCEL_BUTTON, CONFIRM_BUTTON = I.CANCEL_BUTTON, I.CONFIRM_BUTTON
+local EnsureScrollCatcher, EnsureSecureHeader = I.EnsureScrollCatcher, I.EnsureSecureHeader
+local SetCancelButton = I.SetCancelButton
+
+local cancelButton
+I.cancelButtonSetters[#I.cancelButtonSetters + 1] = function(v) cancelButton = v end
 
 -------------------------------------------------------------------------------
 --  Secure activation
 -------------------------------------------------------------------------------
-local bindOwner
 
 -- Which steering model the snippet must use, by the same reading of the profile
 -- the live view does:
@@ -28,11 +48,11 @@ end
 -- interpolated into all three places that can decide it: a parent gate's own
 -- OnEnter (EnterSnippet), the press branch's geometric pre-arm, and
 -- LeaveSnippet's re-arm on the way out of another claim. See the "Arming
--- gates" section further down for what arming means. Three hand-kept copies
--- would only have to agree with each other, and the live view reads eqdArmed
--- and nothing else -- so a copy that forgot to hide a neighbour's gate or to
--- show its own regions would draw one claim while the release fired from
--- another.
+-- gates" section in EUI_Quickdraw_Gates.lua for what arming means. Three
+-- hand-kept copies would only have to agree with each other, and the live
+-- view reads eqdArmed and nothing else -- so a copy that forgot to hide a
+-- neighbour's gate or to show its own regions would draw one claim while the
+-- release fired from another.
 --
 -- Two locals have to be in scope where this is interpolated: `btn`, the
 -- palette's secure button (which carries a reference to every gate, and holds
@@ -1076,6 +1096,10 @@ local function EnsureCancelButton()
     SecureHandlerSetFrameRef(btn, "catcher", EnsureScrollCatcher())
     SecureHandlerWrapScript(btn, "OnClick", EnsureSecureHeader(), SNIPPET_CANCEL)
 
-    cancelButton = btn
+    SetCancelButton(btn)
     return btn
 end
+
+I.ARM_CLAIM, I.EnsureCancelButton, I.LayoutModel = ARM_CLAIM, EnsureCancelButton, LayoutModel
+I.SNIPPET_POST, I.SNIPPET_PRE = SNIPPET_POST, SNIPPET_PRE
+I.broken = false

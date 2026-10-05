@@ -39,9 +39,9 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  angular layouts are steered in the snippet so far; the others still commit
 --  from Lua and therefore only fire out of combat.
 --
---  Protected calls in this file, all of them deferred to PLAYER_REGEN_ENABLED
---  when in combat: the override-binding updates, and PushPalette's writes of a
---  palette's contents onto the secure buttons.
+--  Protected calls in this module, all of them deferred to
+--  PLAYER_REGEN_ENABLED when in combat: the override-binding updates, and
+--  PushPalette's writes of a palette's contents onto the secure buttons.
 -------------------------------------------------------------------------------
 local ADDON_NAME, ns = ...
 local EQD = EllesmereUI.Lite.NewAddon(ADDON_NAME)
@@ -65,21 +65,10 @@ local liveFrame = CreateFrame("Frame", "EUIQuickdrawFrame", UIParent)
 liveFrame:Hide()
 
 -- Upvalues
-local floor, ceil, min, max, abs = math.floor, math.ceil, math.min, math.max, math.abs
-local sin, cos, tan, atan2, sqrt, pi =
-    math.sin, math.cos, math.tan, math.atan2, math.sqrt, math.pi
-local log = math.log
+local min, max = math.min, math.max
+local pi = math.pi
 local tonumber, type, select = tonumber, type, select
-local tinsert, tremove, tsort = table.insert, table.remove, table.sort
-local GetCursorInfo, ClearCursor = GetCursorInfo, ClearCursor
-local GetCursorPosition = GetCursorPosition
-local GetBindingKey = GetBindingKey
-local InCombatLockdown = InCombatLockdown
-local GetTime = GetTime
--- Read every frame an open palette holds an entry whose icon can move under it
--- -- see AdvanceLiveIcons.
-local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown =
-    IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
+local tinsert, tremove = table.insert, table.remove
 
 local TWO_PI = pi * 2
 local QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -130,7 +119,7 @@ local MAX_CHILD_ROWS = 4
 -- with the block to itself: the parent's cell plus one box per side of the
 -- block its run reached, and a full run can wrap onto all four. One
 -- box across the lot instead would swallow the block's own corner ground --
--- see PerimeterNest, the "Arming gates" section and RunReach below.
+-- see PerimeterNest, the "Arming gates" section and RunReach.
 --
 -- Fourteen is what a lane sharing the block with OTHER claims comes to. Each of
 -- those has its own cell taken out of this claim's coverage (see ParentHoles),
@@ -149,7 +138,7 @@ local MAX_CHILD_ROWS = 4
 -- ground between its entries rather than a child.
 --
 -- Re-run that sweep if MAX_SLOTS, MAX_CHILDREN or any nest geometry moves --
--- this number is an OUTPUT of the shapes below it, not a choice.
+-- this number is an OUTPUT of the nest shapes, not a choice.
 local REGION_MAX = 14
 
 -- How many drawn positions the scroll strip's arming lattice may span each
@@ -167,7 +156,7 @@ local NEST_BAND_DEFAULT = 40
 -- The binding ACTION name, and it keeps the module's first name for good. WoW
 -- stores a keybind against this string, so renaming it would unbind every
 -- palette every user has set. The name is never shown: BINDING_NAME_<action>
--- below is what the Keybindings page reads.
+-- (set in OnInitialize) is what the Keybindings page reads.
 local BINDING_PREFIX = "EUI_RADIAL"
 
 -- DIALOG is also the options window's strata (EllesmereUI.lua:7126), which is
@@ -749,9 +738,10 @@ local function ChildIndex(slot)
 end
 ns.ChildIndex = ChildIndex
 
--- Assigned with the usability filter further down (it needs SpecIndexFor);
--- ChildSlots reads through it so a nested menu contributes only what this
--- character can use, under the nested palette's OWN setting.
+-- Assigned with the usability filter in EUI_Quickdraw_Actions.lua (it needs
+-- SpecIndexFor; see SetUsableSlots); ChildSlots reads through it so a nested
+-- menu contributes only what this character can use, under the nested
+-- palette's OWN setting.
 local UsableSlots
 
 -- The reachable entries of a nested palette. Capped rather than refused, so a
@@ -841,3 +831,50 @@ ns.MAX_SLOTS = MAX_SLOTS
 ns.REGION_MAX = REGION_MAX
 ns.MAX_PALETTES = MAX_PALETTES
 ns.MAX_CHILDREN = MAX_CHILDREN
+
+-- Main-chunk locals the EUI_Quickdraw_*.lua files re-import by name.
+-- dbSetters and the three lists beside it: every file that reads one of
+-- these keeps its own copy and adds a setter here; the one place that
+-- assigns it writes through SetDB, SetLiveView, SetScrollCatcher or
+-- SetCancelButton, which runs them all.
+-- SetUsableSlots: EUI_Quickdraw_Actions.lua assigns the forward declaration.
+-- broken: true while an EUI_Quickdraw_*.lua file loads; a file that fails
+-- leaves it set, and the files behind it return at their first lines.
+ns._qdInternals = {
+    BINDING_PREFIX = BINDING_PREFIX, ChildIndex = ChildIndex, ChildSlots = ChildSlots,
+    DB_DEFAULTS = DB_DEFAULTS, EnsurePalette = EnsurePalette, EQD = EQD,
+    LIVE_STRATA = LIVE_STRATA, liveFrame = liveFrame, MAX_CHILD_ROWS = MAX_CHILD_ROWS,
+    MAX_CHILDREN = MAX_CHILDREN, MAX_LATTICE = MAX_LATTICE, MAX_PALETTES = MAX_PALETTES,
+    MAX_SLOTS = MAX_SLOTS, MigrateActiveProfile = MigrateActiveProfile,
+    MigrateLegacyProfile = MigrateLegacyProfile, NEST_BAND_DEFAULT = NEST_BAND_DEFAULT, P = P,
+    PA = PA, PaletteCount = PaletteCount, QUESTION_MARK = QUESTION_MARK,
+    ReadPalette = ReadPalette, REGION_MAX = REGION_MAX, SelectColor = SelectColor,
+    TWO_PI = TWO_PI,
+    dbSetters = { function(v) db = v end },
+    liveViewSetters = {},
+    scrollCatcherSetters = {},
+    cancelButtonSetters = {},
+    SetDB = function(v)
+        local list = ns._qdInternals.dbSetters
+        for i = 1, #list do list[i](v) end
+    end,
+    SetLiveView = function(v)
+        local list = ns._qdInternals.liveViewSetters
+        for i = 1, #list do list[i](v) end
+    end,
+    SetScrollCatcher = function(v)
+        local list = ns._qdInternals.scrollCatcherSetters
+        for i = 1, #list do list[i](v) end
+    end,
+    SetCancelButton = function(v)
+        local list = ns._qdInternals.cancelButtonSetters
+        for i = 1, #list do list[i](v) end
+    end,
+    SetUsableSlots = function(f) UsableSlots = f end,
+    broken = false,
+}
+-- A re-import of a name this table lacks fails where the part file loads,
+-- not later as a nil upvalue inside one of its functions.
+setmetatable(ns._qdInternals, { __index = function(_, k)
+    error("ns._qdInternals has no entry " .. tostring(k), 2)
+end })

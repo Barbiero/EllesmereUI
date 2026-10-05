@@ -1,3 +1,23 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_View.lua
+--
+--  State the views share with the secure side, the slot visual, the module
+--  font, the icon crop, the slot widget and the PaletteView basics.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, max = math.floor, math.max
+local sin, pi = math.sin, math.pi
+local type = type
+
+local PA, QUESTION_MARK, SelectColor = I.PA, I.QUESTION_MARK, I.SelectColor
+local USABILITY_TINT = I.USABILITY_TINT
 
 -------------------------------------------------------------------------------
 --  Palette view  --  the renderer, instanced
@@ -13,21 +33,11 @@
 --  gets back from GetSlotWidget.
 -------------------------------------------------------------------------------
 local views = {}            -- every view, live and preview
-local liveView              -- the palette the keybinds open
--- Declared up here, not beside EnsureScrollCatcher: AdvanceFan reads the fan
--- index straight off it, and that is defined long before the catcher is built.
-local scrollCatcher
-local secureHeader
--- The button ESCAPE is bound to while a palette is open. Declared here for the
--- same reason: ns.Close drops its binding, and that is defined long before the
--- secure activation section builds it.
-local cancelButton
--- One secure button per BOUND palette, indexed the same way. Declared here for
--- the same reason as the three above: PaletteView:ArmedClaim reads a claim's
--- armed state off a palette's own button, and that is defined long before the
--- secure activation section builds any of them.
+-- One secure button per BOUND palette, indexed the same way. Declared here
+-- rather than in the secure activation section: PaletteView:ArmedClaim reads a
+-- claim's armed state off a palette's own button, and that is defined long
+-- before the secure activation section builds any of them.
 local secureButtons = {}
-local openedAt = 0
 
 -- A held key whose up-event never reaches us (alt-tab, /reload prompt, a
 -- taxi takeoff) would otherwise leave the palette on screen forever.
@@ -257,9 +267,10 @@ local function ApplyIconCrop(tex, icon)
 end
 ns.ApplyIconCrop = ApplyIconCrop
 
--- ns-hosted, NOT a file-scope local: this chunk sits at the Lua 5.1 200-local
--- cap and this function was the 200th -- hosting it on ns restores the last
--- slot of headroom. Paint-frequency callers; the ns lookup is free there.
+-- ns-hosted, NOT a file-scope local: as one file the module's main chunk sat
+-- at the Lua 5.1 200-local cap and this function was the 200th -- hosting it
+-- on ns restored the last slot of headroom. Paint-frequency callers; the ns
+-- lookup is free there.
 function ns.SetIconTexture(tex, icon)
     if type(icon) == "table" and icon.atlas then
         tex:SetAtlas(icon.atlas, true)
@@ -469,3 +480,12 @@ function PaletteView:Pitch()
     local _, iconSize = self:Geom()
     return iconSize + ((p and p.fanGap) or 10)
 end
+
+I.AdoptFontString, I.ApplyIconCrop = AdoptFontString, ApplyIconCrop
+I.ApplyModuleFont, I.ApplySlotVisual = ApplyModuleFont, ApplySlotVisual
+I.CANCEL_BUTTON, I.CONFIRM_BUTTON = CANCEL_BUTTON, CONFIRM_BUTTON
+I.CreateSlotWidget, I.LATCH_TIMEOUT = CreateSlotWidget, LATCH_TIMEOUT
+I.OPEN_TIMEOUT, I.PaletteView, I.PaletteViewMeta = OPEN_TIMEOUT, PaletteView, PaletteViewMeta
+I.RefreshFonts, I.secureButtons, I.SelectedZoom = RefreshFonts, secureButtons, SelectedZoom
+I.views = views
+I.broken = false

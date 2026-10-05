@@ -1,10 +1,42 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Live.lua
+--
+--  The live palette: its view, the secure header, the scroll catcher and
+--  its wheel snippet, the palette alpha, ns.Open and ns.Close.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local GetCursorPosition = GetCursorPosition
+local InCombatLockdown = InCombatLockdown
+local GetTime = GetTime
+
+local LIVE_STRATA, liveFrame, P = I.LIVE_STRATA, I.liveFrame, I.P
+local LATCH_TIMEOUT, OPEN_TIMEOUT = I.LATCH_TIMEOUT, I.OPEN_TIMEOUT
+local secureButtons, SetLiveView = I.secureButtons, I.SetLiveView
+local SetScrollCatcher = I.SetScrollCatcher
+
+local liveView
+I.liveViewSetters[#I.liveViewSetters + 1] = function(v) liveView = v end
+local scrollCatcher
+I.scrollCatcherSetters[#I.scrollCatcherSetters + 1] = function(v) scrollCatcher = v end
+local cancelButton
+I.cancelButtonSetters[#I.cancelButtonSetters + 1] = function(v) cancelButton = v end
+
+local secureHeader
+local openedAt = 0
 
 -------------------------------------------------------------------------------
 --  The live palette
 -------------------------------------------------------------------------------
 local function CreateLiveView()
     if liveView then return liveView end
-    liveView = ns.CreatePaletteView(UIParent, { frame = liveFrame, live = true })
+    SetLiveView(ns.CreatePaletteView(UIParent, { frame = liveFrame, live = true }))
     local f = liveView:GetFrame()
     f:SetFrameStrata(LIVE_STRATA)
     f:Hide()
@@ -120,7 +152,7 @@ local function EnsureScrollCatcher()
     SecureHandlerSetFrameRef(f, "ui", UIParent)
     SecureHandlerWrapScript(f, "OnMouseWheel", EnsureSecureHeader(), SNIPPET_WHEEL)
     f:Hide()
-    scrollCatcher = f
+    SetScrollCatcher(f)
     return f
 end
 
@@ -315,11 +347,11 @@ end
 
 -- The rest of what a release puts away -- the scroll catcher, the ownership
 -- stamp, and every arming gate the palette had up -- for the closes that never
--- see a key-up. Assigned further down, beside the gate pool it hides, and the
--- index of a close combat refused is left here for PLAYER_REGEN_ENABLED: every
--- frame it touches is protected, so mid-fight there is nothing it may do.
+-- see a key-up. Assigned in EUI_Quickdraw_Runtime.lua (see
+-- SetReleaseSecureState), which also keeps the index of a close combat refused
+-- for PLAYER_REGEN_ENABLED: every frame it touches is protected, so mid-fight
+-- there is nothing it may do.
 local ReleaseSecureState
-local secureCloseDirty
 
 function ns.Close()
     if not liveView then return end
@@ -342,3 +374,8 @@ function ns.Close()
     liveView.fanVisual = nil
     liveView:SetSelection(nil)
 end
+
+I.CreateLiveView, I.EnsureScrollCatcher = CreateLiveView, EnsureScrollCatcher
+I.EnsureSecureHeader, I.ReleaseEscape = EnsureSecureHeader, ReleaseEscape
+I.SetReleaseSecureState = function(f) ReleaseSecureState = f end
+I.broken = false

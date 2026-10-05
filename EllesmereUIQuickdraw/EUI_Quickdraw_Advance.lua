@@ -1,3 +1,32 @@
+if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
+-------------------------------------------------------------------------------
+--  EUI_Quickdraw_Advance.lua
+--
+--  AdvanceGrid, the fan at run time (center, strip, cancel, AdvanceFan),
+--  the hub text and ns.CreatePaletteView.
+--  Reads the earlier Quickdraw files through ns and ns._qdInternals.
+-------------------------------------------------------------------------------
+local _, ns = ...
+local I = ns._qdInternals
+-- EllesmereUIQuickdraw.lua or an earlier Quickdraw file failed to load.
+if not I or I.broken then return end
+I.broken = true
+
+local floor, min, max, abs = math.floor, math.min, math.max, math.abs
+local tonumber = tonumber
+local GetCursorPosition = GetCursorPosition
+
+local MAX_SLOTS, AdoptFontString = I.MAX_SLOTS, I.AdoptFontString
+local ApplyModuleFont, CreateSlotWidget = I.ApplyModuleFont, I.CreateSlotWidget
+local PaletteView, PaletteViewMeta = I.PaletteView, I.PaletteViewMeta
+local SelectedZoom, views, FalloffK = I.SelectedZoom, I.views, I.FalloffK
+local FalloffRatios, FAN_EDIT_MIN_ALPHA = I.FalloffRatios, I.FAN_EDIT_MIN_ALPHA
+local FAN_EDIT_MIN_SCALE, FanOffset = I.FAN_EDIT_MIN_SCALE, I.FanOffset
+local FAN_CANCEL_REACH, GRID_REACH = I.FAN_CANCEL_REACH, I.GRID_REACH
+local NEST_DIM_ALPHA, NEST_DIM_SCALE = I.NEST_DIM_ALPHA, I.NEST_DIM_SCALE
+
+local scrollCatcher
+I.scrollCatcherSetters[#I.scrollCatcherSetters + 1] = function(v) scrollCatcher = v end
 
 -- Lay the grid out and select the entry nearest the pointer. noPointer draws it
 -- evenly with nothing selected, which is what Layout and the editor want.
@@ -544,7 +573,7 @@ function ns.CreatePaletteView(parent, opts)
 
     -- A caller can hand in the frame instead of naming one. The live view does,
     -- because where a frame is created decides which addon its handlers are
-    -- billed to -- see the top of this file.
+    -- billed to -- see the top of EllesmereUIQuickdraw.lua.
     local frame = view.opts.frame
     if frame then
         frame:SetParent(parent)
@@ -621,3 +650,5 @@ function PaletteView:Widget(index)
     end
     return w
 end
+
+I.broken = false
