@@ -30,9 +30,9 @@ local allButtons, FFD, GetFFD, separatedHdrs = I.allButtons, I.FFD, I.GetFFD, I.
 local unitToButton, RebuildUnitMap = I.unitToButton, I.RebuildUnitMap
 local UpdateAllButtons, LayoutGroups = I.UpdateAllButtons, I.LayoutGroups
 local SetFramesVisible, SetRangeUpdate = I.SetFramesVisible, I.SetRangeUpdate
--- nil for a class without one: read past the guard on the table
-local playerFriendlySpell = rawget(I, "playerFriendlySpell")
-local playerRezSpell = rawget(I, "playerRezSpell")
+-- false in the table for a class without one; nil here, which the tests below expect
+local playerFriendlySpell = I.playerFriendlySpell or nil
+local playerRezSpell = I.playerRezSpell or nil
 
 local db
 I.dbSetters[#I.dbSetters + 1] = function(v) db = v end

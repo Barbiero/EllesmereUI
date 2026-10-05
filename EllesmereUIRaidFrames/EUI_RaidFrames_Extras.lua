@@ -28,12 +28,7 @@ local issecretvalue         = issecretvalue
 local CreateFrame           = CreateFrame
 local RAID_CLASS_COLORS     = RAID_CLASS_COLORS
 
-local allButtons, ApplyFont, ApplyRoleIcon = I.allButtons, I.ApplyFont, I.ApplyRoleIcon
-local defaults, DISPEL_ICON_ATLAS, GetFFD = I.defaults, I.DISPEL_ICON_ATLAS, I.GetFFD
-local IsPowerBarEnabled, ResolveHealthTexture = I.IsPowerBarEnabled, I.ResolveHealthTexture
-local GetDispelColor, GetPowerColor = I.GetDispelColor, I.GetPowerColor
-local LayoutTopNameBar, LayoutGroups = I.LayoutTopNameBar, I.LayoutGroups
-local MOVER_GROUPS = I.MOVER_GROUPS
+local allButtons, GetFFD, GetPowerColor = I.allButtons, I.GetFFD, I.GetPowerColor
 
 local db
 I.dbSetters[#I.dbSetters + 1] = function(v) db = v end

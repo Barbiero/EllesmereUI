@@ -124,7 +124,7 @@ do
     local curves = {}   -- classToken -> { curve, r, g, b (class color used) }
     local r0, g0, b0, r50, g50, b50
     function ns.GetClassReactiveCurve(s, classToken)
-        local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+        local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
         s = s or db.profile
         local c0  = s.dynamicColor0  or DEF0
         local c50 = s.dynamicColor50 or DEF50
@@ -159,7 +159,7 @@ do
     -- above: reactive 0-stop -> mid-stop below 40% health, front-loaded class
     -- weight above (75% class by 75% health, easing in the rest to 100%).
     function ns.ResolveClassReactiveColor(s, classToken, pct01)
-        local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+        local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
         s = s or db.profile
         local cc = (classToken and EllesmereUI.GetClassColor(classToken)) or GRAY
         local c0  = s.dynamicColor0  or DEF0
@@ -194,7 +194,7 @@ end
 -- strands the tint. Colors overridable via the Status Colors swatch in Extras; inline fallbacks
 -- allocate only when the DB key is missing.
 function ns._ApplyHealthBg(d, health, s, unit, connected, deadOrGhost)
-    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
     local bg = d.bg
     if connected == nil then connected = UnitIsConnected(unit) end
     if deadOrGhost == nil then deadOrGhost = UnitIsDeadOrGhost(unit) end
@@ -288,7 +288,7 @@ function ns._ApplyHealthBg(d, health, s, unit, connected, deadOrGhost)
 end
 
 local function GetHealthColor(unit, s)
-    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
     s = s or db.profile
     local mode = s.healthColorMode or "class"
 
@@ -479,7 +479,7 @@ function ns.GetBgColor(unit, s)
 end
 
 local function GetNameColor(unit, s)
-    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
     s = s or db.profile
     local mode = s.nameColorMode or "class"
     if mode == "accent" then
@@ -695,7 +695,7 @@ function ns.RF_PreviewTextColor(mode, custom, classToken, r, g, b, pToken)
 end
 
 -- Anchor a FontString to the health bar using the shared 8-position scheme. Mirrors FB.AnchorText
--- (defined later, after the friendly-boss subsystem) so heal-absorb text in the early frame-build
+-- (EUI_RaidFrames_BossFrames.lua) so heal-absorb text in the early frame-build
 -- path anchors identically. Optional width clamps long "amount"-mode values like health text.
 function ns.AnchorRFText(fs, health, pos, ox, oy, width)
     if not fs or not health then return end

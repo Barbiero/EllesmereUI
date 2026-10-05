@@ -323,7 +323,7 @@ end
 --  Update all visual elements for a single button
 -------------------------------------------------------------------------------
 local function UpdateButton(button)
-    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
     local unit = button:GetAttribute("unit")
     if not unit or not UnitExists(unit) then
         button:SetAlpha(0)
@@ -544,7 +544,7 @@ end
 
 -- Second half of the full paint (after power + absorb).
 ns._PaintButtonTail = function(button, d, s, unit)
-    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see taint note at top)
+    local EllesmereUI = ns.EllesmereUI  -- upvalue read, not a global read (see the taint note at the top of EllesmereUIRaidFrames.lua)
 
     -- Name (visibility owned by AnchorNameText, which hides it when the Top Name Bar is enabled)
     -- Level Position "Attach to Name" (either format) puts the level in front of the name,

@@ -34,8 +34,6 @@ local PP
 I.PPSetters[#I.PPSetters + 1] = function(v) PP = v end
 local containerFrame
 I.containerFrameSetters[#I.containerFrameSetters + 1] = function(v) containerFrame = v end
-local inCombat = false
-I.inCombatSetters[#I.inCombatSetters + 1] = function(v) inCombat = v end
 local framesVisible = false
 I.framesVisibleSetters[#I.framesVisibleSetters + 1] = function(v) framesVisible = v end
 

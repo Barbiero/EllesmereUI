@@ -1502,7 +1502,9 @@ ns._internals = {
     DISPEL_ICON_ATLAS = DISPEL_ICON_ATLAS, ERF = ERF, eventFrame = eventFrame, FFD = FFD,
     GetFFD = GetFFD, InitHealthBarTextures = InitHealthBarTextures,
     IsPowerBarEnabled = IsPowerBarEnabled, PixelSnap = PixelSnap,
-    playerFriendlySpell = playerFriendlySpell, playerRezSpell = playerRezSpell,
+    -- false, not nil, for a class without one: a nil entry would trip the guard below
+    playerFriendlySpell = playerFriendlySpell or false,
+    playerRezSpell = playerRezSpell or false,
     RAID_MARKER_TEXCOORDS = RAID_MARKER_TEXCOORDS, ResolveHealthTexture = ResolveHealthTexture,
     separatedHdrs = separatedHdrs, SUMMON_STATUS_ACCEPTED = SUMMON_STATUS_ACCEPTED,
     SUMMON_STATUS_DECLINED = SUMMON_STATUS_DECLINED,
