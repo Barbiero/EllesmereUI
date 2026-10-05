@@ -492,13 +492,28 @@ end
 -- (s.questOverlayColor, gold; ARTWORK 2) under completed ones
 -- (s.questOverlayDoneColor, green; ARTWORK 3). Built on first enable; off,
 -- built ones hide.
-local function StyleQuestBar(qb, s, tex, sub, c, r, g, b)
+-- A colour, its unset fields at the default (green / gold at 60%); the
+-- options swatches read it too.
+local QUEST_DONE = { r = 0, g = 127/255, b = 0, a = 0.6 }
+local QUEST_INC = { r = 1, g = 0.82, b = 0, a = 0.6 }
+function ns.XPQuestColor(s, done)
+    local d, c
+    if done then
+        d, c = QUEST_DONE, s.questOverlayDoneColor
+    else
+        d, c = QUEST_INC, s.questOverlayColor
+    end
+    c = c or d
+    return c.r or d.r, c.g or d.g, c.b or d.b, c.a or d.a
+end
+
+local function StyleQuestBar(qb, s, tex, sub, done)
     local orient = s.orientation or "HORIZONTAL"
     qb:SetStatusBarTexture(tex)
     qb:GetStatusBarTexture():SetDrawLayer("ARTWORK", sub)
     qb:SetOrientation(orient)
     qb:SetRotatesTexture(orient ~= "HORIZONTAL")
-    qb:SetStatusBarColor(c and c.r or r, c and c.g or g, c and c.b or b, c and c.a or 0.6)
+    qb:SetStatusBarColor(ns.XPQuestColor(s, done))
     qb:Show()
 end
 
@@ -517,8 +532,8 @@ function ns.ApplyXPQuestOverlay(frame, s)
         frame._questBar, frame._questDoneBar = qb, db
     end
     local tex = frame._xpArtOn == "frame" and "Interface\\BUTTONS\\WHITE8X8" or ns.ResolveDataBarTexture(s.barTexture)
-    StyleQuestBar(qb, s, tex, 2, s.questOverlayColor, 1, 0.82, 0)
-    StyleQuestBar(db, s, tex, 3, s.questOverlayDoneColor, 0, 127/255, 0)
+    StyleQuestBar(qb, s, tex, 2, false)
+    StyleQuestBar(db, s, tex, 3, true)
 end
 
 -------------------------------------------------------------------------------

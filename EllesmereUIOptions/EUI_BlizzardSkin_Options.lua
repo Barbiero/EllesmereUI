@@ -8,6 +8,8 @@ local PAGE_WINDOWSKINS   = "Blizzard Window Skins"
 local PAGE_TOOLTIPS      = "Tooltips, Menus & Popups"
 local PAGE_DRAGONRIDING  = "Dragon Riding"
 local PAGE_CHATBUBBLES   = "Chat Bubbles"
+-- A link tab: opens Quality of Life's Shifter (see pageLinks below).
+local PAGE_WINDOWMOVER   = "Window Mover"
 -- Display-only tab labels: the page names above stay the pages' identities
 -- (nav links, Unlock Mode, saved state).
 EllesmereUI.TAB_LABEL_OVERRIDES[PAGE_WINDOWSKINS] = "Window Skins"
@@ -766,7 +768,7 @@ initFrame:SetScript("OnEvent", function(self)
         local ttBuffsRow
         ttBuffsRow, h = W:DualRow(parent, y,
             { type="toggle", text="Show Player Buffs",
-              tooltip="Shows a hovered player's buffs as icons on their tooltip. Use the arrows icon to set the position, icon size and offset.",
+              tooltip="Shows a player's buffs on their tooltip.",
               disabled=ttReskinOff, disabledTooltip="Reskin Tooltip",
               getValue=function()
                   return EllesmereUIDB and EllesmereUIDB.tooltipShowBuffs or false
@@ -777,7 +779,7 @@ initFrame:SetScript("OnEvent", function(self)
                   if EllesmereUI._applyTooltipBuffs then EllesmereUI._applyTooltipBuffs() end
                   EllesmereUI:RefreshPage()  -- update the position cog disabled state
               end },
-            { type="label", text="" }
+            EllesmereUI.BlankRowCfg()
         );  y = y - h
 
         if not EllesmereUI._prebuilding then
@@ -3680,15 +3682,20 @@ initFrame:SetScript("OnEvent", function(self)
         return math.abs(y)
     end
 
+    -- WoW Forever has no skyriding: the Dragon Riding tab is not registered there
+    -- (its resident file returns at load, so the page would have no DB to read).
+    -- Window Mover, right after Window Skins, links to Quality of Life's Shifter,
+    -- so it is offered only while Quality of Life is loaded.
+    local pages = EllesmereUI.IS_FOREVER and { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES }
+        or { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES, PAGE_DRAGONRIDING }
+    if EllesmereUI._ModuleNS["EllesmereUIQoL"] then table.insert(pages, 2, PAGE_WINDOWMOVER) end
     EllesmereUI:RegisterModule("EllesmereUIBlizzardSkin", {
         title       = "Blizzard Skins+",
-        -- WoW Forever has no skyriding: the Dragon Riding tab is not registered there
-        -- (its resident file returns at load, so the page would have no DB to read).
         description = EllesmereUI.IS_FOREVER and "Themed Blizzard frames: window skins, tooltips, menus, popups, chat bubbles."
             or "Themed Blizzard frames: window skins, tooltips, menus, popups, chat bubbles, Dragon Riding HUD.",
         searchTerms = "blizzard skin character sheet tooltip menu popup dragon riding skyriding window skins lfg group finder premade queue pause game menu great vault inspect collections mounts pets toys spellbook talents adventure guide encounter journal professions guild communities calendar achievements mail catalyst gem socket item upgrade upgrades crest loot window loot toast you received popup micro menu modern delves companion brann loot roll need greed pass disenchant loot rolls pending rolls group invite invited to a group role chat bubbles bubble speech balloon",
-        pages       = EllesmereUI.IS_FOREVER and { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES }
-            or { PAGE_WINDOWSKINS, PAGE_TOOLTIPS, PAGE_CHATBUBBLES, PAGE_DRAGONRIDING },
+        pages       = pages,
+        pageLinks   = { [PAGE_WINDOWMOVER] = { module = "EllesmereUIQoL", page = "Shifter" } },
         buildPage   = function(pageName, parent, yOffset)
             if pageName == PAGE_WINDOWSKINS then
                 return BuildWindowSkinsPage(pageName, parent, yOffset)

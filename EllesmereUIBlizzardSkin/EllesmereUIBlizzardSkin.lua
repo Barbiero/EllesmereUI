@@ -1045,7 +1045,10 @@ end
         if not c then return end
         local AK = EllesmereUI.AuraKit
         local db = EllesmereUIDB or {}
-        if not db.tooltipShowBuffs then c:Hide() end
+        if not db.tooltipShowBuffs then
+            c:Hide()
+            return
+        end
         local size = db.tooltipBuffSize or 20
         local perRow = db.tooltipBuffsPerRow or 8
         local p = _TT_BUFF_POS[db.tooltipBuffPosition or "bottom"] or _TT_BUFF_POS.bottom
@@ -1065,17 +1068,19 @@ end
     local function _ttShowBuffs(guid, unit)
         local db = EllesmereUIDB
         if not (unit and db and db.tooltipShowBuffs) then return end
+        -- Its GameTooltip hooks stand down with the others under the gamepad
+        -- interface style.
+        if EllesmereUI.BlizzSkinPadStandDown() then return end
         local AK = EllesmereUI.AuraKit
-        if not AK then return end
         if not _ttBuffs then
+            -- noTooltips: no hover tooltips (they would take over GameTooltip);
+            -- AuraKit keeps the buttons mouse-free through every restyle.
             AK.styles.ttBuffs = { width = 20, height = 20, iconCrop = true, hideDurationText = true,
-                border = { 0, 0, 0, 1, size = 1 } }
+                noTooltips = true, border = { 0, 0, 0, 1, size = 1 } }
             local c = AK.CreateContainerShell(_GameTooltip, { point = { "TOPLEFT", _GameTooltip, "BOTTOMLEFT" } })
             -- Capped at 16 icons.
             AK.AddGroupToContainer(c, { key = "buffs", filter = { "HELPFUL" }, maxFrameCount = 16,
                 style = "ttBuffs",
-                -- No hover tooltips: they would take over GameTooltip.
-                extraInit = function(button) pcall(button.SetMouseMotionEnabled, button, false) end,
                 layout = { elementWidth = 20, elementHeight = 20, elementSpacing = 2, lineSpacing = 2 } })
             _ttBuffs = c
             _ttBuffsLayout()

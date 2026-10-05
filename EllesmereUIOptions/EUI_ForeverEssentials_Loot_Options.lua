@@ -108,11 +108,7 @@ _G._EUI_BuildLootFeedPage = function(pageName, parent, yOffset)
     );  y = y - h
 
     _, h = W:DualRow(parent, y,
-        Bind({ type = "dropdown", text = "Style", values = STYLES, order = STYLE_ORDER,
-               tooltip = "Box: rows with a solid background and a border.\n"
-                   .. "Accent Bar: rows with a colored bar on a background that fades out to the right.\n"
-                   .. "Icon Tray: icon tiles, with a name row for the newest gain.\n"
-                   .. "Loot Toast: dark plates with a gold frame." }, "style", function()
+        Bind({ type = "dropdown", text = "Style", values = STYLES, order = STYLE_ORDER }, "style", function()
             LF.ApplyStyle()
             if EllesmereUI._unlockActive and EllesmereUI.RepositionBarToMover then
                 EllesmereUI.RepositionBarToMover("EUI_LootFeed")
@@ -120,7 +116,7 @@ _G._EUI_BuildLootFeedPage = function(pageName, parent, yOffset)
             EllesmereUI:RefreshPage()
         end),
         Bind({ type = "slider", text = "Accent Bar Width", min = 0, max = 6, step = 1,
-               tooltip = "Width of the colored bar. 0 hides it." }, "barWidth", LF.ApplyStyle,
+               tooltip = "0 hides the accent bar." }, "barWidth", LF.ApplyStyle,
             function() return off() or style() == "BOX" or style() == "TOAST" end,
             function() return off() and "Loot Feed" or "Style" end)
     );  y = y - h
@@ -190,7 +186,7 @@ _G._EUI_BuildLootFeedPage = function(pageName, parent, yOffset)
 
     _, h = W:DualRow(parent, y,
         Slider("width", "Width", 150, 600),
-        Slider("rowHeight", "Row Height", 20, 60, "In the Icon Tray style this is the tile size.")
+        Slider("rowHeight", "Row Height", 20, 60, "Tile size in the Icon Tray style.")
     );  y = y - h
 
     _, h = W:DualRow(parent, y,
@@ -214,15 +210,14 @@ _G._EUI_BuildLootFeedPage = function(pageName, parent, yOffset)
     local displayRow
     displayRow, h = W:DualRow(parent, y,
         Bind({ type = "slider", text = "Background", min = 0, max = 100, step = 1,
-               tooltip = "Opacity of the row background. Accent Bar fades it out to the right; "
-                   .. "Loot Toast keeps its own color.",
+               tooltip = "Opacity of the row background.",
                getValue = function() return math.floor(LF.Get("bgA") * 100 + 0.5) end,
                setValue = function(v)
                    LF.Cfg().bgA = v / 100
                    LF.ApplyStyle()
                end }),
         Bind({ type = "slider", text = "Border Size", min = 0, max = 4, step = 1,
-               tooltip = "0 hides the border. Loot Toast uses it for its gold frame." }, "borderSize", function()
+               tooltip = "0 hides the border." }, "borderSize", function()
             LF.ApplyStyle()
             EllesmereUI:RefreshPage()
         end, function() return off() or style() == "BAR" end,
@@ -240,9 +235,7 @@ _G._EUI_BuildLootFeedPage = function(pageName, parent, yOffset)
     end
 
     _, h = W:DualRow(parent, y,
-        Toggle("qualityBorder", "Quality Borders",
-            "Colors item rows by item quality: the border, the accent bar (Accent Bar) or the icon frame (Loot Toast).",
-            LF.ApplyStyle,
+        Toggle("qualityBorder", "Quality Borders", "Colors item rows by item quality.", LF.ApplyStyle,
             function()
                 if off() or not LF.Get("items") then return true end
                 return style() ~= "BAR" and style() ~= "TOAST" and LF.Get("borderSize") == 0

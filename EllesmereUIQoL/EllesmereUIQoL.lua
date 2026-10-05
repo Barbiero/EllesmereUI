@@ -1359,11 +1359,15 @@ qolFrame:SetScript("OnEvent", function(self)
 
     ---------------------------------------------------------------------------
     --  Auto Select Single Gossip -- picks the only gossip option. Skipped when
-    --  the NPC offers a quest or has one ready to turn in. GOSSIP_SHOW is
-    --  registered only while the toggle is on.
+    --  the NPC offers a quest or has one ready to turn in. GOSSIP_SHOW and
+    --  GOSSIP_CLOSED are registered only while the toggle is on.
     ---------------------------------------------------------------------------
     do
         local gossipFrame
+        -- Page and option pairs picked in this conversation (cleared when it
+        -- ends): each is picked once, so two single-option pages that lead to
+        -- each other cannot flip back and forth.
+        local picked = {}
 
         local function OnGossipShow()
             local db = EllesmereUIDB
@@ -1372,6 +1376,11 @@ qolFrame:SetScript("OnEvent", function(self)
 
             local options = C_GossipInfo.GetOptions()
             if not options or #options ~= 1 then return end
+            local option = options[1]
+            -- A locked or unavailable option would only fail again.
+            if option.status ~= Enum.GossipOptionStatus.Available then return end
+            local key = (C_GossipInfo.GetText() or "") .. "\0" .. (option.gossipOptionID or option.name)
+            if picked[key] then return end
 
             -- Trivial quests only stay ignorable if Quest Tracker auto-accept also ignores them.
             local qtDB = _G._EQT_DB
@@ -1388,20 +1397,32 @@ qolFrame:SetScript("OnEvent", function(self)
 
             -- Blizzard already auto-selects this case itself.
             if #active == 0 and C_GossipInfo.GetNumAvailableQuests() == 0
-                and options[1].selectOptionWhenOnlyOption then return end
+                and option.selectOptionWhenOnlyOption then return end
 
-            C_GossipInfo.SelectOptionByIndex(options[1].orderIndex)
+            picked[key] = true
+            C_GossipInfo.SelectOptionByIndex(option.orderIndex)
+        end
+
+        local function OnGossipEvent(_, event)
+            if event == "GOSSIP_CLOSED" then
+                wipe(picked)
+            else
+                OnGossipShow()
+            end
         end
 
         EllesmereUI._applyAutoGossip = function()
             if EllesmereUIDB and EllesmereUIDB.autoGossip then
                 if not gossipFrame then
                     gossipFrame = CreateFrame("Frame")
-                    gossipFrame:SetScript("OnEvent", OnGossipShow)
+                    gossipFrame:SetScript("OnEvent", OnGossipEvent)
                 end
                 gossipFrame:RegisterEvent("GOSSIP_SHOW")
+                gossipFrame:RegisterEvent("GOSSIP_CLOSED")
             elseif gossipFrame then
                 gossipFrame:UnregisterEvent("GOSSIP_SHOW")
+                gossipFrame:UnregisterEvent("GOSSIP_CLOSED")
+                wipe(picked)
             end
         end
         EllesmereUI._applyAutoGossip()

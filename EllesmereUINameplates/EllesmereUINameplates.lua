@@ -157,6 +157,11 @@ local defaults = {
     -- is an empty list (EllesmereUINameplates_DebuffColors.lua).
     debuffColorsEnabled = false,
     debuffColorsPlayerOnly = true,
+    -- Debuff Coloring "Color Border": the color goes on the plate's border
+    -- instead of its health bar, plus whole pixels added to a Basic or Custom
+    -- Solid border while it shows.
+    debuffColorsBorder = false,
+    debuffColorsBorderExtra = 0,
     -- Blizzard Style (Global Settings > Style): the stock nameplate's bar,
     -- background, selection and cast bar art on our plates with every feature
     -- intact. Default OFF; reload-gated.
@@ -5162,6 +5167,9 @@ function ns.RefreshBorder()
     -- Custom Border on Aura Icons: the aura styles carry the custom border, so a border
     -- edit restyles them (fingerprint-gated). One field read while off.
     if p and p.auraIconCustomBorder and ns.NPC_ReloadAll then ns.NPC_ReloadAll() end
+    -- Debuff Coloring's Color Border is drawn from the border's own numbers
+    -- (fingerprint-gated, one profile read while off).
+    if ns.DebuffColors_RequestRefresh then ns.DebuffColors_RequestRefresh() end
 end
 ns.RefreshBorderStyle = ns.RefreshBorder
 ns.RefreshSimpleBorderSize = ns.RefreshBorder
@@ -11662,7 +11670,6 @@ function npAddon:OnInitialize()
     )
 end
 function npAddon:OnEnable()
-    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
     -- Re-read profile: PreSeedSpecProfile may have re-pointed db.profile between OnInitialize and OnEnable.
     p = ENP.db.profile
     -- A profile already on a stock style gets its one-time bar texture seed
@@ -11716,6 +11723,9 @@ function npAddon:OnEnable()
     ns.NP_RefreshThreatPctFlag()
     ns.NP_RefreshThreatColorFlag()
     if ns.RangeText_Apply then ns.RangeText_Apply() end
+    -- Debuff coloring last: it reads the final profile, and Color Border reads
+    -- the plate style, which latches for the session on its first read.
+    if ns.DebuffColors_Refresh then ns.DebuffColors_Refresh() end
 end
 
 -------------------------------------------------------------------------------

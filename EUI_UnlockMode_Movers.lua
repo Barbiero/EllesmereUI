@@ -22,6 +22,14 @@ local DeselectMover, GetActionBarVisualSize, SortMoverFrameLevels = UM.DeselectM
 
 local _mouseHeld = false       -- true while left mouse button is held down anywhere
 
+-- True while any part of a frame's rect reads secret: all of it when the frame
+-- rides an engine aura container, its size alone when only one edge does (a
+-- Blizzard Style unit frame's box around its aura stack). Nothing measures it then.
+local function RectSecret(f)
+    return issecretvalue and (issecretvalue(f:GetLeft()) or issecretvalue(f:GetTop())
+        or issecretvalue(f:GetWidth()) or issecretvalue(f:GetHeight())) or false
+end
+
 local function CreateMover(barKey)
     local elem = registeredElements[barKey]
     local existing = movers[barKey]
@@ -217,8 +225,9 @@ local function CreateMover(barKey)
 
     -- Determine if this element supports resizing
     local canResize = not (elem and elem.noResize)
-    -- Determine if this element can be anchored to other elements
-    local canAnchorTo = not (elem and elem.noAnchorTo)
+    -- Determine if this element can be anchored to other elements (an element
+    -- that places itself, ownsPosition, takes no link either)
+    local canAnchorTo = not (elem and (elem.noAnchorTo or elem.ownsPosition))
 
     -- Grow direction: action bars 1-8 and CDM bars (both horizontal and vertical)
     local _GROW_KEYS = {
@@ -329,8 +338,7 @@ local function CreateMover(barKey)
             -- A bar riding an engine aura container reports a secret rect
             -- outside unlock mode (the follow provider is inert inside it, so
             -- the bar rests plain there): nothing to attach to yet.
-            local bl0 = b:GetLeft()
-            if issecretvalue and issecretvalue(bl0) then return end
+            if RectSecret(b) then return end
             local s = b:GetEffectiveScale()
             local uiS = UIParent:GetEffectiveScale()
             local elemScale = s / uiS
@@ -410,7 +418,8 @@ local function CreateMover(barKey)
 
     -- Update the name label color based on anchor state
     local function RefreshAnchoredIdle()
-        local ai = GetAnchorInfo(barKey)
+        -- A link on an element that places itself (ownsPosition) is inert.
+        local ai = not (elem and elem.ownsPosition) and GetAnchorInfo(barKey) or nil
         isAnchored = ai ~= nil or ns.IsMoverPosLocked(barKey)
         nameFS:SetText(EllesmereUI.L(label))
         if isAnchored then
@@ -1227,9 +1236,9 @@ local function CreateMover(barKey)
         -- re-apply its anchor now -- the follow provider is inert in unlock
         -- mode, so that places it absolutely -- and sync from the plain rect.
         -- If the rect has not resolved yet, sync again next frame.
-        if issecretvalue and issecretvalue(b:GetLeft()) then
+        if RectSecret(b) then
             if EllesmereUI.ReapplyOwnAnchor then EllesmereUI.ReapplyOwnAnchor(bk) end
-            if issecretvalue(b:GetLeft()) then
+            if RectSecret(b) then
                 self:Hide()
                 local n = self._secretResync or 0
                 if n < 2 then
@@ -1446,8 +1455,8 @@ local function CreateMover(barKey)
                 if not lockY then barY0 = PPd.SnapForES(barY0, bS0) end
             end
             pcall(function()
-                bar0:ClearAllPoints()
-                bar0:SetPoint("TOPLEFT", UIParent, "TOPLEFT", barX0, barY0)
+                EllesmereUI.ClearFramePoints(bar0)
+                EllesmereUI.SetFramePoint(bar0, "TOPLEFT", UIParent, "TOPLEFT", barX0, barY0)
             end)
             -- Element follow-up to the one-point placement above (an element
             -- whose rect needs a second anchor -- main chat's size corner --
@@ -1535,8 +1544,8 @@ local function CreateMover(barKey)
                     if not lockY then barY = PPd.SnapForES(barY, bS) end
                 end
                 pcall(function()
-                    bar:ClearAllPoints()
-                    bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", barX, barY)
+                    EllesmereUI.ClearFramePoints(bar)
+                    EllesmereUI.SetFramePoint(bar, "TOPLEFT", UIParent, "TOPLEFT", barX, barY)
                 end)
                 -- Anchor mover directly to bar TOPLEFT for pixel-perfect overlay
                 s:ClearAllPoints()
@@ -3789,7 +3798,8 @@ local function CreateMover(barKey)
         -- The minimap and kin carry it while EllesmereUI owns their position. Only a
         -- Blizzard-owned position must stay out, or the two fight over the frame.
         local NO_SCREEN_ANCHOR = { QueueStatus = true }   -- Blizzard Edit Mode owns it
-        if not NO_SCREEN_ANCHOR[barKey] and not ns.IsMoverPosLocked(barKey) then
+        if not NO_SCREEN_ANCHOR[barKey] and not ns.IsMoverPosLocked(barKey)
+           and not (registeredElements[barKey] and registeredElements[barKey].ownsPosition) then
             -- Primary link to a screen edge. The capture comes first: on an
             -- offset-less link ApplyAnchorPosition's side-snap branch stores the FLUSH
             -- offsets (0/0) before its no-move capture runs, and the next apply would

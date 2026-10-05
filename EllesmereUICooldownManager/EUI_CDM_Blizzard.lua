@@ -8,7 +8,7 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 local _, ns = ...
 local I = ns._internals
--- Dormant main file (Ayije_CDM conflict guard) or an earlier CDM file failed to load.
+-- The main file or an earlier CDM file failed to load.
 if not I or I.broken then return end
 I.broken = true
 
@@ -175,7 +175,7 @@ local _editModePolicyApplied = false
 -- deliberately repeats every login until the layout is correct: going quiet would leave CDM
 -- misbehaving unexplained. CDM must be OFF while the user follows the steps -- this addon hides
 -- Blizzard's cooldown viewers, and a hidden system cannot be selected in Edit Mode; the confirm
--- button does that step (same disable+reload idiom as the conflict guard at the top of this file). Step 6 lives in the text because once CDM is disabled nothing of ours runs to remind them to re-enable it.
+-- button does that step. Step 6 lives in the text because once CDM is disabled nothing of ours runs to remind them to re-enable it.
 local function ShowManualEditModeFixPopup()
     C_Timer.After(0, function()
         if not (EllesmereUI and EllesmereUI.ShowConfirmPopup) then return end
