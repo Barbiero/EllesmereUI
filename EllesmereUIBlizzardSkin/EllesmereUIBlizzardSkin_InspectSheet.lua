@@ -25,6 +25,7 @@ local EUI_ALL_SLOTS = {
     "InspectHandsSlot", "InspectWaistSlot", "InspectLegsSlot", "InspectFeetSlot",
     "InspectTrinket0Slot", "InspectTrinket1Slot", "InspectFinger0Slot", "InspectFinger1Slot",
     "InspectMainHandSlot", "InspectSecondaryHandSlot",
+    "InspectRangedSlot",  -- WoW Forever only (nil on retail)
 }
 
 -- Slot grid layout mapping
@@ -47,6 +48,7 @@ local slotGridMap = {
     InspectTrinket1Slot = {col = 1, row = 7},
     InspectMainHandSlot = {slot = "MainHand"},
     InspectSecondaryHandSlot = {slot = "SecondaryHand"},
+    InspectRangedSlot = {slot = "Ranged"},  -- WoW Forever only
 }
 
 -- Drop every label a previous styling pass left on this slot. The widgets
@@ -77,6 +79,9 @@ local function EUI_UpdateSlotStyle(slotName, slotID, textOverlayFrame, isRightCo
     EUI_ClearSlotLabels(slot)
 
     local skipLabels = (slotName == "InspectShirtSlot" or slotName == "InspectTabardSlot")
+    -- WoW Forever's ranged slot sits right of the off hand, so there the off
+    -- hand's labels stack above it (the ranged slot's go right, as by default).
+    local above = slotName == "InspectSecondaryHandSlot" and InspectRangedSlot ~= nil
 
     local inspectUnit = InspectFrame and InspectFrame.unit
     if not inspectUnit then return end
@@ -109,7 +114,9 @@ local function EUI_UpdateSlotStyle(slotName, slotID, textOverlayFrame, isRightCo
             ilvlText:SetJustifyH("CENTER")
             ilvlText:ClearAllPoints()
 
-            if slotName == "InspectMainHandSlot" then
+            if above then
+                ilvlText:SetPoint("BOTTOM", slot, "TOP", 0, 3)
+            elseif slotName == "InspectMainHandSlot" then
                 ilvlText:SetPoint("CENTER", slot, "LEFT", -15, 10)
             elseif slotName == "InspectSecondaryHandSlot" then
                 ilvlText:SetPoint("CENTER", slot, "RIGHT", 15, 10)
@@ -174,7 +181,11 @@ local function EUI_UpdateSlotStyle(slotName, slotID, textOverlayFrame, isRightCo
             enchantLabel:ClearAllPoints()
 
             -- Justified toward its slot, so a capped name hugs it
-            if slotName == "InspectMainHandSlot" then
+            if above then
+                local lvlText = GetFFD(slot).iLvlText
+                enchantLabel:SetPoint("BOTTOM", lvlText or slot, "TOP", 0, lvlText and 1 or 3)
+                enchantLabel:SetJustifyH("CENTER")
+            elseif slotName == "InspectMainHandSlot" then
                 enchantLabel:SetPoint("RIGHT", slot, "LEFT", -5, -5)
                 enchantLabel:SetJustifyH("RIGHT")
             elseif slotName == "InspectSecondaryHandSlot" then
@@ -196,7 +207,9 @@ local function EUI_UpdateSlotStyle(slotName, slotID, textOverlayFrame, isRightCo
             hoverFrame:SetSize(20, 20)
             hoverFrame:SetFrameLevel(textOverlayFrame:GetFrameLevel() + 20)
             hoverFrame:ClearAllPoints()
-            if slotName == "InspectMainHandSlot" then
+            if above then
+                hoverFrame:SetPoint("CENTER", enchantLabel, "CENTER", 0, 0)
+            elseif slotName == "InspectMainHandSlot" then
                 hoverFrame:SetPoint("RIGHT", slot, "LEFT", -5, -5)
             elseif slotName == "InspectSecondaryHandSlot" then
                 hoverFrame:SetPoint("LEFT", slot, "RIGHT", 5, -5)
@@ -232,7 +245,9 @@ local function EUI_UpdateSlotStyle(slotName, slotID, textOverlayFrame, isRightCo
             upgradeLabel:SetJustifyH("CENTER")
             upgradeLabel:ClearAllPoints()
 
-            if slotName == "InspectMainHandSlot" then
+            if above then
+                upgradeLabel:SetPoint("LEFT", GetFFD(slot).iLvlText, "RIGHT", 3, 0)
+            elseif slotName == "InspectMainHandSlot" then
                 upgradeLabel:SetPoint("RIGHT", GetFFD(slot).iLvlText, "LEFT", -3, 0)
             elseif slotName == "InspectSecondaryHandSlot" then
                 upgradeLabel:SetPoint("LEFT", GetFFD(slot).iLvlText, "RIGHT", 3, 0)

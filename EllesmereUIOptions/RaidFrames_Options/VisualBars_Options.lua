@@ -1511,8 +1511,7 @@ local function BuildVisualBars(parent, y, W, onSection, EYE)
         }
         if EllesmereUI.IS_FOREVER then
             table.insert(nameRows, 1, { type="dropdown", label="Name Format",
-                values={ first = "First Name", last = "Last Name", full = "First and Last" },
-                order={ "first", "last", "full" },
+                values=EllesmereUI.NAME_FORMAT_VALUES, order=EllesmereUI.NAME_FORMAT_ORDER,
                 get=function() return SVal("nameFormat", "full") end,
                 set=function(v) SSet("nameFormat", v) end })
         end

@@ -4,8 +4,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --  List bag display (bagDisplayMode = "list"): one row per bag slot, grouped by category
 --  with optional subtype sub-sections, and a column header bar on the bag
 --  frame (click = sort, drag = reorder, right-click = add/remove columns).
---  Mode is latched per session (EUI_Bags.IsListMode): in grid mode nothing
---  here is ever built. The bank's List View (bankListView) reuses the row,
+--  Mode is latched per session (EUI_Bags.IsListMode): in the Grid and Compact
+--  displays nothing here is ever built. The bank's List View (bankListView) reuses the row,
 --  column and header bar pieces via ns.
 -------------------------------------------------------------------------------
 local ns = select(2, ...)
@@ -730,7 +730,7 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
             local z = round and ROUND_ZOOM or (BP().bagItemIconZoom or 0.08)
             icon:SetTexCoord(z, 1 - z, z, 1 - z)
             icon:SetDesaturated(info.isLocked or (BP().bagDesaturateJunkItems and q == 0)
-                or (EUI_CategoryManager and EUI_CategoryManager:IsJunk(info.itemID, q)) or false)
+                or (BP().bagJunkMarker == true and EUI_CategoryManager:IsJunk(info.itemID, q)) or false)
             if EUI._BagsItemUnusable(data.bag, data.slot, data.itemLink, info.itemID) then
                 icon:SetVertexColor(1, 0.1, 0.1)
             else
@@ -795,6 +795,14 @@ local function RenderRow(btn, data, cols, rowW, x, y, stripe)
 end
 ns.RenderListRow = RenderRow
 
+-- Mark mode: the row pool it hit-tests, and the one row it toggled
+ns.ListRows = _rows
+function ns.ListPaintJunk(btn, info)
+    local q = info.quality or 1
+    btn._lvIcon:SetDesaturated(info.isLocked or (BP().bagDesaturateJunkItems and q == 0)
+        or EUI_CategoryManager:IsJunk(info.itemID, q) or false)
+end
+
 -- Empty bag slot row (OneBag / MultiBag); clicking or dropping an item
 -- places it in that slot.
 local function RenderEmptyRow(btn, cols, d, rowW, x, y, stripe)
@@ -856,8 +864,9 @@ end
 -- allItems (All Items view: honour Hide in All Items), pinned (pinned set:
 -- duplicate pinned items into a Pinned section at the top), slotView ("one" =
 -- OneBag, "multi" = MultiBag: bag sections in slot order like the grid),
--- recent (recent itemID set: Recent section in slot views), emptySlots (slot
--- views: empty slots as rows; nil while searching).
+-- recent (recent itemID set: Recent section in slot views), recentOnly (the
+-- Recent Items tab: every item in that one section, newest first), emptySlots
+-- (slot views: empty slots as rows; nil while searching).
 function ns.RenderListView(items, opts)
     local child = EUI_Bags._scrollChild
     local cats = EUI_CategoryManager:GetCategories()
@@ -867,7 +876,15 @@ function ns.RenderListView(items, opts)
     -- Bucket: section key (category index, "pinned" or "junk") -> sub label -> items.
     -- Slot views key sections by bag ID (0-5), or "main" for OneBag's bags 0-4.
     local slotView = opts.slotView
+    -- One Junk section: the Junk category (under its own name) while the Junk
+    -- Marker is on, else every grey item
+    local junkOn = BP().bagJunkMarker == true
     local junkLabel = L("Junk")
+    if junkOn then
+        for _, c in ipairs(cats) do
+            if c.isJunk then junkLabel = c.name; break end
+        end
+    end
     local buckets, order = {}, {}
     local function GetBucket(key)
         local b = buckets[key]
@@ -909,17 +926,15 @@ function ns.RenderListView(items, opts)
             if pinnedSet and ns.IsItemPinned(pinnedSet, d.itemLink, d.info.itemID) then
                 Add("pinned", "", d)
             end
-            if recentSet and recentSet[d.info.itemID]
-               and not ns.JunkHiddenFromRecent(d.info.itemID, d.info.quality) then
+            if recentSet and recentSet[d.info.itemID] then
                 Add("recent", "", d)
             end
-            if slotView then
+            if opts.recentOnly then
+                Add("recent", "", d)
+            elseif slotView then
                 Add(BagKey(d.bag), "", d)
             elseif cat and not hidden[cat._defaultName] and not (cat.groupName and hidden[cat.groupName]) then
-                -- Grey items already fold into the list's own "Junk" section; send
-                -- the Junk Marker category's items (grey + player-marked) there too
-                -- so there is a single Junk section, not two.
-                local key = (d._lvQuality == 0 or cat.isJunk) and "junk" or ci
+                local key = (junkOn and cat.isJunk or (not junkOn and d._lvQuality == 0)) and "junk" or ci
                 Add(key, key == "junk" and "" or d._lvSub, d)
             end
         end
@@ -1008,7 +1023,8 @@ function ns.RenderListView(items, opts)
                 h, subCollapsed = PlaceSection(secKey .. "/" .. sl.label, sl.label, "(" .. #sl .. ")", x, y, rowW, true)
                 y = y - h
             end
-            if not subCollapsed then table.sort(sl, rowCompare) end
+            -- Recent Items: newest pickup first, whatever the column sort
+            if not subCollapsed then table.sort(sl, b.key == "recent" and ns.RecentCompare or rowCompare) end
             for i, d in ipairs(subCollapsed and _emptyP or sl) do
                 local btn = GetOrCreateRow(_rowsUsed + 1)
                 if btn then  -- nil in combat (see GetOrCreateRow)

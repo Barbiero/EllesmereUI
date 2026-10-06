@@ -1,10 +1,12 @@
 if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)
 -------------------------------------------------------------------------------
 --  EllesmereUIBags_Grid.lua
---  Grid bag display (bagDisplayMode = "grid"): the secure item-slot factory,
---  RenderButton, and the grid layout pass of EUI_Bags:RefreshInventory.
---  Mode is latched per session (EUI_Bags.IsListMode): in list mode nothing
---  here is ever built.
+--  Grid and Compact bag displays (bagDisplayMode = "grid" / "compact"): the
+--  secure item-slot factory, RenderButton, and the layout pass of
+--  EUI_Bags:RefreshInventory. Compact hands the pass's groups to
+--  EllesmereUIBags_Compact.lua instead of drawing them in grid rows.
+--  Mode is latched per session (EUI_Bags.IsListMode / IsCompactMode): in
+--  list mode nothing here is ever built.
 -------------------------------------------------------------------------------
 local ns = select(2, ...)
 if not (ns and ns.GetSelection) then return end
@@ -33,39 +35,13 @@ local UpdatePawnArrow = ns.UpdatePawnArrow
 local IsItemPinned = ns.IsItemPinned
 local PreCacheSortFields = ns.PreCacheSortFields
 local VisualSortCompare = ns.VisualSortCompare
+local RecentCompare = ns.RecentCompare
 local MergeDuplicates = ns.MergeDuplicates
 local ApplySavedOrder = ns.ApplySavedOrder
-
--- Junk category ordering: most valuable first by vendor sell value (unit sell
--- price x stack count), with the normal visual order as a stable tiebreak.
--- Callers must have run PreCacheSortFields first (the tiebreak relies on it).
-local function SortJunkByVendor(items)
-    for _, d in ipairs(items) do
-        -- Sell price (GetItemInfo index 11) from the item LINK, not a bare
-        -- itemID: C_Item.GetItemInfo (what GetItemInfo aliases here) returns nil
-        -- for a bare id on this client, so the id form left every value at 0 and
-        -- the sort fell back to visual order. The link form is what List view's
-        -- Sell Price column uses, and PreCacheSortFields (run just above) has
-        -- already warmed it.
-        local price = (d.itemLink and select(11, GetItemInfo(d.itemLink))) or 0
-        d._junkSell = price * ((d.info and d.info.stackCount) or 1)
-    end
-    table.sort(items, function(a, b)
-        if a._junkSell ~= b._junkSell then return a._junkSell > b._junkSell end
-        return VisualSortCompare(a, b)
-    end)
-end
-
--- Junk coin badge placement: each corner anchored to the matching button corner,
--- nudged a few px OUTSIDE so it overhangs the frame like a badge. Corner is picked
--- in the Junk cog; no per-user offsets.
-local JUNK_COIN_CORNER = {
-    TOPLEFT     = { "TOPLEFT",     "TOPLEFT",     -3,  3 },
-    TOPRIGHT    = { "TOPRIGHT",    "TOPRIGHT",     3,  3 },
-    BOTTOMLEFT  = { "BOTTOMLEFT",  "BOTTOMLEFT",  -3, -3 },
-    BOTTOMRIGHT = { "BOTTOMRIGHT", "BOTTOMRIGHT",  3, -3 },
-}
-
+-- Junk Marker state, read once per RenderGridView pass for every RenderButton
+local junkOn = false
+-- Compact display state, read once per RenderGridView pass
+local compactOn = false
 local BuildExpansionBuckets = ns.BuildExpansionBuckets
 local BuildSlotBuckets = ns.BuildSlotBuckets
 -- Section label for a bag ID (MultiBag grid and list)
@@ -151,6 +127,28 @@ local function GetOrCreateSlot(idx)
 end
 ns.GetOrCreateSlot = GetOrCreateSlot
 
+-- A slot's desaturation (locked, grey with the option on, Junk Marker junk)
+-- and its Junk Marker coin badge, lifted past the bottom-left corner.
+local function PaintJunkState(btn, info, markerJunk)
+    local quality = info.quality or 1
+    SetItemButtonDesaturated(btn, info.isLocked or (BP().bagDesaturateJunkItems and quality == 0) or markerJunk)
+    if markerJunk then
+        if not btn._junkCoin then
+            btn._junkCoin = ns.JunkRoundTex(btn, "OVERLAY", 6, 133784)
+            btn._junkCoin:SetSize(12, 12)
+            btn._junkCoin:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", -3, -3)
+        end
+        btn._junkCoin:Show()
+    elseif btn._junkCoin then
+        btn._junkCoin:Hide()
+    end
+end
+
+-- Mark mode repaints the one slot it toggled
+function ns.GridPaintJunk(btn, info)
+    PaintJunkState(btn, info, EUI_CategoryManager:IsJunk(info.itemID, info.quality or 1))
+end
+
 -------------------------------------------------------------------------------
 --  RenderButton
 -------------------------------------------------------------------------------
@@ -216,41 +214,8 @@ local function RenderButton(btn, data, _, col, row, startX, currentY, _, interac
         btn:SetItemButtonCount(data._mergedCount or data.info.stackCount)
         btn._isMerged = data._mergedCount and true or nil
 
-        -- Desature: 1) locked items 2) junk items. "Junk" means grey (when the
-        -- standalone Desaturate option is on) OR anything the Junk Marker feature
-        -- classifies as junk (grey + player-marked). EUI_CategoryManager:IsJunk
-        -- returns false whenever the feature is off, so marker items only react
-        -- while it is enabled.
         local quality = data.info.quality or 1
-        local markerJunk = EUI_CategoryManager and EUI_CategoryManager:IsJunk(data.info.itemID, quality)
-        local isJunk = (BP().bagDesaturateJunkItems and quality == 0) or markerJunk
-        SetItemButtonDesaturated(btn, data.info.isLocked or isJunk)
-
-        -- Coin corner marker on junk items so marked (non-grey) items read as
-        -- junk at a glance. Lazily created once per pooled button, shown/hidden
-        -- per render.
-        if markerJunk then
-            if not btn._junkCoin then
-                local c = btn:CreateTexture(nil, "OVERLAY", nil, 6)
-                c:SetTexture(133784)  -- INV_Misc_Coin_01
-                c:SetTexCoord(0.12, 0.88, 0.12, 0.88)  -- crop for a clean round edge
-                c:SetSize(12, 12)
-                -- Rounded badge to match the rounded header coin button.
-                local cmask = btn:CreateMaskTexture()
-                cmask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-                cmask:SetAllPoints(c)
-                c:AddMaskTexture(cmask)
-                btn._junkCoin = c
-            end
-            -- Re-anchor each render so the chosen corner (and its outward lift)
-            -- applies live when the cog option changes.
-            local a = JUNK_COIN_CORNER[BP().bagJunkCoinCorner] or JUNK_COIN_CORNER.BOTTOMLEFT
-            btn._junkCoin:ClearAllPoints()
-            btn._junkCoin:SetPoint(a[1], btn, a[2], a[3], a[4])
-            btn._junkCoin:Show()
-        elseif btn._junkCoin then
-            btn._junkCoin:Hide()
-        end
+        PaintJunkState(btn, data.info, junkOn and EUI_CategoryManager:IsJunk(data.info.itemID, quality))
 
         local filtered = data.info.isFiltered
         btn:SetAlpha(filtered and 0.2 or 1)
@@ -460,6 +425,36 @@ local function RenderButton(btn, data, _, col, row, startX, currentY, _, interac
         if data.info and btn.UpdateTooltip then btn:UpdateTooltip() else GameTooltip:Hide() end
     end
 end
+ns.RenderButton = RenderButton  -- shared with EllesmereUIBags_Compact.lua
+
+-- "Hide" link on a Pinned / Recent header. Headers are pooled across views, so
+-- the link reads the setting it turns off (_dbKey) and its tooltip (_tooltip)
+-- from fields that every pass showing it sets.
+local function GetHeaderHideButton(hdr)
+    local hb = hdr._hideBtn
+    if hb then return hb end
+    hb = CreateFrame("Button", nil, hdr)
+    hb:SetSize(30, 16)
+    hb._fs = hb:CreateFontString(nil, "OVERLAY")
+    SetBagFont(hb._fs, 9)
+    hb._fs:SetAllPoints()
+    hb._fs:SetText(EllesmereUI.L("Hide"))
+    hb._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
+    hb:SetScript("OnEnter", function(self)
+        self._fs:SetTextColor(1, 1, 1, 0.9)
+        EUI.ShowWidgetTooltip(self, self._tooltip)
+    end)
+    hb:SetScript("OnLeave", function(self)
+        self._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
+        EUI.HideWidgetTooltip()
+    end)
+    hb:SetScript("OnClick", function(self)
+        BP()[self._dbKey] = false
+        EUI_Bags:RefreshInventory()
+    end)
+    hdr._hideBtn = hb
+    return hb
+end
 
 -------------------------------------------------------------------------------
 --  Grid layout pass. Called by RefreshInventory after the shared scan,
@@ -467,6 +462,8 @@ end
 -------------------------------------------------------------------------------
 function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, gridW, gridPadX, showPinned, pinnedSet)
     local selectedCategoryIndex, selectedGroupName = ns.GetSelection()
+    junkOn = BP().bagJunkMarker == true
+    compactOn = EUI_Bags.IsCompactMode() == true
 
     -- 5. Render grid into scroll child
     for _, btn in pairs(itemSlots) do
@@ -488,6 +485,12 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         SetBagFont(hdr._label, catTitleSize)
         SetBagFont(hdr._hint, catTitleSize - 1)
     end
+    -- The user category's Edit | Delete row sits on the scroll child, outside
+    -- its header; the single category view shows it again when needed
+    do
+        local editDelete = _catHeaders[1] and _catHeaders[1]._editDeleteFrame
+        if editDelete then editDelete:Hide() end
+    end
     for _, sh in pairs(_expSubHeaders) do
         sh:Hide()
     end
@@ -499,6 +502,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
     local startX = gridPadX + 5
     local curY = -6
     local slotIdx = 0
+    if compactOn then ns.CompactBagsBegin() end
 
     -- Lightweight empty pad pool (no ItemButton template, just bg + border)
     if not EUI_Bags._emptyPads then EUI_Bags._emptyPads = {} end
@@ -568,7 +572,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
     -- and assignment pools; only the coordinates differ from the full-row path.
     local armorySlotGrouping = ArmorySlotGroupingEnabled()
     local RenderCompactSlotBuckets
-    if BP().bagCompactArmorySlotGroups and armorySlotGrouping then
+    if not compactOn and BP().bagCompactArmorySlotGroups and armorySlotGrouping then
         RenderCompactSlotBuckets = function(buckets, subHeaderIdx, assignCatKey)
             local stride = SLOT_SIZE + SPACING
             local usableWidth = columns * stride - SPACING
@@ -699,7 +703,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
     end
 
     local RenderSlotBuckets
-    if armorySlotGrouping then
+    if armorySlotGrouping and not compactOn then
         RenderSlotBuckets = function(buckets, subHeaderIdx, assignCatKey)
             if RenderCompactSlotBuckets then
                 return RenderCompactSlotBuckets(buckets, subHeaderIdx, assignCatKey)
@@ -790,6 +794,9 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 end
             end
             if #pinItems > 0 then pinItems = MergeDuplicates(pinItems) end
+            if compactOn then
+                ns.CompactBagsSection(EllesmereUI.L("Pinned Items"), pinItems, "pinned")
+            else
             headerIdx = headerIdx + 1
             local pinHdr = GetOrCreateCatHeader(headerIdx)
             pinHdr:SetParent(child)
@@ -799,30 +806,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local showTips = BP().bagShowPinRecentTips ~= false
             pinHdr._label:SetText(EllesmereUI.L("Pinned Items"))
             pinHdr._hint:SetText(showTips and EllesmereUI.L("(Middle Click to Add or Remove)") or "")
-            if not pinHdr._hideBtn then
-                local hb = CreateFrame("Button", nil, pinHdr)
-                hb:SetSize(30, 16)
-                hb._fs = hb:CreateFontString(nil, "OVERLAY")
-                SetBagFont(hb._fs, 9)
-                hb._fs:SetAllPoints()
-                hb._fs:SetText(EllesmereUI.L("Hide"))
-                hb._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                hb:SetScript("OnEnter", function(self)
-                    self._fs:SetTextColor(1, 1, 1, 0.9)
-                    EUI.ShowWidgetTooltip(self, "Hides Pinned Items. Re-show in settings.")
-                end)
-                hb:SetScript("OnLeave", function(self)
-                    self._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                    EUI.HideWidgetTooltip()
-                end)
-                pinHdr._hideBtn = hb
-            end
+            local pinHide = GetHeaderHideButton(pinHdr)
+            pinHide._dbKey = "bagPinnedInOneBag"
+            pinHide._tooltip = "Hides Pinned Items. Re-show in settings."
             pinHdr._hideBtn:ClearAllPoints()
             pinHdr._hideBtn:SetPoint("RIGHT", pinHdr, "RIGHT", _warnHidden and -5 or 0, 0)
-            pinHdr._hideBtn:SetScript("OnClick", function()
-                BP().bagPinnedInOneBag = false
-                EUI_Bags:RefreshInventory()
-            end)
             pinHdr._hideBtn:Show()
             pinHdr._line:ClearAllPoints()
             pinHdr._line:SetPoint("LEFT", pinHdr._hint, "RIGHT", 6, 0)
@@ -868,6 +856,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local pinTotal = pinItemCount + pinPadCount
             local pinRows = math.ceil(pinTotal / columns)
             curY = curY - (pinRows * (SLOT_SIZE + SPACING)) - 6
+            end -- compact vs grid
         end
 
         -- Recent Items quickview (display-only duplicates)
@@ -877,13 +866,18 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local recentItems = {}
             if EUI_Bags._recentItems then
                 for _, d in ipairs(tempItems) do
-                    if d.info and d.info.itemID and EUI_Bags._recentItems[d.info.itemID]
-                       and not ns.JunkHiddenFromRecent(d.info.itemID, d.info.quality) then
+                    if d.info and d.info.itemID and EUI_Bags._recentItems[d.info.itemID] then
                         recentItems[#recentItems + 1] = d
                     end
                 end
             end
-            if #recentItems > 0 then recentItems = MergeDuplicates(recentItems) end
+            if #recentItems > 0 then
+                recentItems = MergeDuplicates(recentItems)
+                table.sort(recentItems, RecentCompare)
+            end
+            if compactOn then
+                ns.CompactBagsSection(EllesmereUI.L("Recent Items"), recentItems, "recent")
+            else
             headerIdx = headerIdx + 1
             local recHdr = GetOrCreateCatHeader(headerIdx)
             recHdr:SetParent(child)
@@ -893,30 +887,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local showTips = BP().bagShowPinRecentTips ~= false
             recHdr._label:SetText(EllesmereUI.L("Recent Items"))
             recHdr._hint:SetText(showTips and EllesmereUI.L("(Extra quickview display, your items are also in their category)") or "")
-            if not recHdr._hideBtn then
-                local hb = CreateFrame("Button", nil, recHdr)
-                hb:SetSize(30, 16)
-                hb._fs = hb:CreateFontString(nil, "OVERLAY")
-                SetBagFont(hb._fs, 9)
-                hb._fs:SetAllPoints()
-                hb._fs:SetText(EllesmereUI.L("Hide"))
-                hb._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                hb:SetScript("OnEnter", function(self)
-                    self._fs:SetTextColor(1, 1, 1, 0.9)
-                    EUI.ShowWidgetTooltip(self, "Hides Recent Items. Re-show in settings.")
-                end)
-                hb:SetScript("OnLeave", function(self)
-                    self._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                    EUI.HideWidgetTooltip()
-                end)
-                recHdr._hideBtn = hb
-            end
+            local recHide = GetHeaderHideButton(recHdr)
+            recHide._dbKey = "bagRecentInOneBag"
+            recHide._tooltip = "Hides Recent Items. Re-show in settings."
             recHdr._hideBtn:ClearAllPoints()
             recHdr._hideBtn:SetPoint("RIGHT", recHdr, "RIGHT", (_warnHidden and not showPinnedOneBag) and -5 or 0, 0)
-            recHdr._hideBtn:SetScript("OnClick", function()
-                BP().bagRecentInOneBag = false
-                EUI_Bags:RefreshInventory()
-            end)
             recHdr._hideBtn:Show()
             local recLineAnchor = recHdr._hideBtn
             if BP().bagShowRecentClear == true
@@ -949,12 +924,14 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local recTotal = recItemCount + recPadCount
             local recRows = math.ceil(recTotal / columns)
             curY = curY - (recRows * (SLOT_SIZE + SPACING)) - 6
+            end -- compact vs grid
         end
 
         -- One section header + item grid for a slot list, advancing the shared
         -- curY/slotIdx/headerIdx upvalues (used by OneBag's "Main Bags" and MultiBag's per-bag sections).
         local function RenderBagGrid(label, slotList)
             if #slotList == 0 then return end
+            if compactOn then ns.CompactBagsSlots(label, slotList); return end
             headerIdx = headerIdx + 1
             local hdr = GetOrCreateCatHeader(headerIdx)
             hdr:SetParent(child)
@@ -978,52 +955,14 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             curY = curY - (rows * (SLOT_SIZE + SPACING)) - 6
         end
 
-        -- Junk pull-out (OneBag/MultiBag): when enabled, divert player-marked or
-        -- grey junk out of the flat bag section(s) into their own "Junk" section,
-        -- sorted by vendor value like the category view. Pre-collected here (not
-        -- inline in the loops) so it can render either at the very bottom
-        -- (default) or at the top just below Pinned Items (bagJunkAtTop). Empty
-        -- slots are never diverted. Off by default -> no change.
-        -- Nothing below is built unless the pull-out is on: no tables allocated,
-        -- no RenderJunkSection closure created, when the feature (or this view's
-        -- toggle) is off.
-        local pullJunk = (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()
-            and ((not isMulti and BP().bagJunkOneBag) or (isMulti and BP().bagJunkMultiBag))) or false
-        local junkItems, diverted, RenderJunkSection, junkAtTop
-        if pullJunk then
-            junkItems, diverted = {}, {}
-            for _, d in ipairs(tempItems) do
-                if d.bag ~= 5 and d.info and d.info.itemID
-                   and EUI_CategoryManager:IsJunk(d.info.itemID, d.info.quality) then
-                    junkItems[#junkItems + 1] = d
-                    diverted[d] = true
-                end
-            end
-            RenderJunkSection = function()
-                if #junkItems == 0 then return end
-                PreCacheSortFields(junkItems)
-                if BP().bagJunkSortByValue then
-                    SortJunkByVendor(junkItems)
-                else
-                    table.sort(junkItems, VisualSortCompare)
-                end
-                RenderBagGrid(EllesmereUI.L("Junk") .. " (" .. #junkItems .. ")", junkItems)
-            end
-            -- Top placement: below the Pinned Items section (drawn above), before
-            -- the bag section(s).
-            junkAtTop = BP().bagJunkAtTop and #junkItems > 0
-            if junkAtTop then RenderJunkSection() end
-        end
-
         -- One bag's items + empties as a section titled with the bag's name, in
-        -- slot order (MultiBag's bags, OneBag's special bags). Diverted junk is
-        -- excluded so it only shows in the pulled-out Junk section.
+        -- slot order (MultiBag's bags, OneBag's special bags).
         local BagDisplayName = ns.BagDisplayName
         local function RenderOneBag(bag)
             local bagList = {}
             local bagFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag == bag and not (diverted and diverted[d]) then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
+                if d.bag == bag then bagList[#bagList + 1] = d; bagFilled = bagFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag == bag then bagList[#bagList + 1] = d end
@@ -1041,7 +980,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             local mainSlots = {}
             local mainFilled = 0
             for _, d in ipairs(tempItems) do
-                if d.bag ~= 5 and not (special and special[d.bag]) and not (diverted and diverted[d]) then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
+                if d.bag ~= 5 and not (special and special[d.bag]) then mainSlots[#mainSlots + 1] = d; mainFilled = mainFilled + 1 end
             end
             for _, d in ipairs(emptySlots) do
                 if d.bag ~= 5 and not (special and special[d.bag]) then mainSlots[#mainSlots + 1] = d end
@@ -1072,15 +1011,19 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         table.sort(reagentSlotList, function(a, b) return a.slot < b.slot end)
 
         if #reagentSlotList > 0 then
+            local reagFilled = 0
+            for _, d in ipairs(reagentSlotList) do if d.info then reagFilled = reagFilled + 1 end end
+            local reagLabel = EllesmereUI.Lf("Reagent Bag (%d / %d)", reagFilled, #reagentSlotList)
+            if compactOn then
+                ns.CompactBagsSlots(reagLabel, reagentSlotList)
+            else
             headerIdx = headerIdx + 1
             local reagHdr = GetOrCreateCatHeader(headerIdx)
             reagHdr:SetParent(child)
             reagHdr:ClearAllPoints()
             reagHdr:SetPoint("TOPLEFT", child, "TOPLEFT", startX, curY)
             reagHdr:SetWidth(columns * (SLOT_SIZE + SPACING))
-            local reagFilled = 0
-            for _, d in ipairs(reagentSlotList) do if d.info then reagFilled = reagFilled + 1 end end
-            reagHdr._label:SetText(EllesmereUI.Lf("Reagent Bag (%d / %d)", reagFilled, #reagentSlotList))
+            reagHdr._label:SetText(reagLabel)
             reagHdr:Show()
             curY = curY - 22
 
@@ -1096,11 +1039,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             end
             local reagRows = math.ceil(#reagentSlotList / columns)
             curY = curY - (reagRows * (SLOT_SIZE + SPACING))
+            end -- compact vs grid
         end
-
-        -- Junk category at the very bottom (OneBag/MultiBag pull-out) unless the
-        -- player moved it to the top (already rendered above, below Pinned Items).
-        if RenderJunkSection and not junkAtTop then RenderJunkSection() end
 
     elseif selectedCategoryIndex == 0 and not selectedGroupName then
         -- "All Items" view: group by category with headers
@@ -1115,15 +1055,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         end
         for i = 1, #cats do
             if #itemsByCat[i] > 0 and not cats[i].groupName and not cats[i].isRecent then
-                if cats[i].isJunk and BP().bagJunkSortByValue then
-                    -- Opt-in: order Junk by vendor value instead of the saved drag
-                    -- order -- same as the grouped-member and selected-category
-                    -- paths. Off -> Junk behaves like any other category.
-                    PreCacheSortFields(itemsByCat[i])
-                    SortJunkByVendor(itemsByCat[i])
-                else
-                    ApplySavedOrder(i, itemsByCat[i])
-                end
+                ApplySavedOrder(i, itemsByCat[i])
             end
         end
         -- Merge duplicates after ordering so first-in-visual-order wins
@@ -1153,6 +1085,19 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 and not showPinAdd
                 and not alwaysShow
 
+            -- Compact: the collector draws this section (EllesmereUIBags_Compact.lua)
+            if compactOn then
+                local assignKey
+                if assignCatIdx and EUI_CategoryManager:CanAssignToCategory(assignCatIdx) then
+                    local aCat = EUI_CategoryManager:GetCategories()[assignCatIdx]
+                    assignKey = aCat and aCat._defaultName
+                end
+                local kind = (showPinAdd and "pinned") or (alwaysShow and "recent")
+                    or (useSlotNest and "slot") or (useExpNest and "exp") or "flat"
+                ns.CompactBagsSection(sectionName, sectionItems, kind, assignKey)
+                return
+            end
+
             headerIdx = headerIdx + 1
             local hdr = GetOrCreateCatHeader(headerIdx)
             hdr:SetParent(child)
@@ -1172,28 +1117,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             end
             -- Hide button for Pinned / Recent sections
             if showPinAdd or alwaysShow then
-                if not hdr._hideBtn then
-                    local hb = CreateFrame("Button", nil, hdr)
-                    hb:SetSize(30, 16)
-                    hb._fs = hb:CreateFontString(nil, "OVERLAY")
-                    SetBagFont(hb._fs, 9)
-                    hb._fs:SetAllPoints()
-                    hb._fs:SetText(EllesmereUI.L("Hide"))
-                    hb._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                    hb:SetScript("OnEnter", function(self)
-                        self._fs:SetTextColor(1, 1, 1, 0.9)
-                        EUI.ShowWidgetTooltip(self, self._tooltip)
-                    end)
-                    hb:SetScript("OnLeave", function(self)
-                        self._fs:SetTextColor(0.5, 0.5, 0.5, 0.7)
-                        EUI.HideWidgetTooltip()
-                    end)
-                    hb:SetScript("OnClick", function(self)
-                        BP()[self._dbKey] = false
-                        EUI_Bags:RefreshInventory()
-                    end)
-                    hdr._hideBtn = hb
-                end
+                GetHeaderHideButton(hdr)
                 hdr._hideBtn._dbKey = showPinAdd and "bagShowPinnedItems" or "bagShowRecentItems"
                 hdr._hideBtn._tooltip = showPinAdd and "Hides Pinned Items. Re-show in settings." or "Hides Recent Items. Re-show in settings."
                 hdr._hideBtn:ClearAllPoints()
@@ -1361,25 +1285,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
         end
 
         local hiddenSet = BP().bagHiddenInAllItems or {}
-        -- "Move Junk to Top" in All Items: render the Junk category right after
-        -- Pinned/Recent (the top display-only sections) and skip its normal order
-        -- slot below. Only built while the feature + toggle are on, so the scan
-        -- and closure cost nothing per render when off; otherwise Junk stays in
-        -- its category-order position.
-        local junkAtTopAll, junkCat, junkIdx, RenderJunkCatTop
-        local junkRendered = false
-        if EUI_CategoryManager:IsJunkMarkerEnabled() and BP().bagJunkAtTop then
-            for i, c in ipairs(cats) do if c.isJunk then junkIdx, junkCat = i, c; break end end
-            junkAtTopAll = junkIdx and not hiddenSet[junkCat._defaultName]
-            RenderJunkCatTop = function()
-                junkRendered = true
-                RenderSection(junkCat.name, itemsByCat[junkIdx] or {}, false, false, false, junkIdx, true)
-            end
-        end
         for ci, cat in ipairs(cats) do
-            if junkAtTopAll and not junkRendered and not cat.isPinned and not cat.isRecent then
-                RenderJunkCatTop()
-            end
             if cat.isPinned then
                 -- Pinned Items: display-only duplicate (items also appear in their normal category)
                 if pinnedSet and showPinned then
@@ -1398,12 +1304,14 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                    and (BP().bagShowRecentItems ~= false) then
                     local recentItems = {}
                     for _, data in ipairs(displayItems) do
-                        if data.info and data.info.itemID and EUI_Bags._recentItems[data.info.itemID]
-                           and not ns.JunkHiddenFromRecent(data.info.itemID, data.info.quality) then
+                        if data.info and data.info.itemID and EUI_Bags._recentItems[data.info.itemID] then
                             recentItems[#recentItems + 1] = data
                         end
                     end
-                    if #recentItems > 0 then recentItems = MergeDuplicates(recentItems) end
+                    if #recentItems > 0 then
+                        recentItems = MergeDuplicates(recentItems)
+                        table.sort(recentItems, RecentCompare)
+                    end
                     RenderSection(EllesmereUI.L("Recent Items"), recentItems, false, false, true)
                 end
             elseif cat.groupName then
@@ -1437,8 +1345,6 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 end
             elseif cat.isEquipSet then
                 -- Set children render inside their anchor's section
-            elseif cat.isJunk and junkAtTopAll then
-                -- Junk already rendered at the top; skip its normal order slot.
             else
                 if not hiddenSet[cat._defaultName] then
                     local catItems = itemsByCat[ci] or {}
@@ -1500,14 +1406,15 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
 
                 if #memberItems > 0 then
                     PreCacheSortFields(memberItems)
-                    if memberCat and memberCat.isJunk and BP().bagJunkSortByValue then
-                        SortJunkByVendor(memberItems)
-                    else
-                        table.sort(memberItems, VisualSortCompare)
-                    end
+                    table.sort(memberItems, VisualSortCompare)
                     memberItems = MergeDuplicates(memberItems)
                 end
 
+                if compactOn then
+                    local aKey = EUI_CategoryManager:CanAssignToCategory(mi) and memberCat and memberCat._defaultName or nil
+                    ns.CompactBagsSection(memberCat and memberCat.name or "?", memberItems,
+                        useSlotNest and "slot" or "flat", aKey)
+                else
                 headerIdx = headerIdx + 1
                 local hdr = GetOrCreateCatHeader(headerIdx)
                 hdr:SetParent(child)
@@ -1572,6 +1479,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
 
                 end -- slot nest vs flat grid
 
+                end -- compact vs grid
+
                 end -- hideEmpty guard
             end
         else
@@ -1581,13 +1490,10 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             if #displayItems > 0 then
                 if not (selCat and selCat.isRecent) then
                     PreCacheSortFields(displayItems)
-                    if selCat and selCat.isJunk and BP().bagJunkSortByValue then
-                        SortJunkByVendor(displayItems)
-                    else
-                        table.sort(displayItems, VisualSortCompare)
-                    end
+                    table.sort(displayItems, VisualSortCompare)
                 end
                 displayItems = MergeDuplicates(displayItems)
+                if selCat and selCat.isRecent then table.sort(displayItems, RecentCompare) end
             end
             local headerName = selCat and selCat.name
             if headerName then
@@ -1687,6 +1593,8 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                     hdr._editDeleteFrame:Hide()
                 end
 
+                -- Compact draws the name as the group's label instead
+                if not compactOn then
                 hdr:SetParent(child)
                 hdr:ClearAllPoints()
                 hdr:SetPoint("TOPLEFT", child, "TOPLEFT", startX, curY)
@@ -1704,6 +1612,7 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 end
                 hdr:Show()
                 curY = curY - 22
+                end -- grid header
             end
 
             local itemCount = #displayItems
@@ -1711,7 +1620,23 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
                 and selCat and IsArmoryGearCategory(selCat)
                 and itemCount > 0
 
-            if useSlotNest then
+            if compactOn then
+                local aKey
+                if useSlotNest and selectedCategoryIndex > 0
+                   and EUI_CategoryManager:CanAssignToCategory(selectedCategoryIndex) then
+                    aKey = selCat._defaultName
+                end
+                -- The grid header's Pinned / Recent hint, on the label's hover
+                local hint
+                if selCat and BP().bagShowPinRecentTips ~= false then
+                    if selCat.isPinned then
+                        hint = EllesmereUI.L("(Middle Click to Add or Remove)")
+                    elseif selCat.isRecent then
+                        hint = EllesmereUI.L("(Extra quickview display, your items are also in their category)")
+                    end
+                end
+                ns.CompactBagsSection(headerName or "", displayItems, useSlotNest and "slot" or "flat", aKey, true, hint)
+            elseif useSlotNest then
                 local expSubIdx = 0
                 local buckets = BuildSlotBuckets(displayItems)
                 local showAssign = selectedCategoryIndex > 0
@@ -1750,6 +1675,11 @@ function ns.RenderGridView(tempItems, displayItems, emptySlots, child, columns, 
             curY = curY - (gridRows * (SLOT_SIZE + SPACING))
             end -- slot nest vs flat grid
         end
+    end
+
+    -- Compact: pack and draw the groups this pass collected
+    if compactOn then
+        slotIdx, curY = ns.CompactBagsPlace(child, startX, curY, columns, slotIdx)
     end
 
     -- Hide slots that were not rendered this pass

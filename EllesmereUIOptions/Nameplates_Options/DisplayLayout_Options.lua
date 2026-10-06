@@ -2441,11 +2441,10 @@ local function BuildDisplayLayout(parent, y, ctx)
             if EllesmereUI.IS_FOREVER and (ns.IsNameElement(slotEl) or slotEl == "targetOfTarget") then
                 local nfKey = slotKey .. "NameFormat"
                 cogOpts.dropdown2Label = "Name Format"
-                cogOpts.dropdown2Values = {
-                    { value = "first", label = "First Name" },
-                    { value = "last",  label = "Last Name" },
-                    { value = "full",  label = "First and Last" },
-                }
+                cogOpts.dropdown2Values = {}
+                for _, k in ipairs(EllesmereUI.NAME_FORMAT_ORDER) do
+                    cogOpts.dropdown2Values[#cogOpts.dropdown2Values + 1] = { value = k, label = EllesmereUI.NAME_FORMAT_VALUES[k] }
+                end
                 cogOpts.dropdown2Get = function() return DBVal(nfKey) or "full" end
                 cogOpts.dropdown2Set = function(v)
                     DB()[nfKey] = (v ~= "full") and v or nil

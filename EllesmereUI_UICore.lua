@@ -989,6 +989,23 @@ do
             count[mode] = count[mode] + 1
             return s
         end
+
+        -- The Name Format choices of every options row that sets one:
+        --     EllesmereUI.NAME_FORMAT_VALUES / EllesmereUI.NAME_FORMAT_ORDER
+        -- "full" (First and Last) is the unset default, saved as nil (Raid
+        -- Frames saves "full"). "mixed" is display-only, for a row over several
+        -- settings that differ: the order leaves it out, so it is never offered.
+        --     EllesmereUI.NameFormatCogRow(get, set)
+        -- A settings-cog dropdown row for one Name Format: get() returns the
+        -- saved value ("first", "last" or nil) and set(v) receives the same.
+        local VALUES = { first = "First Name", last = "Last Name", full = "First and Last", mixed = "Mixed" }
+        local ORDER = { "first", "last", "full" }
+        EllesmereUI.NAME_FORMAT_VALUES, EllesmereUI.NAME_FORMAT_ORDER = VALUES, ORDER
+        function EllesmereUI.NameFormatCogRow(get, set)
+            return { type = "dropdown", label = "Name Format", values = VALUES, order = ORDER,
+                get = function() return get() or "full" end,
+                set = function(v) set((v ~= "full") and v or nil) end }
+        end
     end
 end
 

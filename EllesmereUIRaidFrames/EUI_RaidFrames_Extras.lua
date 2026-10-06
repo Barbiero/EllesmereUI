@@ -160,7 +160,13 @@ do
                     nameFS:SetText(fakeName)
                 else
                     -- Display sink: a secret name renders raw, never inspected.
-                    nameFS:SetFormattedText("%s", (unit and EllesmereUI.WithSurname(UnitName(unit))) or "")
+                    -- WoW Forever: the raid frames' Name Format (live names
+                    -- show only in a raid).
+                    local hmName = unit and EllesmereUI.WithSurname(UnitName(unit))
+                    if hmName and ns.RF_FormatName then
+                        hmName = ns.RF_FormatName(hmName, db.profile)
+                    end
+                    nameFS:SetFormattedText("%s", hmName or "")
                 end
                 nameFS:Show()
                 local w = nameFS:GetStringWidth()

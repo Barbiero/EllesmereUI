@@ -666,7 +666,8 @@ assert(f.level == UIState(p.health).level + 2, "the color is not just above the 
 -- inset by it, so no corner is drawn twice.
 local rows, sides = 0, 0
 for _, piece in ipairs(pieces) do
-    assert(piece.layer == "OVERLAY" and piece.snap == false)
+    -- The plate's own border is OVERLAY 7: a lower sublevel would sink under it.
+    assert(piece.layer == "OVERLAY" and piece.sublevel == 7 and piece.snap == false)
     if piece.height then
         assert(piece.height == 1.5)
         rows = rows + 1
@@ -678,9 +679,13 @@ for _, piece in ipairs(pieces) do
 end
 assert(rows == 2 and sides == 2)
 Auras("nameplate2", {{ id=703, mine=true }, { id=1943, mine=true }})
-AssertBorder(p, .1, .88, .32, "the combo's border did not win")
+f = AssertBorder(p, .1, .88, .32, "the combo's border did not win")
+-- Basic copies rank by frame level (all on OVERLAY 7): the rest just above the
+-- border, the top single one level higher, a combo two.
+assert(f.level == UIState(p.health).level + 4, "the combo's copy does not rank above the singles")
 Auras("nameplate2", {{ id=703, mine=true }})
-AssertBorder(p, 1, .43, .04)
+f = AssertBorder(p, 1, .43, .04)
+assert(f.level == UIState(p.health).level + 3, "the top single's copy does not rank above the rest")
 -- The bar texture is not a Color Border input; the border size and Extra
 -- Border Size are.
 combat = false
@@ -745,7 +750,11 @@ ns.DebuffColors_Refresh()
 f, pieces = AssertBorder(p, 1, .43, .04)
 assert(f.strata == "MEDIUM" and f.ignoreParentScale)
 assert(f.level == CustomBorderLevel(p, false, true) + 1, "the color is not just above the Solid border's strips")
-for _, piece in ipairs(pieces) do assert((piece.height or piece.width) == 2) end
+-- On MEDIUM the copies keep one level and rank by sublevel (703 is the top single).
+for _, piece in ipairs(pieces) do
+    assert((piece.height or piece.width) == 2)
+    assert(piece.layer == "OVERLAY" and piece.sublevel == 5, "a MEDIUM copy lost its rank sublevel")
+end
 profile.customBorderSizePx = "3|1|solid"
 ns.DebuffColors_Refresh()
 f, pieces = AssertBorder(p, 1, .43, .04)
@@ -769,6 +778,7 @@ local g0 = #geometry
 ns.DebuffColors_Refresh()
 f, pieces = AssertBorder(p, 1, .43, .04)
 assert(#pieces == 8 and f.strata == "MEDIUM" and not f.ignoreParentScale)
+for _, piece in ipairs(pieces) do assert(piece.layer == "OVERLAY" and piece.sublevel == 5) end
 assert(f.level == CustomBorderLevel(p, false, false) + 1, "the color is not just above the textured border")
 assert(pxReapply.owner == DC and pxReapply.fn == ns.DebuffColors_RequestRefresh, "slices left the UI scale re-apply")
 assert(Watching("DISPLAY_SIZE_CHANGED") == 0, "slices kept the resolution watch")

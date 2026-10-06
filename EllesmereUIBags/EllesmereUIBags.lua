@@ -2,9 +2,10 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 -------------------------------------------------------------------------------
 --  EllesmereUIBags.lua -- Enhanced Bags System for EllesmereUI (Midnight): sidebar category filter + flat item grid layout.
 -------------------------------------------------------------------------------
-if not (EllesmereUI and EllesmereUI._ModuleNS) then EUI_CLIENT_BLOCKED = true; return end -- stale-parent guard: a partially updated install (old parent, new child) goes dormant via the line-1 failsafe instead of erroring
+if not (EllesmereUI and EllesmereUI._ModuleNS and EllesmereUI.NewCombatQueue) then EUI_CLIENT_BLOCKED = true; return end -- stale-parent guard: a partially updated install (old parent, new child) goes dormant via the line-1 failsafe instead of erroring
 local ns = select(2, ...)
 EllesmereUI._ModuleNS["EllesmereUIBags"] = ns  -- LOD options files read this module ns via the registry
+ns.CombatQueue = EllesmereUI.NewCombatQueue(CreateFrame("Frame"))
 
 EUI_Bags = CreateFrame("Frame", "EUI_MainBagFrame", UIParent)
 EUI_Bags:SetToplevel(true)
@@ -144,16 +145,6 @@ local EUI = EllesmereUI
 local _emptyP = {}
 local function BP() return (EUI._bagsDB and EUI._bagsDB.profile) or _emptyP end
 
--- "Show Junk in Recent" (default on): when turned off, junk items (grey +
--- player-marked) are kept out of the Recent Items section. Returns false on the
--- default path with no IsJunk lookup, and is a no-op while the Junk Marker
--- feature is off (IsJunk is false then). Shared by the grid and list recent
--- gatherers. Core loads before Grid/List, so ns has it by the time they run.
-function ns.JunkHiddenFromRecent(itemID, quality)
-    if BP().bagJunkShowInRecent ~= false then return false end
-    return (EUI_CategoryManager and EUI_CategoryManager:IsJunk(itemID, quality)) or false
-end
-
 -- Uninstall EUI: Sort to Bottom flips Blizzard's own sort direction, so the
 -- player's is handed back, as turning the option off does.
 EUI.OnUninstall(function()
@@ -241,16 +232,24 @@ local function GetDefaultBagType()
 end
 EUI._GetBagDefaultType = GetDefaultBagType
 
--- Bag display mode ("grid" | "list"), latched on the first read after the
--- profile loads: switching needs a reload, so only one mode ever builds
--- frames in a session. nil = profile not loaded yet (nothing latched).
+-- Bag display mode ("grid" | "list" | "compact"), latched on the first read
+-- after the profile loads: switching needs a reload, so only one mode ever
+-- builds frames in a session. nil = profile not loaded yet (nothing latched).
+-- Any other saved value reads as "grid".
 local _listMode
 function EUI_Bags.IsListMode()
     if _listMode == nil then
         if not EUI.Lite.IsDBReady() then return nil end
-        _listMode = BP().bagDisplayMode == "list"
+        local mode = BP().bagDisplayMode
+        _listMode = mode == "list"
+        EUI_Bags._compactMode = mode == "compact"
     end
     return _listMode
+end
+-- Compact display (EllesmereUIBags_Compact.lua), on IsListMode's latch
+function EUI_Bags.IsCompactMode()
+    if EUI_Bags.IsListMode() == nil then return nil end
+    return EUI_Bags._compactMode
 end
 
 local function ApplyBagScale()
@@ -1705,85 +1704,7 @@ local function CreateHeader()
         end
     end)
     EUI_Bags._bagsBtn = bagsBtn
-
-    -- Mark-as-Junk button (coin). Anchored to the LEFT of the bags button so it
-    -- rides along when "Show Sort Icon" re-anchors that button, and so hiding it
-    -- leaves no gap (nothing anchors to the junk button). Only shown while the
-    -- Junk Marker feature is enabled; the options toggle flips it live.
-    local junk = CreateFrame("Button", nil, header)
-    junk:SetSize(22, 22)
-    junk:SetPoint("RIGHT", bagsBtn, "LEFT", -6, 0)
-    junk.icon = junk:CreateTexture(nil, "OVERLAY")
-    junk.icon:SetAllPoints()
-    junk.icon:SetTexture(133784)  -- INV_Misc_Coin_01
-    junk.icon:SetTexCoord(0.12, 0.88, 0.12, 0.88)  -- crop so the round edge is clean
-    junk.icon:SetAlpha(0.9)
-    -- Rounded look to match the other header buttons: circular alpha mask.
-    local jmask = junk:CreateMaskTexture()
-    jmask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    jmask:SetAllPoints(junk.icon)
-    junk.icon:AddMaskTexture(jmask)
-    -- Subtle round border: a thin dark rim just outside the coin so it reads as a
-    -- bordered round icon like the other header buttons. ARTWORK sits below the
-    -- OVERLAY icon, extended 1px past it, round-masked -> a 1px dark ring.
-    junk.ring = junk:CreateTexture(nil, "ARTWORK")
-    junk.ring:SetColorTexture(0, 0, 0, 0.85)
-    junk.ring:SetPoint("TOPLEFT", junk.icon, "TOPLEFT", -1, 1)
-    junk.ring:SetPoint("BOTTOMRIGHT", junk.icon, "BOTTOMRIGHT", 1, -1)
-    local jringMask = junk:CreateMaskTexture()
-    jringMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    jringMask:SetAllPoints(junk.ring)
-    junk.ring:AddMaskTexture(jringMask)
-    junk:SetScript("OnEnter", function(self)
-        self.icon:SetAlpha(1)
-        if EUI.ShowWidgetTooltip then
-            EUI.ShowWidgetTooltip(self, EllesmereUI.L("Mark items as Junk"))
-        end
-    end)
-    junk:SetScript("OnLeave", function(self)
-        self.icon:SetAlpha(0.9)
-        EUI.HideWidgetTooltip()
-    end)
-    junk:SetScript("OnClick", function()
-        EUI.HideWidgetTooltip()
-        if EUI_Bags.EnterJunkSelectMode then EUI_Bags:EnterJunkSelectMode() end
-    end)
-    junk:SetShown(BP().bagJunkMarker == true)
-    EUI_Bags._junkBtn = junk
-
-    -- "Sell Junk" text button, to the left of the coin button. Only shown while
-    -- a merchant window is open AND the feature is enabled (toggled by the
-    -- merchant event handler); hidden otherwise so it never crowds the row.
-    local sellJunk = CreateFrame("Button", nil, header)
-    sellJunk:SetSize(58, 18)
-    sellJunk:SetPoint("RIGHT", junk, "LEFT", -6, 0)
-    sellJunk.bg = sellJunk:CreateTexture(nil, "BACKGROUND")
-    sellJunk.bg:SetAllPoints()
-    sellJunk.bg:SetColorTexture(0, 0, 0, 0.4)
-    sellJunk.label = sellJunk:CreateFontString(nil, "OVERLAY")
-    SetBagFont(sellJunk.label, 10)
-    sellJunk.label:SetPoint("CENTER", 0, 0)
-    sellJunk.label:SetText(EllesmereUI.L("Sell Junk"))
-    sellJunk.label:SetTextColor(0.85, 0.82, 0.55)
-    sellJunk:SetScript("OnEnter", function(self)
-        self.label:SetTextColor(1, 0.96, 0.66)
-        if EUI.ShowWidgetTooltip then
-            EUI.ShowWidgetTooltip(self, EllesmereUI.L("Sell all Junk items at this merchant. Note: the game only remembers the last 12 sold items for buyback."))
-        end
-    end)
-    sellJunk:SetScript("OnLeave", function(self)
-        self.label:SetTextColor(0.85, 0.82, 0.55)
-        EUI.HideWidgetTooltip()
-    end)
-    sellJunk:SetScript("OnClick", function()
-        EUI.HideWidgetTooltip()
-        if EUI_Bags.SellJunk then EUI_Bags:SellJunk() end
-    end)
-    sellJunk:Hide()
-    EUI_Bags._sellJunkBtn = sellJunk
-    -- DB is ready by the time the header is built: register the merchant events
-    -- now iff the feature is on (the toggle re-syncs them on change).
-    if EUI_Bags.SyncJunkMerchantWatcher then EUI_Bags:SyncJunkMerchantWatcher() end
+    EUI_Bags:SyncJunkMarker()  -- Junk Marker buttons, built only while it is on
 
     local clear = CreateFrame("Button", nil, search)
     clear:SetSize(22, 22)
@@ -1810,9 +1731,7 @@ local function CreateHeader()
         -- SetItemSearch is client-global and the bank reads isFiltered too:
         -- re-render an open bank so both windows always show the same filter
         -- state (the bank's box already mirrors this refresh toward bags).
-        if EUI_Bank and EUI_Bank:IsVisible() and EUI_Bank.RefreshBank then
-            EUI_Bank:RefreshBank()
-        end
+        ns.RefreshOpenBank()
     end)
 
     local close = CreateFrame("Button", nil, header)
@@ -1832,6 +1751,7 @@ local function CreateHeader()
         -- Controller cursor: keep Blizzard's hidden bag frames closed too.
         if EUI.PadInUse() then ns.PadReleaseBlizzBags() end
     end)
+    EUI_Bags._closeBtn = close  -- Junk Marker mode lets a click on it through
     -- Controller cursor: Cancel finds each window's close control.
     if EUI.PadCP() then
         EUI_Bags.CloseButton = close
@@ -3664,6 +3584,8 @@ local function GetOrCreatePinOverlay()
             return
         end
         EUI.HideWidgetTooltip()
+        -- Select modes raise the item grid: out of combat only
+        if InCombatLockdown() then return end
         EnterPinSelectMode()
     end)
     ov:Hide()
@@ -3714,6 +3636,8 @@ local function GetOrCreateAssignOverlay()
                 return
             end
             EUI.HideWidgetTooltip()
+            -- Select modes raise the item grid: out of combat only
+            if InCombatLockdown() then return end
             EnterAssignSelectMode(self._assignCatKey)
         end
     end
@@ -3734,7 +3658,11 @@ end
 
 ExitPinSelectMode = function()
     EUI_Bags._pinSelectMode = false
-    if EUI_Bags._pinCatcher then EUI_Bags._pinCatcher:Hide() end
+    local cf = EUI_Bags._pinCatcher
+    if cf then
+        cf:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        cf:Hide()
+    end
     local ov = EUI_Bags._pinOverlay
     if ov then
         ov:EnableMouse(false)
@@ -3751,59 +3679,119 @@ ExitPinSelectMode = function()
     if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
 end
 
+-- Repaints an open bank (RefreshBank returns while it is closed), so the
+-- search filter and Junk Marker changes show in both windows
+function ns.RefreshOpenBank()
+    local bank = _G.EUI_BankFrame
+    if bank then bank:RefreshBank() end
+end
+
 -------------------------------------------------------------------------------
 --  Assign Selection Mode: dim the screen, click an item to assign it to a category (mirrors Pin Selection Mode).
 -------------------------------------------------------------------------------
 local _assignSelectCatKey = nil
--- Junk-select mode reuses this machinery with two extra behaviours: toggle
--- (click flips membership instead of only adding) and stay-open (the mode
--- survives each click so several items can be marked in one pass).
-local _assignSelectToggle = false
-local _assignSelectStayOpen = false
 
 local function ExitAssignSelectMode()
+    local wasJunk = EUI_Bags._junkMode
     EUI_Bags._assignSelectMode = false
+    EUI_Bags._junkMode = nil
     _assignSelectCatKey = nil
-    _assignSelectToggle = false
-    _assignSelectStayOpen = false
-    if EUI_Bags._assignCatcher then EUI_Bags._assignCatcher:Hide() end
+    local cf = EUI_Bags._assignCatcher
+    if cf then
+        cf._clearHover()
+        cf:UnregisterEvent("PLAYER_REGEN_DISABLED")
+        cf:Hide()
+    end
     local ov = EUI_Bags._assignOverlay
     if ov then
         ov:EnableMouse(false)
-        if not ov._fadeOut then
-            local fg = ov:CreateAnimationGroup()
-            local a = fg:CreateAnimation("Alpha")
-            a:SetFromAlpha(1); a:SetToAlpha(0); a:SetDuration(0.15)
-            fg:SetScript("OnFinished", function() ov:Hide(); ov:SetAlpha(1) end)
-            ov._fadeOut = fg
+        if not ov:IsVisible() then
+            -- Hidden with the bags: nothing to fade out
+            if ov._fadeIn then ov._fadeIn:Stop() end
+            ov:Hide()
+            ov:SetAlpha(1)
+        else
+            if not ov._fadeOut then
+                local fg = ov:CreateAnimationGroup()
+                local a = fg:CreateAnimation("Alpha")
+                a:SetFromAlpha(1); a:SetToAlpha(0); a:SetDuration(0.15)
+                fg:SetScript("OnFinished", function() ov:Hide(); ov:SetAlpha(1) end)
+                ov._fadeOut = fg
+            end
+            ov._fadeOut:Play()
         end
-        ov._fadeOut:Play()
     end
     local sf = EUI_Bags._scrollFrame
     if sf then sf:SetFrameStrata(EUI_Bags:GetFrameStrata()) end
+    -- Marks repainted only their own slots: sort them into place now (an open
+    -- bank greys and regroups its copies too)
+    if wasJunk and EUI_Bags._junkDirty then
+        EUI_Bags._junkDirty = nil
+        if EUI_Bags:IsShown() then EUI_Bags:RefreshInventory() end
+        ns.RefreshOpenBank()
+    end
 end
 
-EnterAssignSelectMode = function(catKey, opts)
-    EUI_Bags._assignSelectMode = true
-    _assignSelectCatKey = catKey
-    _assignSelectToggle = opts and opts.toggle or false
-    _assignSelectStayOpen = opts and opts.stayOpen or false
+-- Select modes' hit-test: the shown grid slot or list row under the cursor,
+-- only over the scroll frame (rows scrolled out of view stay shown under the
+-- header, the footer or outside the window; the scroll frame only clips them).
+-- Cursor / each button's OWN effective scale: GetRect() is in button units.
+function ns.SelectSlotUnderCursor()
+    local sf = EUI_Bags._scrollFrame
+    if not (sf and sf:IsMouseOver()) then return nil end
+    local rawCx, rawCy = GetCursorPosition()
+    local pool = itemSlots
+    for _ = 1, 2 do
+        for _, btn in pairs(pool) do
+            if btn:IsShown() and btn:GetParent():IsShown() then
+                local es = btn:GetEffectiveScale()
+                local cx, cy = rawCx / es, rawCy / es
+                local l, b, w, h = btn:GetRect()
+                if l and b and w and h and cx >= l and cx <= l + w and cy >= b and cy <= b + h then
+                    return btn
+                end
+            end
+        end
+        pool = ns.ListRows
+        if not pool then break end
+    end
+    return nil
+end
 
-    -- Normal "+" assign dims the whole viewport (its long-standing look); junk
-    -- select mode dims ONLY the bag window so the item grid stays bright while the
-    -- player clicks several items in a row. The two overlays are cached
-    -- separately and picked per mode; the active one is stored in _assignOverlay
-    -- so Exit and the fades below operate on whichever is up.
-    local bagOnly = opts and opts.bagOnly
-    local cacheKey = bagOnly and "_assignOverlayBag" or "_assignOverlayFull"
+-- Mark mode: a mark is per item, so every shown slot holding it repaints
+-- (the item ID first: only those slots read the full item info)
+function ns.RepaintJunkItem(itemID)
+    local pool = itemSlots
+    for _ = 1, 2 do
+        for _, btn in pairs(pool) do
+            if btn:IsShown() and btn:GetParent():IsShown() then
+                local bag, slot = btn:GetParent():GetID(), btn:GetID()
+                if C_Container.GetContainerItemID(bag, slot) == itemID then
+                    local info = C_Container.GetContainerItemInfo(bag, slot)
+                    if info then
+                        if btn._lvIcon then ns.ListPaintJunk(btn, info) else ns.GridPaintJunk(btn, info) end
+                    end
+                end
+            end
+        end
+        pool = ns.ListRows
+        if not pool then break end
+    end
+end
+
+-- junk: Junk Marker mode -- clicks toggle marks, the mode stays open, and only
+-- the bag window dims (the "+" assign dims the whole screen).
+EnterAssignSelectMode = function(catKey, junk)
+    EUI_Bags._assignSelectMode = true
+    EUI_Bags._junkMode = junk or nil
+    _assignSelectCatKey = catKey
+
+    local cacheKey = junk and "_assignOverlayBag" or "_assignOverlayFull"
     if not EUI_Bags[cacheKey] then
-        local ov = CreateFrame("Frame", nil, bagOnly and EUI_Bags or UIParent)
-        if bagOnly then
-            -- Bag-only: sit at the bag's OWN strata (just above its chrome). The
-            -- item grid rides the scroll frame, raised a full strata above to
-            -- FULLSCREEN_DIALOG below -- so the items stay fully bright and only
-            -- the bag behind them dims. (A same-strata overlay left the grid's
-            -- layering ambiguous, which dimmed the items.)
+        local ov = CreateFrame("Frame", nil, junk and EUI_Bags or UIParent)
+        if junk then
+            -- The bag's own strata: the item grid rides the scroll frame, raised
+            -- to FULLSCREEN_DIALOG below, so only the bag behind the items dims.
             ov:SetFrameStrata(EUI_Bags:GetFrameStrata())
             ov:SetFrameLevel(EUI_Bags:GetFrameLevel() + 20)
             ov:SetAllPoints(EUI_Bags)
@@ -3817,25 +3805,17 @@ EnterAssignSelectMode = function(catKey, opts)
         ov.bg:SetAllPoints()
         ov.bg:SetColorTexture(0, 0, 0, 0.6)
         ov:SetScript("OnMouseDown", function() ExitAssignSelectMode() end)
-        ov:SetScript("OnKeyDown", function(self, key)
-            if key == "ESCAPE" then
-                self:SetPropagateKeyboardInput(false)
-                ExitAssignSelectMode()
-            else
-                self:SetPropagateKeyboardInput(true)
-            end
-        end)
+        -- Escape (and controller Back) ends the mode before closing the bags,
+        -- through the escape proxy: the overlay takes no keyboard input
+        EllesmereUI.RegisterEscapeClose(ov, { notOwned = true, onEscape = function() ExitAssignSelectMode() end })
         EUI_Bags[cacheKey] = ov
     end
     EUI_Bags._assignOverlay = EUI_Bags[cacheKey]
     local ov = EUI_Bags._assignOverlay
-    -- Controller cursor: Back (which never reaches OnKeyDown) cancels the
-    -- mode first. Joined only once a controller is in use; the proxy counts
-    -- it only when one is in use at its show.
-    if not ov._padEsc and EUI.PadInUse() then
-        ov._padEsc = true
-        EllesmereUI.RegisterEscapeClose(ov, { padOnly = true, notOwned = true, onEscape = function() ExitAssignSelectMode() end })
-    end
+    -- A fade-out still running from a quick exit would hide the dim mid-mode,
+    -- and the exit turned its mouse off
+    if ov._fadeOut then ov._fadeOut:Stop() end
+    ov:EnableMouse(true)
     ov:SetAlpha(0)
     ov:Show()
     if not ov._fadeIn then
@@ -3850,22 +3830,10 @@ EnterAssignSelectMode = function(catKey, opts)
     -- Raise scroll frame above overlay
     local sf = EUI_Bags._scrollFrame
     if sf then sf:SetFrameStrata("FULLSCREEN_DIALOG") end
+    -- Junk Marker: the coin stays bright above the dim (clicking it again ends the mode)
+    if junk and EUI_Bags._junkBtn then EUI_Bags._junkBtn:SetFrameLevel(ov:GetFrameLevel() + 1) end
 
-    local function FindBtnUnderCursor()
-        -- Cursor / each button's OWN effective scale: GetRect() is in button units
-        local rawCx, rawCy = GetCursorPosition()
-        for _, btn in pairs(itemSlots) do
-            if btn:IsShown() and btn:GetParent():IsShown() then
-                local es = btn:GetEffectiveScale()
-                local cx, cy = rawCx / es, rawCy / es
-                local l, b, w, h = btn:GetRect()
-                if l and b and w and h and cx >= l and cx <= l + w and cy >= b and cy <= b + h then
-                    return btn
-                end
-            end
-        end
-        return nil
-    end
+    local FindBtnUnderCursor = ns.SelectSlotUnderCursor
 
     -- Click catcher with hover highlight
     if not EUI_Bags._assignCatcher then
@@ -3873,6 +3841,8 @@ EnterAssignSelectMode = function(catKey, opts)
         cf:SetFrameStrata("FULLSCREEN_DIALOG")
         cf:SetFrameLevel(500)
         cf:EnableMouse(true)
+        -- Combat ends the mode (registered only while it is on)
+        cf:SetScript("OnEvent", function() ExitAssignSelectMode() end)
 
         local hoverOv = cf:CreateTexture(nil, "OVERLAY")
         hoverOv:SetColorTexture(1, 1, 1, 0.4)
@@ -3896,8 +3866,18 @@ EnterAssignSelectMode = function(catKey, opts)
             hoverOv:ClearAllPoints()
             hoverOv:Hide()
         end
+        cf._clearHover = ClearHover
 
-        cf:SetScript("OnUpdate", function()
+        -- Re-tests only when the cursor or the scroll moved, or on a show
+        -- (_hoverDirty); the wheel scrolls under a still cursor
+        local lastX, lastY, lastScroll
+        cf:SetScript("OnUpdate", function(self)
+            local x, y = GetCursorPosition()
+            local sf = EUI_Bags._scrollFrame
+            local s = sf and sf:GetVerticalScroll() or 0
+            if x == lastX and y == lastY and s == lastScroll and not self._hoverDirty then return end
+            lastX, lastY, lastScroll = x, y, s
+            self._hoverDirty = nil
             local btn = FindBtnUnderCursor()
             if btn == hoveredBtn then return end
             ClearHover()
@@ -3923,6 +3903,19 @@ EnterAssignSelectMode = function(catKey, opts)
 
         cf:SetScript("OnMouseDown", function(_, button)
             if button == "RightButton" then ClearHover(); ExitAssignSelectMode(); return end
+            -- Junk Marker: the coin ends the mode (tested first, so nothing
+            -- under it can take the click)
+            local junkMode = EUI_Bags._junkMode
+            if junkMode and EUI_Bags._junkBtn and EUI_Bags._junkBtn:IsMouseOver() then
+                ExitAssignSelectMode()
+                return
+            end
+            -- ...and the close button still closes the bags
+            if junkMode and EUI_Bags._closeBtn and EUI_Bags._closeBtn:IsMouseOver() then
+                ExitAssignSelectMode()
+                EUI_Bags._closeBtn:Click()
+                return
+            end
             local btn = FindBtnUnderCursor()
             if btn then
                 local bagID = btn:GetParent():GetID()
@@ -3930,28 +3923,25 @@ EnterAssignSelectMode = function(catKey, opts)
                 if bagID and slotID and slotID > 0 then
                     local info = C_Container.GetContainerItemInfo(bagID, slotID)
                     if info and info.itemID and _assignSelectCatKey then
-                        if _assignSelectToggle then
-                            -- Junk-select mode: click toggles membership.
+                        if junkMode then
+                            -- Only the item's own slots repaint, so nothing moves under
+                            -- the cursor; the bag sorts the marks when the mode ends
                             EUI_CategoryManager:ToggleJunk(info.itemID)
+                            ns.RepaintJunkItem(info.itemID)
+                            EUI_Bags._junkDirty = true
                         else
+                            ClearHover()
                             EUI_CategoryManager:AssignItem(info.itemID, _assignSelectCatKey)
-                        end
-                        ClearHover()
-                        if not _assignSelectStayOpen then
                             ExitAssignSelectMode()
-                        end
-                        EUI_Bags:RefreshInventory()
-                        -- RefreshInventory can lower the scroll frame back down;
-                        -- in a stay-open pass re-raise it above the catcher so the
-                        -- next click still hit-tests item buttons.
-                        if _assignSelectStayOpen then
-                            local sf = EUI_Bags._scrollFrame
-                            if sf then sf:SetFrameStrata("FULLSCREEN_DIALOG") end
+                            EUI_Bags:RefreshInventory()
                         end
                         return
                     end
                 end
             end
+            -- Junk Marker: a click on empty bag space keeps the mode; anywhere
+            -- outside the bags, right-click or Esc ends it
+            if junkMode and EUI_Bags:IsMouseOver() then return end
             ClearHover()
             ExitAssignSelectMode()
         end)
@@ -3960,140 +3950,242 @@ EnterAssignSelectMode = function(catKey, opts)
         cf:Hide()
         EUI_Bags._assignCatcher = cf
     end
-    EUI_Bags._assignCatcher:Show()
+    local cf = EUI_Bags._assignCatcher
+    cf._hoverDirty = true
+    cf:RegisterEvent("PLAYER_REGEN_DISABLED")
+    cf:Show()
 end
 
--- Junk-select mode: enter assign-select targeted at the Junk category, but in
--- toggle + stay-open form so the player can click several items in a row to
--- mark/unmark them. Defined as a method (not a local) so the header button --
--- built earlier in file order than EnterAssignSelectMode -- can reach it at
--- click time.
-function EUI_Bags:EnterJunkSelectMode()
-    if not (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()) then return end
-    EnterAssignSelectMode(EUI_CategoryManager.JUNK_KEY, { toggle = true, stayOpen = true, bagOnly = true })
+-------------------------------------------------------------------------------
+--  Junk Marker: the header coin (mark mode) and Sell Junk (at merchants). Both
+--  buttons are built on the first enable; nothing exists while it is off.
+-------------------------------------------------------------------------------
+do
+-- A round-masked texture: the coin, its rim and the item badge (Grid)
+function ns.JunkRoundTex(owner, layer, sublevel, fileID)
+    local t = owner:CreateTexture(nil, layer, nil, sublevel)
+    if fileID then
+        t:SetTexture(fileID)
+        t:SetTexCoord(0.12, 0.88, 0.12, 0.88)
+    end
+    local m = owner:CreateMaskTexture()
+    m:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    m:SetAllPoints(t)
+    t:AddMaskTexture(m)
+    return t
 end
 
--- SellJunk: sell every junk item (grey + player-marked) that has a sell value at
--- the open merchant. Selling via UseContainerItem is insecure-callable while a
--- merchant is open, so no secure handler is needed. The client only keeps the
--- last 12 sold items for buyback (surfaced in the button tooltip); this sells
--- everything regardless -- a deliberate "clear my junk" action.
--- Still-refundable purchases are skipped: Blizzard's own right-click never sells
--- them (it pops the refund confirmation instead), and marks are account-wide per
--- itemID -- so a freshly bought copy of a marked item would otherwise auto-sell
--- at the next merchant without asking. GetContainerItemPurchaseInfo reports a
--- refundSeconds while the item is inside its refund window. Capability-guarded.
-local function IsRefundable(bag, slot)
-    local getInfo = C_Container and C_Container.GetContainerItemPurchaseInfo
-    if not getInfo then return false end
-    -- Modern ContainerItemPurchaseInfo table carries refundSeconds. Type-guard
-    -- the read so a non-table return can never error mid-sell -- a non-refundable
-    -- or unbought slot returns nil here, which is simply treated as sellable.
-    local purchase = getInfo(bag, slot, false)
-    if type(purchase) ~= "table" then return false end
-    return (purchase.refundSeconds and purchase.refundSeconds > 0) or false
+local function BuildButtons()
+    local bagsBtn = EUI_Bags._bagsBtn
+    local header = bagsBtn:GetParent()
+    -- The coin sits left of Show Bags, so it follows when Show Sort Icon moves that button
+    local junk = CreateFrame("Button", nil, header)
+    junk:SetSize(22, 22)
+    junk:SetPoint("RIGHT", bagsBtn, "LEFT", -6, 0)
+    junk.icon = ns.JunkRoundTex(junk, "OVERLAY", nil, 133784)
+    junk.icon:SetAllPoints()
+    junk.icon:SetAlpha(0.9)
+    local rim = ns.JunkRoundTex(junk, "ARTWORK")
+    rim:SetColorTexture(0, 0, 0, 0.85)
+    rim:SetPoint("TOPLEFT", junk.icon, "TOPLEFT", -1, 1)
+    rim:SetPoint("BOTTOMRIGHT", junk.icon, "BOTTOMRIGHT", 1, -1)
+    junk:SetScript("OnEnter", function(self)
+        self.icon:SetAlpha(1)
+        EUI.ShowWidgetTooltip(self, EllesmereUI.L("Click items to mark or unmark them as junk."))
+    end)
+    junk:SetScript("OnLeave", function(self)
+        self.icon:SetAlpha(0.9)
+        EUI.HideWidgetTooltip()
+    end)
+    junk:SetScript("OnClick", function(self)
+        EUI.HideWidgetTooltip()
+        if InCombatLockdown() then return end
+        -- An item on the cursor: mark or unmark that one
+        local cursorType, itemID = GetCursorInfo()
+        if cursorType == "item" and itemID then
+            EUI_CategoryManager:ToggleJunk(itemID)
+            ClearCursor()
+            EUI_Bags:RefreshInventory()
+            ns.RefreshOpenBank()
+            return
+        end
+        -- Controller cursor on screen: mark mode hit-tests the hidden
+        -- pointer, so explain the carry-then-press path instead.
+        if EUI.PadCursorShown() then
+            EUI.ShowWidgetTooltip(self, EllesmereUI.L("Pick up an item, then press the coin to mark it as junk"))
+            return
+        end
+        EnterAssignSelectMode(EUI_CategoryManager.JUNK_KEY, true)
+    end)
+    EUI_Bags._junkBtn = junk
+
+    local sell = CreateFrame("Button", nil, header)
+    sell:SetPoint("RIGHT", junk, "LEFT", -6, 0)
+    local bg = sell:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.4)
+    sell.label = sell:CreateFontString(nil, "OVERLAY")
+    SetBagFont(sell.label, 10)
+    sell.label:SetPoint("CENTER")
+    sell.label:SetText(EllesmereUI.L("Sell Junk"))
+    sell.label:SetTextColor(0.85, 0.82, 0.55)
+    -- Sized to its label (translations run longer)
+    sell:SetSize(math.max(58, math.ceil(sell.label:GetStringWidth()) + 14), 18)
+    sell:SetScript("OnEnter", function(self)
+        self.label:SetTextColor(1, 0.96, 0.66)
+        EUI.ShowWidgetTooltip(self, EllesmereUI.L("Sells all your junk items."))
+    end)
+    sell:SetScript("OnLeave", function(self)
+        self.label:SetTextColor(0.85, 0.82, 0.55)
+        EUI.HideWidgetTooltip()
+    end)
+    sell:SetScript("OnClick", function()
+        EUI.HideWidgetTooltip()
+        EUI_Bags:SellJunk()
+    end)
+    EUI_Bags._sellJunkBtn = sell
 end
 
--- Find the first sellable junk slot: grey or player-marked, with vendor value
--- (hasNoValue items can't be sold), not locked, and not still refundable.
--- Re-scanned each step because slots empty as they sell.
-local function NextJunkSlot()
+-- Shows the coin while the Junk Marker is on and Sell Junk while a merchant is
+-- also open; ends mark mode when it goes off. Run at header build, by the
+-- options toggle and on merchant open / close.
+function EUI_Bags:SyncJunkMarker()
+    local on = BP().bagJunkMarker == true
+    if on and not self._junkBtn and self._bagsBtn then BuildButtons() end
+    if self._junkBtn then
+        self._junkBtn:SetShown(on)
+        self._sellJunkBtn:SetShown(on and _openItemPanels.merchant == true)
+    end
+    if not on and self._junkMode then ExitAssignSelectMode() end
+end
+
+-- The slots one Sell Junk sweep may sell, gathered once as bag * 1000 + slot
+-- (ids holds each one's itemID): marked or grey junk worth something, outside
+-- WoW Forever's special bags, equipment sets and pins, and not still
+-- refundable (Blizzard's own right-click never sells those without asking, and
+-- a fresh purchase of a marked item would otherwise go unasked).
+local function GatherJunkSlots(slots, ids)
+    local special = ns.SpecialBags()
+    local setGear = EUI_CategoryManager:GetSetGearLookup()
+    local pinned = EllesmereUIDB and EllesmereUIDB.bagPinnedItems
     for bag = 0, 5 do
-        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
-        for slot = 1, numSlots do
-            local info = C_Container.GetContainerItemInfo(bag, slot)
-            if info and info.itemID and not info.isLocked and not info.hasNoValue
-               and EUI_CategoryManager and EUI_CategoryManager:IsJunk(info.itemID, info.quality)
-               and not IsRefundable(bag, slot) then
-                return bag, slot, info
+        if not (special and special[bag]) then
+            for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                if info and info.itemID and not info.hasNoValue and not setGear[bag * 1000 + slot]
+                   and EUI_CategoryManager:IsJunk(info.itemID, info.quality)
+                   and not (pinned and IsItemPinned(pinned, info.hyperlink, info.itemID)) then
+                    local p = C_Container.GetContainerItemPurchaseInfo(bag, slot, false)
+                    if not (p and p.refundSeconds and p.refundSeconds > 0) then
+                        slots[#slots + 1] = bag * 1000 + slot
+                        ids[#ids + 1] = info.itemID
+                    end
+                end
             end
         end
     end
 end
 
--- Sell all junk at the open merchant, ONE item per short tick rather than dozens
--- of UseContainerItem calls in a single frame -- gentler on the client and it
--- bails cleanly if the merchant closes or combat starts mid-sweep. (WoW still
--- only keeps the last ~12 sold items for buyback; that's inherent to any bulk
--- sell and is called out in the button tooltip.) Re-entrancy guarded so the
--- button + auto-sell can't run two sweeps at once.
-function EUI_Bags:SellJunk()
-    if not (EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()) then return end
-    if not (MerchantFrame and MerchantFrame:IsShown()) then return end
-    if InCombatLockdown() then return end
-    if EUI_Bags._junkSelling then return end
-
-    local sold, earned = 0, 0
-    local function finish()
-        EUI_Bags._junkSelling = nil
-        if sold > 0 then
-            if EUI_Bags.RefreshInventory then EUI_Bags:RefreshInventory() end
-            if not BP().bagJunkNoSellSummary then
-                local msg = string.format(EllesmereUI.L("Sold %d junk item(s)"), sold)
-                if earned > 0 and GetCoinTextureString then
-                    msg = msg .. "  " .. GetCoinTextureString(earned)
-                end
-                if EllesmereUI.Print then EllesmereUI.Print(msg) else print(msg) end
+-- One item every 0.08 s, until the gathered slots run out, the merchant
+-- closes, combat starts or the cursor holds an item (a sale waiting on its
+-- confirmation: press Sell Junk again once it is answered). A sale counts once
+-- its slot has emptied; the summary (what sold, and what was left unsold)
+-- waits for the server to answer the sales in flight, 2 s at most.
+-- force: the caller saw MERCHANT_SHOW, which can run before Bags' own merchant
+-- flag is set.
+function EUI_Bags:SellJunk(force)
+    if self._junkSelling or InCombatLockdown() or not (force or _openItemPanels.merchant) then return end
+    self._junkSelling = true
+    local slots, ids, values, sent = {}, {}, {}, {}
+    GatherJunkSlots(slots, ids)
+    local i, done = 0, false
+    local function Landed(k)
+        local key = slots[k]
+        return C_Container.GetContainerItemID(math.floor(key / 1000), key % 1000) ~= ids[k]
+    end
+    local function InFlight()
+        for n = 1, #sent do
+            local k = sent[n]
+            if not Landed(k) then
+                local key = slots[k]
+                local info = C_Container.GetContainerItemInfo(math.floor(key / 1000), key % 1000)
+                if info and info.isLocked then return true end
             end
         end
+        return false
     end
-
-    local function step()
-        -- Stop if the merchant window closed or combat started mid-sweep.
-        if not (MerchantFrame and MerchantFrame:IsShown()) or InCombatLockdown() then
-            finish(); return
+    -- The summary (the bags repaint from the sales' own BAG_UPDATEs)
+    local function Finish()
+        if done then return end
+        done = true
+        local f = EUI_Bags._junkSettle
+        if f then f:UnregisterAllEvents() end
+        EUI_Bags._junkSelling = nil
+        local sold, earned = 0, 0
+        for n = 1, #sent do
+            if Landed(sent[n]) then sold, earned = sold + 1, earned + values[sent[n]] end
         end
-        local bag, slot, info = NextJunkSlot()
-        if not bag then finish(); return end
-        C_Container.UseContainerItem(bag, slot)
-        sold = sold + 1
-        -- Best-effort earned total for the summary line. Sell price (GetItemInfo
-        -- index 11) resolves from the item LINK; the bare-itemID form returns nil
-        -- on this client, so the hyperlink is used (same as the Junk sort).
-        local sp = (info.hyperlink and select(11, GetItemInfo(info.hyperlink))) or 0
-        earned = earned + sp * (info.stackCount or 1)
-        C_Timer.After(0.08, step)
+        -- A gathered slot still holding its item went unsold: a sale refused
+        -- or waiting on its confirmation, or the sweep cut short
+        local left = 0
+        for k = 1, #slots do
+            if not Landed(k) then left = left + 1 end
+        end
+        local tag = EllesmereUI.COLOR_CODES.BRAND .. "EllesmereUI:|r "
+        if sold > 0 then
+            local msg = EllesmereUI.Lf("Sold %1$d junk item(s)", sold)
+            if earned > 0 then msg = msg .. "  " .. C_CurrencyInfo.GetCoinTextureString(earned) end
+            EllesmereUI.Print(tag .. msg)
+        end
+        if left > 0 then
+            EllesmereUI.Print(tag .. EllesmereUI.Lf("%d junk item(s) could not be sold.", left))
+        end
     end
-
-    EUI_Bags._junkSelling = true
+    -- Sales still in flight: finish once the server has answered them (their
+    -- slots emptied or unlocked), or after 2 s at the latest
+    local function Report()
+        if not InFlight() then return Finish() end
+        local f = EUI_Bags._junkSettle
+        if not f then
+            f = CreateFrame("Frame")
+            f:SetScript("OnEvent", function(self) self._check() end)
+            EUI_Bags._junkSettle = f
+        end
+        f._check = function() if not InFlight() then Finish() end end
+        f:RegisterEvent("BAG_UPDATE_DELAYED")
+        f:RegisterEvent("ITEM_LOCK_CHANGED")
+        C_Timer.After(2, Finish)
+    end
+    local function step()
+        local live = (force or _openItemPanels.merchant) and not InCombatLockdown() and not CursorHasItem()
+        force = nil
+        while live and i < #slots do
+            i = i + 1
+            local key = slots[i]
+            local bag, slot = math.floor(key / 1000), key % 1000
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            -- Still the gathered item, and not locked
+            if info and info.itemID == ids[i] and not info.isLocked then
+                values[i] = ((info.hyperlink and select(11, GetItemInfo(info.hyperlink))) or 0) * (info.stackCount or 1)
+                sent[#sent + 1] = i
+                C_Container.UseContainerItem(bag, slot)
+                C_Timer.After(0.08, step)
+                return
+            end
+        end
+        Report()
+    end
     step()
 end
 
--- Merchant watcher: show/hide the Sell Junk button with the merchant window, and
--- run an auto-sell pass on open when the player opted in. Self-contained frame so
--- it does not touch the main bag event handler. Its MERCHANT_SHOW/CLOSED events
--- are registered only while the feature is enabled (SyncJunkMerchantWatcher), so
--- a player with the feature off never runs this handler.
-local _junkMerchantWatcher = CreateFrame("Frame")
-_junkMerchantWatcher:SetScript("OnEvent", function(_, event)
-    local btn = EUI_Bags._sellJunkBtn
-    if event == "MERCHANT_SHOW" then
-        local on = EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled()
-        if btn then btn:SetShown(on == true) end
-        if on and BP().bagJunkAutoSell then
-            -- Defer: at MERCHANT_SHOW the MerchantFrame may not be :IsShown() yet
-            -- (Blizzard shows it in its own handler, often after addons), which
-            -- made the sell bail "no merchant open". Next frame it is up.
-            C_Timer.After(0, function() EUI_Bags:SellJunk() end)
-        end
-    else
-        if btn then btn:Hide() end
-    end
-end)
-
--- Register the merchant events only while the Junk Marker feature is on; drop
--- them (and hide the Sell Junk button) when it is off. Called once the bag UI is
--- built with a ready DB, and again whenever the master toggle flips.
-function EUI_Bags:SyncJunkMerchantWatcher()
-    if EUI_CategoryManager and EUI_CategoryManager:IsJunkMarkerEnabled() then
-        _junkMerchantWatcher:RegisterEvent("MERCHANT_SHOW")
-        _junkMerchantWatcher:RegisterEvent("MERCHANT_CLOSED")
-    else
-        _junkMerchantWatcher:UnregisterEvent("MERCHANT_SHOW")
-        _junkMerchantWatcher:UnregisterEvent("MERCHANT_CLOSED")
-        if EUI_Bags._sellJunkBtn then EUI_Bags._sellJunkBtn:Hide() end
-    end
+-- Profile switch: the categories (Junk with them) and the coin follow the new profile
+function EUI_Bags:OnProfileApplied()
+    self.InvalidateSetCategories()
+    self:SyncJunkMarker()
+    if self:IsShown() then self:RefreshInventory() end
+    ns.RefreshOpenBank()
 end
+end -- Junk Marker
 
 EnterPinSelectMode = function()
     EUI_Bags._pinSelectMode = true
@@ -4109,24 +4201,16 @@ EnterPinSelectMode = function()
         ov.bg:SetAllPoints()
         ov.bg:SetColorTexture(0, 0, 0, 0.6)
         ov:SetScript("OnMouseDown", function() ExitPinSelectMode() end)
-        ov:SetScript("OnKeyDown", function(self, key)
-            if key == "ESCAPE" then
-                self:SetPropagateKeyboardInput(false)
-                ExitPinSelectMode()
-            else
-                self:SetPropagateKeyboardInput(true)
-            end
-        end)
+        -- Escape (and controller Back) ends the mode before closing the bags,
+        -- through the escape proxy: the overlay takes no keyboard input
+        EllesmereUI.RegisterEscapeClose(ov, { notOwned = true, onEscape = function() ExitPinSelectMode() end })
         EUI_Bags._pinOverlay = ov
     end
     local ov = EUI_Bags._pinOverlay
-    -- Controller cursor: Back (which never reaches OnKeyDown) cancels the
-    -- mode first. Joined only once a controller is in use; the proxy counts
-    -- it only when one is in use at its show.
-    if not ov._padEsc and EUI.PadInUse() then
-        ov._padEsc = true
-        EllesmereUI.RegisterEscapeClose(ov, { padOnly = true, notOwned = true, onEscape = function() ExitPinSelectMode() end })
-    end
+    -- A fade-out still running from a quick exit would hide the dim mid-mode,
+    -- and the exit turned its mouse off (clicks outside the grid end the mode)
+    if ov._fadeOut then ov._fadeOut:Stop() end
+    ov:EnableMouse(true)
     ov:SetAlpha(0)
     ov:Show()
     if not ov._fadeIn then
@@ -4142,21 +4226,7 @@ EnterPinSelectMode = function()
     local sf = EUI_Bags._scrollFrame
     if sf then sf:SetFrameStrata("FULLSCREEN_DIALOG") end
 
-    local function FindBtnUnderCursor()
-        -- Cursor / each button's OWN effective scale: GetRect() is in button units
-        local rawCx, rawCy = GetCursorPosition()
-        for _, btn in pairs(itemSlots) do
-            if btn:IsShown() and btn:GetParent():IsShown() then
-                local es = btn:GetEffectiveScale()
-                local cx, cy = rawCx / es, rawCy / es
-                local l, b, w, h = btn:GetRect()
-                if l and b and w and h and cx >= l and cx <= l + w and cy >= b and cy <= b + h then
-                    return btn
-                end
-            end
-        end
-        return nil
-    end
+    local FindBtnUnderCursor = ns.SelectSlotUnderCursor
 
     -- Click catcher above the raised icons: swallows clicks (items aren't used/equipped), then pins whichever icon was clicked.
     if not EUI_Bags._pinCatcher then
@@ -4164,6 +4234,8 @@ EnterPinSelectMode = function()
         cf:SetFrameStrata("FULLSCREEN_DIALOG")
         cf:SetFrameLevel(500)
         cf:EnableMouse(true)
+        -- Combat ends the mode (registered only while it is on)
+        cf:SetScript("OnEvent", function() ExitPinSelectMode() end)
 
         -- Hover highlight: accent border (2px) + white overlay
         local pinHoverOv = cf:CreateTexture(nil, "OVERLAY")
@@ -4191,8 +4263,18 @@ EnterPinSelectMode = function()
             pinHoverOv:ClearAllPoints()
             pinHoverOv:Hide()
         end
+        cf._clearHover = ClearPinHover
 
-        cf:SetScript("OnUpdate", function()
+        -- Re-tests only when the cursor or the scroll moved, or on a show or a
+        -- bag refresh (_hoverDirty); the wheel scrolls under a still cursor
+        local lastX, lastY, lastScroll
+        cf:SetScript("OnUpdate", function(self)
+            local x, y = GetCursorPosition()
+            local sf = EUI_Bags._scrollFrame
+            local s = sf and sf:GetVerticalScroll() or 0
+            if x == lastX and y == lastY and s == lastScroll and not self._hoverDirty then return end
+            lastX, lastY, lastScroll = x, y, s
+            self._hoverDirty = nil
             local btn = FindBtnUnderCursor()
             if btn == pinHoveredBtn then return end
             ClearPinHover()
@@ -4258,6 +4340,8 @@ EnterPinSelectMode = function()
             EUI_Bags._pinCatcher:SetSize(w, h)
         end
     end
+    EUI_Bags._pinCatcher._hoverDirty = true
+    EUI_Bags._pinCatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
     EUI_Bags._pinCatcher:Show()
 end
 
@@ -4761,6 +4845,8 @@ local function StopSidebarDrag()
                     end
                     if insertAt < 1 then insertAt = 1 end
                     if insertAt > #cats + 1 then insertAt = #cats + 1 end
+                    -- Junk stays last (as in ReorderCategory)
+                    if cats[#cats] and cats[#cats].isJunk and insertAt > #cats then insertAt = #cats end
                     for b = #ordered, 1, -1 do
                         table.insert(cats, insertAt, ordered[b])
                     end
@@ -5030,7 +5116,8 @@ local function PadCategoryEntries(root, btn, cat, catIdx, isGroupHeader, isGroup
         if b and b:IsShown() then return b end
     end
     local upTarget, downTarget, moveGroup
-    if me and not cat.noMove and not btn._noMove then
+    -- Junk stays last: it never moves (ReorderCategory keeps the rest above it)
+    if me and not cat.noMove and not btn._noMove and not cat.isJunk then
         local group = cat.groupName
         if isGroupMember and group then
             -- Within its own group only (set children are skipped).
@@ -5060,7 +5147,8 @@ local function PadCategoryEntries(root, btn, cat, catIdx, isGroupHeader, isGroup
                     local members = EUI_CategoryManager:GetGroupMembers(q._groupName)
                     if #members > 0 then downTarget = members[#members] + 1 end
                 else
-                    downTarget = q._catIdx + 1
+                    local nextCat = EUI_CategoryManager:GetCategories()[q._catIdx]
+                    if not (nextCat and nextCat.isJunk) then downTarget = q._catIdx + 1 end
                 end
             end
         end
@@ -5443,8 +5531,10 @@ local function BuildSidebarButtons(categoryCounts, totalCount)
             end)
             btn:SetScript("OnMouseDown", function(self, button)
                 if button ~= "LeftButton" then return end
-                -- Equip-set cats: ReorderCategory rejects them; don't start the drag either
+                -- Equip-set cats and Junk: ReorderCategory rejects them; don't start the drag either
                 if self._catIdx <= 0 or self._noMove or self._isEquipSet then return end
+                local dragCat = EUI_CategoryManager:GetCategories()[self._catIdx]
+                if dragCat and dragCat.isJunk then return end
                 self._didDrag = false
                 local _, startY = GetCursorPosition()
                 self._dragStartY = startY
@@ -6283,6 +6373,13 @@ end
 function EUI_Bags:RefreshInventory()
     if not EUI_Bags:IsVisible() then return end
 
+    -- A select mode's hover box sits on a button this refresh may refill: put
+    -- that button's border back now and re-test the hover after
+    local hoverCatcher = EUI_Bags._assignCatcher
+    if hoverCatcher and hoverCatcher:IsShown() then hoverCatcher._clearHover(); hoverCatcher._hoverDirty = true end
+    hoverCatcher = EUI_Bags._pinCatcher
+    if hoverCatcher and hoverCatcher:IsShown() then hoverCatcher._clearHover(); hoverCatcher._hoverDirty = true end
+
     -- Refreshing during combat (bags opened mid-fight in M+/Delves) is safe: moving already-created
     -- buttons taints nothing; only CREATING a secure ContainerFrameItemButtonTemplate in lockdown
     -- poisons it (UseContainerItem() -> ADDON_ACTION_FORBIDDEN). GetOrCreateSlot returns nil in combat (pre-warmed pool makes this rare); PLAYER_REGEN_ENABLED replays a full refresh for anything skipped.
@@ -6587,6 +6684,12 @@ function EUI_Bags:RefreshInventory()
             S = 3 + (selectedCategoryIndex == -1 and spBags or 0)
         end
         n = math.max(n, 1)
+        -- Compact: no header rows; each group boundary costs one blank cell and
+        -- every row carries the label band, so fold both into the cell count
+        if EUI_Bags.IsCompactMode() then
+            n = (n + S - 1) * (1 + ns.CompactBandHeight() / (SLOT_SIZE + SPACING))
+            S = 0
+        end
         local ideal = baseCols
         -- Only grow when the tab won't fit at the base column count.
         if math.ceil(n / baseCols) + math.ceil(HDR * S) > BASE_ROWS then
@@ -6644,6 +6747,8 @@ function EUI_Bags:RefreshInventory()
             -- Same rule as the grid's Recent Items section
             recent = (showRecent and (isAllItems or (selectedCategoryIndex < 0 and BP().bagRecentInOneBag == true)))
                 and EUI_Bags._recentItems or nil,
+            -- The Recent Items tab: its items in one newest-first section
+            recentOnly = isRecentView or nil,
             -- Empty rows only when nothing is search-filtered out
             emptySlots = (#displayItems == #tempItems) and emptySlots or nil,
             -- Same rule as the grid's Pinned Items section
@@ -7275,9 +7380,10 @@ local function StartAddon()
     -- Recent Items: session-only tracking (resets on login/reload)
     -- Raised from 12 to 15.
     local RECENT_MAX = 15
-    EUI_Bags._recentItems = {}      -- itemID -> true (set of recent item IDs)
+    EUI_Bags._recentItems = {}      -- itemID -> pickup number (higher = newer; ns.RecentCompare sorts by it)
     EUI_Bags._recentOrder = {}      -- ordered list of itemIDs (oldest first)
-    local _knownItemCounts = {} -- itemID -> highest bag-visible count since the last bank/mail resync
+    EUI_Bags._recentSeq = 0         -- last pickup number handed out
+    local _knownItemCounts = {} -- itemID -> highest carried count (bags + worn gear) since the last bank/mail resync
     local _snapshotReady = false
 
     -- Both are interaction state, not frame visibility -- a third-party bank/mail
@@ -7296,6 +7402,12 @@ local function StartAddon()
             or C_PlayerInteractionManager.IsInteractingWithNpcOfType(Enum.PlayerInteractionType.AccountBanker)) and true or false
     end
 
+    -- One total per item across the bags AND worn gear: equipping, taking off
+    -- and equipment set swaps only move an item between the two, so its total
+    -- holds and nothing re-flags, while loot still raises it. Slots 1-30 are
+    -- gear and profession gear, 31-35 the equipped bags; a worn stack (a thrown
+    -- weapon stack on WoW Forever) counts by its size. The ammo slot (0) is
+    -- skipped: it names a type whose ammo is already counted in the bags.
     local function TallyItemCounts()
         local counts, order = {}, {}
         for bag = 0, 5 do
@@ -7306,6 +7418,13 @@ local function StartAddon()
                     if not counts[info.itemID] then order[#order + 1] = info.itemID end
                     counts[info.itemID] = (counts[info.itemID] or 0) + (info.stackCount or 0)
                 end
+            end
+        end
+        for slot = INVSLOT_FIRST_EQUIPPED, CONTAINER_BAG_OFFSET + NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+            local itemID = GetInventoryItemID("player", slot)
+            if itemID then
+                if not counts[itemID] then order[#order + 1] = itemID end
+                counts[itemID] = (counts[itemID] or 0) + (GetInventoryItemCount("player", slot) or 1)
             end
         end
         return counts, order
@@ -7336,29 +7455,34 @@ local function StartAddon()
         for _, itemID in ipairs(order) do
             local count = counts[itemID]
             local known = _knownItemCounts[itemID] or 0
-            if count > known and not EUI_Bags._recentItems[itemID] then
-                EUI_Bags._recentItems[itemID] = true
-                EUI_Bags._recentOrder[#EUI_Bags._recentOrder + 1] = itemID
-                while #EUI_Bags._recentOrder > RECENT_MAX do
-                    local old = table.remove(EUI_Bags._recentOrder, 1)
-                    EUI_Bags._recentItems[old] = nil
+            if count > known then
+                -- New, or more of a listed item: either way it is the newest now
+                local recent, ro = EUI_Bags._recentItems, EUI_Bags._recentOrder
+                if recent[itemID] then
+                    for i = #ro, 1, -1 do
+                        if ro[i] == itemID then table.remove(ro, i); break end
+                    end
+                end
+                EUI_Bags._recentSeq = EUI_Bags._recentSeq + 1
+                recent[itemID] = EUI_Bags._recentSeq
+                ro[#ro + 1] = itemID
+                while #ro > RECENT_MAX do
+                    recent[table.remove(ro, 1)] = nil
                 end
             end
             if not atMail or count > known then
                 _knownItemCounts[itemID] = count
             end
         end
-        -- Items gone from bags entirely (sold/used/deleted) no longer appear
-        -- in `counts`; drop their known peak too. Equipped is not disposed:
-        -- without the guard, swapping gear on (peak pruned) and later off
-        -- again (count rises from 0) would re-flag every swapped piece as
-        -- recent and FIFO-evict genuine loot.
+        -- Items gone entirely (sold/used/deleted) no longer appear in `counts`;
+        -- drop their known peak too. Worn gear is in `counts`, so an equipped
+        -- item keeps its peak and taking it off later re-flags nothing.
         -- Skipped at the mailbox for the same reason drops are ignored above: an item
         -- gone from bags there was as likely posted or sent as disposed of, and
         -- dropping its peak would re-flag it as new the moment it came back.
         if not atMail then
             for itemID in pairs(_knownItemCounts) do
-                if not counts[itemID] and not C_Item.IsEquippedItem(itemID) then
+                if not counts[itemID] then
                     _knownItemCounts[itemID] = nil
                 end
             end
@@ -7366,7 +7490,7 @@ local function StartAddon()
     end
 
     -- "Clear" link on the Recent Items headers. Only the tracked set is dropped --
-    -- _knownItemCounts already holds each item's current bag total, so nothing
+    -- _knownItemCounts already holds each item's current carried total, so nothing
     -- sitting in bags re-flags as new on the next DetectNewItems pass.
     function EUI_Bags:ClearRecentItems()
         wipe(EUI_Bags._recentItems)
@@ -7613,6 +7737,8 @@ local function StartAddon()
             if SetItemPanelOpen(panel[1], panel[2]) and EUI_Bags:IsVisible() then
                 EUI_Bags:RefreshInventory()
             end
+            -- Sell Junk shows with the merchant (only once the Junk Marker built it)
+            if panel[1] == "merchant" and EUI_Bags._junkBtn then EUI_Bags:SyncJunkMarker() end
             return
         end
         if event == "EQUIPMENT_SETS_CHANGED" then
@@ -7666,12 +7792,15 @@ local function StartAddon()
             watch:UnregisterAllEvents()
             EUI_Bags._padPlaceBtn:Hide()
         end
-        -- Controller cursor: a Back press or a bank close hides the bags
-        -- alone, so the pin/assign selection and the detached reagent window
-        -- go with them (a real close only, not a hidden UI).
-        if EUI.PadInUse() and not EUI_Bags:IsShown() then
+        -- The select modes (pin, assign, Junk Marker) end with the bags: their
+        -- click catchers cover the screen (a real close only, not a hidden UI)
+        if not EUI_Bags:IsShown() then
             if EUI_Bags._pinSelectMode then ExitPinSelectMode() end
             if EUI_Bags._assignSelectMode then ExitAssignSelectMode() end
+        end
+        -- Controller cursor: a Back press or a bank close hides the bags
+        -- alone, so the detached reagent window goes with them.
+        if EUI.PadInUse() and not EUI_Bags:IsShown() then
             EUI_BagsReagent:Hide()
         end
     end)
@@ -7731,6 +7860,16 @@ ns.GetCatTitleSize = GetCatTitleSize
 ns.SetInsetBorderThickness = SetInsetBorderThickness
 ns.UpdatePawnArrow = UpdatePawnArrow
 ns.PreCacheSortFields = PreCacheSortFields
+-- Recent Items order in every view: newest pickup first (pickup numbers in
+-- EUI_Bags._recentItems), the bag position breaking ties within one item
+function ns.RecentCompare(a, b)
+    local rec = EUI_Bags._recentItems
+    local ra = (a.info and rec[a.info.itemID]) or 0
+    local rb = (b.info and rec[b.info.itemID]) or 0
+    if ra ~= rb then return ra > rb end
+    if a.bag ~= b.bag then return a.bag < b.bag end
+    return a.slot < b.slot
+end
 ns.VisualSortCompare = VisualSortCompare
 ns.MergeDuplicates = MergeDuplicates
 ns.ApplySavedOrder = ApplySavedOrder

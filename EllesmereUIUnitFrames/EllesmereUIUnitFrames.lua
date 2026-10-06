@@ -434,6 +434,11 @@ local defaults = {
             classPowerCustomColor = { r = 1, g = 0.82, b = 0 },
             classPowerBgColor = { r = 0.082, g = 0.082, b = 0.082, a = 1.0 },
             classPowerEmptyColor = { r = 0.2, g = 0.2, b = 0.2, a = 1.0 },
+            -- WoW Forever: where the WoW Forever style's "Blizzard" class
+            -- resource (the combo point arc) shows -- "target" (the stock
+            -- spot), "player" or "never". Player only; nil on every other
+            -- client.
+            foreverComboLocation = (EllesmereUI.IS_FOREVER == true) and "target" or nil,
             borderSize = 1,
             borderColor = { r = 0, g = 0, b = 0 },
             borderTexture = "solid",

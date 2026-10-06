@@ -32,8 +32,7 @@ end
 -- accessors. On ns for the same upvalue cap.
 if EllesmereUI.IS_FOREVER then
     local HAS_NAME = { name = true, levelname = true, namelevel = true, nametotarget = true, targetname = true }
-    local FORMATS = { first = "First Name", last = "Last Name", full = "First and Last" }
-    local FORMAT_ORDER = { "first", "last", "full" }
+    local FORMATS, FORMAT_ORDER = EllesmereUI.NAME_FORMAT_VALUES, EllesmereUI.NAME_FORMAT_ORDER
     function ns.UF_NameFormatRows(prefix, contentDefault, get, set, rows)
         local contentKey, formatKey = prefix .. "Content", prefix .. "NameFormat"
         table.insert(rows, 1, { type="dropdown", label="Name Format", values=FORMATS, order=FORMAT_ORDER,
@@ -43,6 +42,24 @@ if EllesmereUI.IS_FOREVER then
             disabled=function() return not HAS_NAME[get(contentKey, contentDefault)] end,
             disabledTooltip="This option only applies when the text shows a name." })
         return rows
+    end
+    -- The same slots for the Forever Essentials NAME FORMAT section, which
+    -- reads and sets every name text at once: { unit settings key, content key,
+    -- format key, text bar slot }, keys prebuilt so its reads build no strings.
+    -- Boss frames have no text bar; the other mini frames no extra text either.
+    do
+        local MAIN = { "leftText", "rightText", "centerText", "extraText", "btbLeft", "btbRight", "btbCenter" }
+        local BOSS = { "leftText", "rightText", "centerText", "extraText" }
+        local MINI = { "leftText", "rightText", "centerText" }
+        local slots = {}
+        for _, set in ipairs({ { "player", MAIN }, { "target", MAIN }, { "focus", MAIN }, { "boss", BOSS },
+                { "targettarget", MINI }, { "focustarget", MINI }, { "pet", MINI } }) do
+            for _, pre in ipairs(set[2]) do
+                slots[#slots + 1] = { unit = set[1], content = pre .. "Content", format = pre .. "NameFormat",
+                    btb = pre:sub(1, 3) == "btb" }
+            end
+        end
+        ns.UF_NAME_FORMAT_SLOTS, ns.UF_HAS_NAME = slots, HAS_NAME
     end
 else
     function ns.UF_NameFormatRows(_, _, _, _, rows) return rows end
@@ -1866,6 +1883,7 @@ initFrame:SetScript("OnEvent", function(self)
         classPowerCustomColor= { player=true },
         classPowerBgColor    = { player=true },
         classPowerEmptyColor = { player=true },
+        foreverComboLocation = { player=true },
         showInRaid           = { player=true, target=true, focus=true },
         showInParty          = { player=true, target=true, focus=true },
         showSolo             = { player=true, target=true, focus=true },

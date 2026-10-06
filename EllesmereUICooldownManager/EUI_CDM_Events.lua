@@ -449,7 +449,8 @@ end
 -- /cd toggles Blizzard's Cooldown Manager settings: out of combat, a frame
 -- later (off the chat line, as the parent's commands run). WoW Forever's
 -- Gamepad interface style blocks opening a Blizzard panel from addon code.
-SLASH_EUIBLIZZCDM1 = "/cd"
+-- The /cd alias itself is set in ECME:OnInitialize, and only while Quality of
+-- Life's "Type /cd to open Blizzard CDM" is on.
 SlashCmdList.EUIBLIZZCDM = function()
     C_Timer.After(0, function()
         if InCombatLockdown() then

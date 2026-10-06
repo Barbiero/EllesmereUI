@@ -324,10 +324,19 @@ end
 -- while the slot shows. Strips keep whole physical pixels in scale-1 space as
 -- the plate scales, like the border's own (the PP scale guard); slices sit on
 -- the textured border's own geometry. Built in the creation window only.
--- Every slot's copy sits on the same frame level, so the sublevel ranks them
--- like the tints (a combo over the top single over the rest).
+-- The copies rank like the tints (a combo over the top single over the rest)
+-- without moving past anything else. On a custom border's MEDIUM strata a copy
+-- stays one level above the border and its sublevel ranks it (the frames that
+-- share that level draw ARTWORK). A Basic copy shares the flattened plate with
+-- the border's OVERLAY 7 strips, under which a lower sublevel sinks, so it keeps
+-- OVERLAY 7 and ranks by frame level (no other plate frame uses those levels).
 local function MakeBorderInit(b, color, sublevel)
     local initialized = setmetatable({}, { __mode = "k" })
+    local rank = 0
+    if not b.config.border.strata then
+        rank = (sublevel == 7 and 2) or (sublevel == 5 and 1) or 0
+        sublevel = 7
+    end
     return function(button)
         if initialized[button] then return end
         initialized[button] = true
@@ -343,7 +352,7 @@ local function MakeBorderInit(b, color, sublevel)
         if spec.behind ~= nil then
             base = spec.behind and math.max(1, b.level - 1) or (b.level + 1)
         end
-        f:SetFrameLevel(base + spec.up)
+        f:SetFrameLevel(base + spec.up + rank)
         if spec.kind == "strips" then
             f:SetIgnoreParentScale(true)
             f:SetScale(1)
