@@ -9233,7 +9233,7 @@ L["Your setup and every EllesmereUI feature carry over; only the look changes. A
 L["Your UI, Restyled in Seconds"] = "你的 UI，数秒内重新设计"
 L["Zone Text Scale"] = "区域文本缩放"
 
-2026.10.6新增
+--2026.10.6新增
 L["%1$d condition(s), met by your current talents: the icon shows."] = "%1$d 个条件，已由你当前的天赋满足：图标显示。"
 L["%1$d condition(s), not met by your current talents: the icon is hidden."] = "%1$d 个条件，未由你当前的天赋满足：图标隐藏。"
 L["%d active"] = "%d 个已启用"
