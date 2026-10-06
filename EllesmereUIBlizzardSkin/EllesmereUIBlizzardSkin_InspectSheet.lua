@@ -582,7 +582,8 @@ local function SkinInspectSheet()
         local paperDollItemsFrame = InspectPaperDollItemsFrame
         if paperDollItemsFrame then
             local IsForeignBtn = ns.WSkin and ns.WSkin.IsForeignFrame
-            local talentsBtn = paperDollItemsFrame.InspectTalents
+            -- Forever parents it to InspectPaperDollFrame instead.
+            local talentsBtn = paperDollItemsFrame.InspectTalents or InspectPaperDollFrame.InspectTalents
             local children2 = { paperDollItemsFrame:GetChildren() }
             for i = 1, #children2 do
                 local child = children2[i]
