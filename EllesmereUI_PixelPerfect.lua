@@ -183,14 +183,6 @@ do
         return result
     end
 
-    -- Half an edge (the scaleOffset styles' base offset) on whole pixels, a tie rounding
-    -- toward the frame: rounded outward (4.5 -> 5) the Pixels styles' solid line stopped
-    -- short of the frame at odd sizes and an odd size reached further out than the next even one.
-    function PP.SnapHalfEdge(edge, es)
-        if not (PP.IsNum(es) and es > 0) then es = 1 end
-        local onePixel = PP.perfect / es
-        return math.floor((edge / 2) / onePixel + 0.5 - 0.001) * onePixel
-    end
 
     ---------------------------------------------------------------------------
     --  SnapCenterForDim(value, dim, effectiveScale) -- snap a CENTER coord so both edges land
@@ -1364,7 +1356,7 @@ do
         borders = setmetatable({}, { __mode = "k" }),        -- borderFrame -> true (backdrop path)
         secret = setmetatable({}, { __mode = "k" }),         -- borderFrame -> state (8-slice path)
         owners = setmetatable({}, { __mode = "k" }),         -- owner -> fn (RegisterPxReapply)
-        seam = setmetatable({}, { __mode = "k" }),           -- borderFrame -> true (SetBorderSeamFill)
+        edgeFill = setmetatable({}, { __mode = "k" }),       -- borderFrame -> true (SetBorderEdgeFill)
     }
 
     --- px, step, tex of a *Px value; nil for nil / false / anything else.
@@ -1477,6 +1469,18 @@ do
         end
         tex:SetWidth(thick)
         tex:Show()
+    end
+
+    --- A scaleOffset texture's base offset (half its edge). The Pixels styles put it on
+    --- whole pixels with a tie rounding toward the frame: the final snap rounds ties
+    --- outward (4.5 -> 5), which left their solid line short of the frame at odd sizes
+    --- and made an odd size reach further out than the next even one.
+    function EllesmereUI.BorderHalfEdge(textureKey, edge, es)
+        if textureKey ~= "pixels" and textureKey ~= "pixels-textured" then return edge / 2 end
+        local PP = EllesmereUI.PP
+        if not (PP.IsNum(es) and es > 0) then es = 1 end
+        local onePixel = PP.perfect / es
+        return math.floor((edge / 2) / onePixel + 0.5 - 0.001) * onePixel
     end
 
     --- Check if a border texture uses scaled offset (edgeSize/2 base).
@@ -1671,7 +1675,7 @@ do
             if not (sok and ses and ses > 0.01) then ses = UIParent and UIParent:GetEffectiveScale() or 1 end
             local offsetX, offsetY
             if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
-                local half = PP.SnapHalfEdge(edgeSize, ses)
+                local half = EllesmereUI.BorderHalfEdge(textureKey, edgeSize, ses)
                 offsetX = half + adjX
                 offsetY = half + adjY
             else
@@ -1685,28 +1689,31 @@ do
             bdFrame:ClearAllPoints()
             bdFrame:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -offsetX + sx, offsetY + sy)
             bdFrame:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", offsetX + sx, -offsetY + sy)
-            -- Seam fill (opt-in, SetBorderSeamFill): the Pixels styles' solid line ends edge/28
+            -- Edge fill (opt-in, SetBorderEdgeFill): the Pixels styles' solid line ends edge/28
             -- inside the owner (texels 13-16 of a cell, owner edge at 16), so on an owner that
             -- moves by sub-pixels the owner's edge pixel is left to the soft inner fade and what
             -- is behind shows through. Hard strips 1px each side of the owner's edges, under the
             -- art (BACKGROUND; the pieces are BORDER), at the default placement only.
-            local seam = bdFrame._seam
-            if _px.seam[borderFrame] and (textureKey == "pixels" or textureKey == "pixels-textured")
+            local fill = bdFrame._edgeFill
+            if _px.edgeFill[borderFrame] and (textureKey == "pixels" or textureKey == "pixels-textured")
                 and adjX == 0 and adjY == 0 and sx == 0 and sy == 0 then
-                if not seam then
-                    seam = {}
+                if not fill then
+                    fill = {}
                     for i = 1, 4 do
-                        seam[i] = bdFrame:CreateTexture(nil, "BACKGROUND")
-                        seam[i]:SetColorTexture(1, 1, 1, 1)
+                        fill[i] = bdFrame:CreateTexture(nil, "BACKGROUND")
+                        fill[i]:SetColorTexture(1, 1, 1, 1)
                     end
-                    bdFrame._seam = seam
+                    bdFrame._edgeFill = fill
+                    -- Opaque only: a translucent strip under translucent art would stack darker.
                     hooksecurefunc(bdFrame, "SetBackdropBorderColor", function(self, cr, cg, cb, ca)
-                        local s = self._seam
-                        for i = 1, 4 do s[i]:SetVertexColor(cr, cg, cb, ca or 1) end
+                        local f = self._edgeFill
+                        for i = 1, 4 do f[i]:SetVertexColor(cr, cg, cb, 1) end
+                        f.opaque = (ca or 1) >= 0.999
+                        EllesmereUI.SyncBorderEdgeFill(self:GetParent())
                     end)
                 end
                 local px1 = PP.perfect / ses
-                local t, bt, l, rt = seam[1], seam[2], seam[3], seam[4]
+                local t, bt, l, rt = fill[1], fill[2], fill[3], fill[4]
                 t:ClearAllPoints()
                 t:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", 0, px1)
                 t:SetPoint("BOTTOMRIGHT", borderFrame, "TOPRIGHT", 0, -px1)
@@ -1719,9 +1726,9 @@ do
                 rt:ClearAllPoints()
                 rt:SetPoint("TOPLEFT", borderFrame, "TOPRIGHT", -px1, 0)
                 rt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", px1, 0)
-                seam.on = true
-            elseif seam then
-                seam.on = nil
+                fill.on = true
+            elseif fill then
+                fill.on = nil
             end
             -- SetBackdrop re-runs the nine-slice texcoord math, dividing by THIS frame's current
             -- width/height, and owners' sizes can be secret (map-pin tooltips); the upstream
@@ -1745,7 +1752,7 @@ do
             bdFrame:SetBackdropBorderColor(r, g, b, a)
             bdFrame:Show()
             borderFrame:Show()
-            if seam then EllesmereUI.SyncBorderSeam(borderFrame) end
+            if fill then EllesmereUI.SyncBorderEdgeFill(borderFrame) end
             -- An exact edge is pixels at UIParent scale, so a UI scale change must re-apply
             -- it (the legacy edge is UI units and needs nothing): keep the call's arguments
             -- on our backdrop frame (scalars, no table per apply) for ReapplyPxBorders.
@@ -1820,7 +1827,7 @@ do
             es = (UIParent and UIParent:GetEffectiveScale() or 1) / ratio
         end
         if EllesmereUI.BorderTextureUsesScaleOffset(tex) then
-            local half = PP.SnapHalfEdge(edge, es)
+            local half = EllesmereUI.BorderHalfEdge(tex, edge, es)
             ox, oy = half + ox, half + oy
         end
         ox, oy = PP.SnapForES(ox, es), PP.SnapForES(oy, es)
@@ -2021,7 +2028,7 @@ do
         if not (sok and ses and ses > 0.01) then ses = UIParent and UIParent:GetEffectiveScale() or 1 end
         local PP = EllesmereUI.PP
         if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
-            local half = PP.SnapHalfEdge(edgeSize, ses)
+            local half = EllesmereUI.BorderHalfEdge(textureKey, edgeSize, ses)
             ox, oy = half + ox, half + oy
         end
         ox, oy = PP.SnapForES(ox, ses), PP.SnapForES(oy, ses)
@@ -2070,24 +2077,25 @@ do
         if bdFrame and bdFrame._pxEdge then bdFrame._pxEdge = nil; _px.borders[borderFrame] = nil end
     end
 
-    --- Opts a textured border into the seam fill (see ApplyBorderStyle) from its next apply.
+    --- Opts a textured border into the edge fill (see ApplyBorderStyle) from its next apply.
     --- For owners that move by sub-pixels; off by default.
-    function EllesmereUI.SetBorderSeamFill(borderFrame, on)
-        _px.seam[borderFrame] = on or nil
+    function EllesmereUI.SetBorderEdgeFill(borderFrame, on)
+        _px.edgeFill[borderFrame] = on or nil
     end
 
-    --- Shows each seam strip only while its edge piece draws: an owner that hides a piece
-    --- (the nameplate cast bar wrap) calls this after toggling it.
-    function EllesmereUI.SyncBorderSeam(borderFrame)
+    --- Shows each edge fill strip only while its edge piece draws (none before the backdrop
+    --- has laid its pieces out): an owner that hides a piece (the nameplate cast bar wrap)
+    --- calls this after toggling it.
+    function EllesmereUI.SyncBorderEdgeFill(borderFrame)
         local bdFrame = _bdBorderData[borderFrame]
-        local seam = bdFrame and bdFrame._seam
-        if not seam then return end
-        local on = seam.on == true
+        local fill = bdFrame and bdFrame._edgeFill
+        if not fill then return end
+        local on = fill.on == true and fill.opaque ~= false
         local te, be, le, re = bdFrame.TopEdge, bdFrame.BottomEdge, bdFrame.LeftEdge, bdFrame.RightEdge
-        seam[1]:SetShown(on and not (te and not te:IsShown()))
-        seam[2]:SetShown(on and not (be and not be:IsShown()))
-        seam[3]:SetShown(on and not (le and not le:IsShown()))
-        seam[4]:SetShown(on and not (re and not re:IsShown()))
+        fill[1]:SetShown(on and te ~= nil and te:IsShown())
+        fill[2]:SetShown(on and be ~= nil and be:IsShown())
+        fill[3]:SetShown(on and le ~= nil and le:IsShown())
+        fill[4]:SetShown(on and re ~= nil and re:IsShown())
     end
 end
 

@@ -619,14 +619,14 @@ function ns.ApplyCustomBorderStyle(plate, szOverride)
         bf = CreateFrame("Frame", nil, plate.health)
         bf:SetAllPoints(plate.health)
         plate._customBorder = bf
+        -- Plates move by sub-pixels: the Pixels styles need their edge fill.
+        EllesmereUI.SetBorderEdgeFill(bf, true)
     end
     -- Health bars flatten render layers: a BORDER-layer backdrop would be clipped by the
     -- ARTWORK health fill, so lift it onto MEDIUM strata (same escape the plate uses for
     -- text/aura layers). Set before ApplyBorderStyle so any backdrop child it creates inherits it.
     bf:SetFrameStrata("MEDIUM")
     bf:SetFrameLevel(behind and math.max(1, plate.health:GetFrameLevel() - 1) or (plate.health:GetFrameLevel() + 1))
-    -- Plates move by sub-pixels: the Pixels styles need their seam fill.
-    EllesmereUI.SetBorderSeamFill(bf, true)
     EllesmereUI.ApplyBorderStyle(bf, sz, col.r, col.g, col.b, a, tex,
         p and p.customBorderOffset, p and p.customBorderOffsetY,
         p and p.customBorderShiftX, p and p.customBorderShiftY,
@@ -709,6 +709,7 @@ function ns.NP_UpdateCustomBorderWrap(plate)
             lower:SetPoint("TOPRIGHT", plate.health, "BOTTOMRIGHT", 0, 0)
             lower:SetPoint("BOTTOM", cast, "BOTTOM", 0, 0)
             plate._cbWrapLower = lower
+            EUI.SetBorderEdgeFill(lower, true)
         end
         -- Above the cast spell icon, re-set every pass (a strata change on the lifted
         -- cast bar resets its children's levels).
@@ -721,7 +722,6 @@ function ns.NP_UpdateCustomBorderWrap(plate)
             or lower._sTex ~= tex or lower._sSz ~= sz or lower._sPx ~= px
             or lower._sOX ~= offX or lower._sOY ~= offY or lower._sSX ~= shX or lower._sSY ~= shY then
             lower:SetFrameLevel(lvl)
-            EUI.SetBorderSeamFill(lower, true)
             EUI.ApplyBorderStyle(lower, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
             if PP.GetBorders(lower) then PP.CreateBorder(lower, nil, nil, nil, nil, nil, nil, nil, true) end
             lower._sTex, lower._sSz, lower._sPx = tex, sz, px
@@ -800,7 +800,7 @@ function ns.NP_SetWrapJoin(plate, on, tex, r, g, b, a)
             joined.BottomLeftCorner:Show()
             joined.BottomRightCorner:Show()
             bf._cbJoinBd = nil
-            EllesmereUI.SyncBorderSeam(bf)
+            EllesmereUI.SyncBorderEdgeFill(bf)
         end
         if lower and lower._cbFillL then
             lower._cbFillL:Hide()
@@ -815,8 +815,8 @@ function ns.NP_SetWrapJoin(plate, on, tex, r, g, b, a)
     lbd.TopEdge:Hide()
     lbd.TopLeftCorner:Hide()
     lbd.TopRightCorner:Hide()
-    EllesmereUI.SyncBorderSeam(bf)
-    EllesmereUI.SyncBorderSeam(lower)
+    EllesmereUI.SyncBorderEdgeFill(bf)
+    EllesmereUI.SyncBorderEdgeFill(lower)
     local fl, fr = lower._cbFillL, lower._cbFillR
     if not fl then
         fl = lower:CreateTexture(nil, "BORDER")

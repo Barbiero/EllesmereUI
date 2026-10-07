@@ -627,7 +627,7 @@ local function BuildLivePreview(parent, yOff)
                     local snapES = (pvES > 0.01) and pvES or uiES
                     local offX, offY
                     if EllesmereUI.BorderTextureUsesScaleOffset(brdTexKey) then
-                        local half = gamePP.SnapHalfEdge(edgeSize, snapES)
+                        local half = EllesmereUI.BorderHalfEdge(brdTexKey, edgeSize, snapES)
                         offX = half + adjX
                         offY = half + adjY
                     else
