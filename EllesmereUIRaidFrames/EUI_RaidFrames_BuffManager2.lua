@@ -967,14 +967,15 @@ end
 -- resolved spell arrays, recomputed per call (the legacy editor mutates
 -- indicator tables directly, so an edit-generation cache is unsound).
 -- Indicators resolving to EMPTY are skipped (empty include map = unverified
--- semantics). The views are STABLE, one per bucket + indicator id, and
--- refreshed IN PLACE: the container machinery captures them in its per-button
--- meta at build time and re-reads them on every geometry fingerprint/anchor
--- pass, so a fresh table per call freezes position/growth edits until reload.
--- Not keyed by the store table: an override layer swap replaces every store
--- indicator with a copy (_ERF_BM2ApplyLayer) without changing the container
--- signature, so the built frames would keep the outgoing layer's sizes.
-local bm2ViewCache = setmetatable({}, { __mode = "k" })
+-- semantics). The views are STABLE, one per bucket + indicator id (list
+-- position when id-less, matching BmSignature), and refreshed IN PLACE: the
+-- container machinery captures them in its per-button meta at build time and
+-- re-reads them on every geometry fingerprint/anchor pass, so a fresh table
+-- per call freezes position/growth edits until reload. Not keyed by the store
+-- table: an override layer swap replaces every store indicator with a copy
+-- (_ERF_BM2ApplyLayer) without changing the container signature. Bounded by
+-- the indicators ever rendered this session.
+local bm2ViewCache = {}
 
 -- Show In as rendered: an Anchor To member continues its root's run, so the
 -- terminal root's value decides (the member's own is not offered while it is
@@ -1040,7 +1041,6 @@ function ns.BM2_SpecIndicators(frameKind)
         if not list then return end
         for i = 1, #list do
             local ind = list[i]
-            local viewKey = ind.id ~= nil and (tostring(bucket) .. ":" .. tostring(ind.id)) or ind
             local drop = groupKey and inhDis and inhDis[groupKey .. ":" .. ind.id]
             if not drop and frameKind then
                 local showIn = ns.BM2_EffectiveShowIn(ind, list)
@@ -1049,6 +1049,7 @@ function ns.BM2_SpecIndicators(frameKind)
             end
             local resolved = not drop and ns.BM2_ResolveSpells(ind) or nil
             if resolved and #resolved > 0 then
+                local viewKey = tostring(bucket) .. ":" .. tostring(ind.id or ("x" .. i))
                 local v = bm2ViewCache[viewKey]
                 if not v then v = {}; bm2ViewCache[viewKey] = v end
                 for k in pairs(v) do v[k] = nil end
