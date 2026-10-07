@@ -946,11 +946,16 @@ local function StyleButton(button)
         ApplyBorderColor()
         -- Rounded corners (EllesmereUI_RoundedCorners.lua; nothing at radius 0).
         -- The power border rides in the body so its edge strips round too.
-        EllesmereUI.RoundCorners(button, s.cornerRadius or 0, {
-            roots = { d.health, d.power, d.topNameBar, d.powerBorderFrame },
-            textures = { d.bg },
-            border = d.borderFrame, style = texKey,
-        })
+        local radius = s.cornerRadius or 0
+        if radius > 0 then
+            EllesmereUI.RoundCorners(button, radius, {
+                roots = { d.health, d.power, d.topNameBar, d.powerBorderFrame },
+                textures = { d.bg },
+                border = d.borderFrame, style = texKey,
+            })
+        else
+            EllesmereUI.RoundCorners(button, 0)
+        end
     end
     if ns.RF_Stock() and not d.kit then ns.RF_StockBuild(button, d, d.power) end
     UpdateBorder()

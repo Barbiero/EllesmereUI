@@ -2176,8 +2176,9 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
         local bh = hh + pvPpExtra
         -- Class power "above" position adds height above health bar ("top" floats outside)
         local cpStyle = (unitKey == "player") and (s.classPowerStyle or "none") or "none"
-        -- The style that builds (WoW Forever reads a saved "blizzard" as modern).
-        if ns.UF_ForeverCPStyle then cpStyle = ns.UF_ForeverCPStyle(cpStyle) end
+        -- The style that builds (WoW Forever reads a saved "blizzard" as modern,
+        -- and a rogue's own style); only the player frame has a class resource.
+        if unitKey == "player" and ns.UF_ForeverCPStyle then cpStyle = ns.UF_ForeverCPStyle(cpStyle) end
         local cpPos = (cpStyle == "modern") and (s.classPowerPosition or "top") or "none"
         local cpAboveH = 0
         if cpStyle == "modern" and cpPos == "above" and cpPips then
@@ -3214,6 +3215,29 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
             elseif cbPv then
                 cbPv:Hide()
             end
+            -- Type Icon Position: the eye also shows the Magic type icon on its
+            -- corner of the health bar, over the border (runtime twin:
+            -- ApplyDispelSlotStyle). Built on first use.
+            local tiPv = pf._pvDispelIcon
+            local dp = db.profile
+            if optState.showDispelOverlayPreview and dp.showDispelIcons == true then
+                if not tiPv then
+                    tiPv = CreateFrame("Frame", nil, pf)
+                    local tex = tiPv:CreateTexture(nil, "ARTWORK")
+                    tex:SetAllPoints(tiPv)
+                    tex:SetAtlas("RaidFrame-Icon-DebuffMagic")
+                    pf._pvDispelIcon = tiPv
+                end
+                local sz = dp.dispelIconSize or 16
+                local corner = (dp.dispelIconPosition or "right"):upper()
+                tiPv:SetFrameLevel(border:GetFrameLevel() + 2)
+                tiPv:SetSize(sz, sz)
+                tiPv:ClearAllPoints()
+                tiPv:SetPoint(corner, health, corner, dp.dispelIconOffsetX or 0, dp.dispelIconOffsetY or 0)
+                tiPv:Show()
+            elseif tiPv then
+                tiPv:Hide()
+            end
         end
 
         -- Buff icons -- reposition based on anchor/growth/size/offset settings
@@ -3622,20 +3646,30 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
                 EllesmereUI.BorderPx((not s.borderSizeOverride) and bds.borderSizePx, bs2, bTex2))
         end
         -- Rounded corners, as on the live frame: the border frame is the shape
-        -- (health + power + attached text bar); the fill sits on pf, under the bars.
+        -- (health + power + attached portrait and text bar); the fill sits on
+        -- pf, under the bars. The portrait joins with its own art only.
         do
             local radius = (not ResolveBlizzPreview(unitKey, s) and bds.cornerRadius) or 0
-            EllesmereUI.RoundCorners(pf, radius, {
-                roots = { health, (pvPpPos == "below" or pvPpPos == "above") and power or nil,
-                    s.bottomTextBar and btbIsAtt and btbFrame or nil },
-                border = border, rect = border, style = bds.borderTexture or "solid",
-            })
+            if radius > 0 then
+                local port = sp and isAttached and portraitFrame and portraitFrame:IsShown() and portraitFrame or nil
+                EllesmereUI.RoundCorners(pf, radius, {
+                    roots = { health, (pvPpPos == "below" or pvPpPos == "above") and power or nil,
+                        s.bottomTextBar and btbIsAtt and btbFrame or nil },
+                    textures = { port and port._previewBg, port and port._previewTex },
+                    border = border, rect = border, style = bds.borderTexture or "solid",
+                })
+            else
+                EllesmereUI.RoundCorners(pf, 0)
+            end
             if power then
                 local det = pvPpPos == "detached_top" or pvPpPos == "detached_bottom"
-                EllesmereUI.RoundCorners(power, det and radius or 0, {
-                    roots = { power }, border = power._pbBorder,
-                    style = s.powerBorderStyle or "solid",
-                })
+                if det and radius > 0 then
+                    EllesmereUI.RoundCorners(power, radius, {
+                        border = power._pbBorder, style = s.powerBorderStyle or "solid",
+                    })
+                else
+                    EllesmereUI.RoundCorners(power, 0)
+                end
             end
         end
         if castbar then

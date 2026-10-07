@@ -1586,11 +1586,6 @@ local _totemOrigStrata
 -- ResourceBars. Handlers/event registrations can attach later anywhere.
 local _erbEventFrame = CreateFrame("Frame")   -- event entry; events registered in OnEnable
 
--- Native fill easing: SetValue(v, ns.EASE) lets the engine animate toward the
--- new value instead of a per-frame Lua lerp. Secret values and deliberate snaps
--- use plain SetValue.
-ns.EASE = Enum and Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut
-
 -- Shell pool for runtime handler hosts (the combat queue below, and up to three
 -- mouse-follow anchors): born HERE so their work bills ResourceBars (attribution
 -- rule above). One spare.
@@ -2040,13 +2035,14 @@ local function CreateStatusBar(parent, name, w, h, borderSize, borderR, borderG,
 
     -- Forward StatusBar methods to the inner bar so callers don't change
     bar.SetMinMaxValues = function(_, ...) sb:SetMinMaxValues(...) end
-    bar.SetValue = function(_, ...)
+    bar.SetValue = function(_, v)
         -- Native interpolation (opt-in "Smooth Bars"): _smoothing is set only on
-        -- bars whose toggle is on; nil elsewhere, so this is a plain SetValue.
+        -- bars whose toggle is on; nil elsewhere, so every write lands at once.
+        -- The toggle alone decides: callers pass the value only.
         if bar._smoothing then
-            sb:SetValue((...), bar._smoothing)
+            sb:SetValue(v, bar._smoothing)
         else
-            sb:SetValue(...)
+            sb:SetValue(v)
         end
     end
     bar.GetValue = function(_) return sb:GetValue() end
@@ -3314,31 +3310,49 @@ end
 function ns.ERB_RoundBar(bar, cfg)
     if not bar then return end
     local radius = (not ns.ERB_BarsBlizz() and cfg.cornerRadius) or 0
+    if radius <= 0 then EllesmereUI.RoundCorners(bar, 0); return end
     EllesmereUI.RoundCorners(bar, radius, {
         roots = { bar._sb }, clip = bar._sb,
         border = bar._border and bar._border._frame, style = cfg.borderTexture or "solid",
     })
 end
 -- Class resource: the whole row rounds its outline; with Border on Pips each
--- pip (or rune) also rounds inside its own border.
-function ns.ERB_RoundSecondary(sp, isBarType)
-    local radius = (not ns.ERB_BarsBlizz() and sp.cornerRadius) or 0
-    local style = sp.borderTexture or "solid"
-    local onPips = sp.borderOnPips and not isBarType
-    local rowBorder = secondaryFrame._barBorder
-    EllesmereUI.RoundCorners(secondaryFrame, radius, {
-        roots = { secondaryFrame }, style = style,
-        border = not onPips and rowBorder and rowBorder._frame or nil,
-        clip = isBarType and secondaryBar and secondaryBar._sb or nil,
-    })
-    local pipRadius = onPips and radius or 0
-    for _, list in ipairs({ pips, runeFrames }) do
+-- shown pip (or rune) also rounds inside its own border (pips only show from
+-- BuildBars, before this runs). The pip loop runs only while pips are rounded
+-- or were rounded before.
+do
+    local pipsRounded = false
+    local function RoundPipList(list, radius, style)
         for i = 1, #list do
             local pip = list[i]
-            EllesmereUI.RoundCorners(pip, pipRadius, {
-                roots = { pip }, style = style,
-                border = pip._border and pip._border._frame,
+            if radius <= 0 then
+                EllesmereUI.RoundCorners(pip, 0)
+            elseif pip:IsShown() then
+                EllesmereUI.RoundCorners(pip, radius, {
+                    style = style, border = pip._border and pip._border._frame,
+                })
+            end
+        end
+    end
+    function ns.ERB_RoundSecondary(sp, isBarType)
+        local radius = (not ns.ERB_BarsBlizz() and sp.cornerRadius) or 0
+        local style = sp.borderTexture or "solid"
+        local onPips = sp.borderOnPips and not isBarType
+        local rowBorder = secondaryFrame._barBorder
+        if radius > 0 then
+            EllesmereUI.RoundCorners(secondaryFrame, radius, {
+                style = style,
+                border = not onPips and rowBorder and rowBorder._frame or nil,
+                clip = isBarType and secondaryBar and secondaryBar._sb or nil,
             })
+        else
+            EllesmereUI.RoundCorners(secondaryFrame, 0)
+        end
+        local pipRadius = onPips and radius or 0
+        if pipRadius > 0 or pipsRounded then
+            RoundPipList(pips, pipRadius, style)
+            RoundPipList(runeFrames, pipRadius, style)
+            pipsRounded = pipRadius > 0
         end
     end
 end
@@ -3477,9 +3491,6 @@ local function BuildBars()
         -- Health's own texture (the Texture cog) counts only while splitTex is on; nil or false
         -- matches the main row.
         ApplyBarTexture(healthBar, (p.splitTex == true and hp.barTexture) or g.barTexture or "none")
-        -- Rounded corners (EllesmereUI_RoundedCorners.lua), after the retexture:
-        -- nothing at radius 0 or under the stock styles.
-        ns.ERB_RoundBar(healthBar, hp)
 
         -- Colors: custom colored > class color. Gradient is additive: when enabled
         -- it fills from the resolved custom/class base to the gradient end color.
@@ -3528,6 +3539,10 @@ local function BuildBars()
         -- Absorb / heal absorb / max health reduction overlays
         -- (EUI_ResourceBars_HealthIndicators.lua): settings pass only.
         ns.HealthIndicatorsApply(healthBar, (not IsSpecDisabled(hp)) and hp or nil, hpOri)
+        -- Rounded corners (EllesmereUI_RoundedCorners.lua), after the retexture
+        -- and the overlays, so overlays built by this pass join the body:
+        -- nothing at radius 0 or under the stock styles.
+        ns.ERB_RoundBar(healthBar, hp)
         end
     end
 
@@ -4542,13 +4557,9 @@ local function UpdateHealthBar()
         end
     end
 
-    -- Fill: eased SetValue -- the engine animates toward the new value, so a health
-    -- change costs zero per-frame Lua. Secrets use the plain SetValue path.
-    if not curTainted then
-        healthBar:SetValue(cur, ns.EASE)
-    else
-        healthBar:SetValue(cur)
-    end
+    -- Fill: the bar's Smooth Bars item decides whether the engine eases toward
+    -- the new value (CreateStatusBar's SetValue wrapper), at zero per-frame Lua.
+    healthBar:SetValue(cur)
 
     if hp.textFormat ~= "none" and not _G._ERB_TextHiddenByForm(hp) then
         local fmt = hp.textFormat
@@ -4840,13 +4851,9 @@ local function UpdatePrimaryBar()
         end
     end
 
-    -- Fill: eased SetValue (see the health handler note); secrets use plain.
-    local tainted = issecretvalue and issecretvalue(cur)
-    if not tainted then
-        primaryBar:SetValue(cur, ns.EASE)
-    else
-        primaryBar:SetValue(cur)
-    end
+    -- Fill: eased only while the bar's Smooth Bars item is on (see the health
+    -- handler note).
+    primaryBar:SetValue(cur)
 
     if pp.textFormat ~= "none" and not _G._ERB_TextHiddenByForm(pp) then
         -- Stamped only when the text is actually written, so a form-hidden
@@ -6257,14 +6264,10 @@ local function UpdateSecondaryResource()
                     end
                 end
             end
-            -- Secret-aware update: secrets go straight to the StatusBar (the C
-            -- widget handles them natively); clean values get the eased SetValue.
+            -- Fill: eased only while the bar's Smooth Bars item is on (see the
+            -- health handler note); a secret goes straight to the StatusBar too.
+            secondaryBar:SetValue(cur)
             local tainted = issecretvalue and issecretvalue(cur)
-            if tainted then
-                secondaryBar:SetValue(cur)
-            else
-                secondaryBar:SetValue(cur, ns.EASE)
-            end
             if sp.showText and secondaryFrame._countText then
                 local ct = secondaryFrame._countText
                 local percentSuffix = (sp.showPercent == false) and "" or "%"
@@ -7066,7 +7069,8 @@ end
 
 -- Subsystem tickers. There is NO frame-rate OnUpdate multiplexer:
 --  * Value fills (health/primary/secondary) are EVENT-DRIVEN -- handlers call
---    SetValue(v, ns.EASE) and the engine animates the ease, zero per-frame Lua.
+--    SetValue(v) and, while the bar's Smooth Bars item is on, the engine
+--    animates the ease (ERB:ApplySmoothing), zero per-frame Lua.
 --    Threshold/band coloring rides the same events; never add a color poll.
 --  * Genuinely time-based jobs each ride their own fixed-rate anim ticker
 --    (EllesmereUI.Tick.NewAnimTicker): the C engine fires OnLoop at the
@@ -7079,13 +7083,14 @@ end
 -- bills the work to ResourceBars (frame-birth attribution rule).
 
 -- Ebon Might drain (Aug Evoker; the engine slot owns the countdown when present).
--- 20 Hz drain + text; the eased SetValue keeps the fill continuous between fires.
+-- 20 Hz drain + text; with the Power Bar's Smooth Bars item on, the engine eases
+-- the fill between fires.
 -- Re-armed by UNIT_AURA via ns.ArmTick.
 ns.EMTick = EllesmereUI.Tick.NewAnimTicker(CreateFrame("Frame"), function()    if ns.EMB121_Owns then return end
     if cachedPrimary ~= "EBON_MIGHT" then return end
     if not (primaryBar and primaryBar:IsShown() and primaryBar:GetAlpha() > 0) then return end
     local remaining = (_ebonMightExpiry > 0) and max(0, _ebonMightExpiry - GetTime()) or 0
-    primaryBar:SetValue(remaining, ns.EASE)
+    primaryBar:SetValue(remaining)
     local pp = _G._ERB_ResolvePowerCfg()
     if pp and pp.textFormat and pp.textFormat ~= "none" then
         local fmt = pp.textFormat
@@ -11546,10 +11551,9 @@ end
 -- interpolation mode on the bar and let the CreateStatusBar SetValue wrapper
 -- pass it to Blizzard's C-side interpolation. nil = no interpolation = zero
 -- added cost (plain SetValue). Only the three main bars are toggled here (pips
--- never smooth). The cast bar never smooths: its fill is recomputed from
--- GetTime() every frame (already smooth), and
--- easing toward that moving target made the fill trail real progress so the
--- bar looked cut off at cast end. The GCD bar keeps its own bar._castInterp.
+-- never smooth; the WoW Forever druid mana bar follows the Power Bar's). The
+-- cast bar has its own Smooth Bar Animation (castBar.smoothFill) and the GCD
+-- bar its own bar._castInterp.
 function ERB:ApplySmoothing()
     local interp = Enum and Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut
     local p = ERB.db and ERB.db.profile

@@ -138,16 +138,23 @@ local function BuildDisplayLayout(parent, y, ctx)
           end }))
     y = y - h
     -- Corner Radius (EllesmereUI_RoundedCorners.lua): an inline cog on the
-    -- border size control.
+    -- border size control. The stock styles keep every plate square.
     if not EllesmereUI._prebuilding then
         EllesmereUI.BuildInlineCog(borderStyleRow._rightRegion, {
             title = "Corner Radius", tip = "Corner Radius",
-            disabled = function() return DBVal("customBorderEnabled") and not EllesmereUI.RoundedStyleOK(DBVal("customBorderTexture") or defaults.customBorderTexture) end,
-            disabledTooltip = "This option requires the Solid, Glow or Shadow border style.",
+            disabled = function()
+                if EllesmereUI.BlizzStyle.Get("nameplates") then return true end
+                return DBVal("customBorderEnabled") and not EllesmereUI.RoundedStyleOK(DBVal("customBorderTexture") or defaults.customBorderTexture)
+            end,
+            disabledTooltip = function()
+                if EllesmereUI.BlizzStyle.Get("nameplates") then return EllesmereUI.BlizzStyle.Label("nameplates") end
+                return "This option requires the Solid, Glow or Shadow border style."
+            end,
+            requireState = "disabled",
             rows = {
                 { type = "slider", label = "Corner Radius", min = 0, max = EllesmereUI.ROUNDED_MAX_RADIUS, step = 1,
                   get = function() return DBVal("cornerRadius") or 0 end,
-                  set = function(v) DB().cornerRadius = v; ns.RefreshBorder(); if ns.RefreshCastBorder then ns.RefreshCastBorder() end; UpdatePreview() end },
+                  set = function(v) DB().cornerRadius = v; ns.RefreshBorder(); ns.RefreshCastBorder(); UpdatePreview() end },
             },
         })
     end

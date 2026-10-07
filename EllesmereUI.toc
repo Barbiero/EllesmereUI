@@ -80,6 +80,9 @@ EllesmereUI_AuraKit.lua
 EllesmereUI_WarriorCharges.lua
 EllesmereUI_ManaRegenSpark.lua
 EllesmereUI_SpellCostPrediction.lua
+# Friends list kit: realm regions, the 12.1 Social UI tiles and invite auto-accept,
+# shared by the Friends List module (retail) and Blizzard Skins+ (WoW Forever)
+EllesmereUI_FriendsKit.lua
 EllesmereUI_FirstInstall.lua
 EllesmereUI_RaidFramesPopup.lua
 EllesmereUI_PatchNotesPopup.lua

@@ -1180,7 +1180,7 @@ local friendlyFrameCache = CreateFramePool("Frame", UIParent, nil, nil, false, f
             ns.ApplyCustomBorderColor(plate)
         else
             local cr, cg, cb = ns.GetBorderColor()
-            PP.SetBorderColor(plate.health, cr, cg, cb, 1)
+            ns.NP_BasicBorderColor(plate, cr, cg, cb, 1)
         end
     end
 
@@ -1558,7 +1558,7 @@ function FriendlyFrame:ApplyTarget()
                 if not self._customBorder then ns.ApplyCustomBorderStyle(self) end
                 EllesmereUI.SetBorderStyleColor(self._customBorder, bc.r, bc.g, bc.b, 1)
             else
-                PP.SetBorderColor(self.health, bc.r, bc.g, bc.b, 1)
+                ns.NP_BasicBorderColor(self, bc.r, bc.g, bc.b, 1)
             end
             self._fxBorderTinted = true
         elseif self._fxBorderTinted then

@@ -1099,6 +1099,9 @@ local function BuildNameplatePreview(parent, parentW)
         -- frame (the live plate's Basic border is that same Solid border).
         do
             local radius = (not EllesmereUI.BlizzStyle.Get("nameplates") and DBVal("cornerRadius")) or 0
+            local style = customOn and (DBVal("customBorderTexture") or defaults.customBorderTexture) or "solid"
+            -- A custom style that cannot round keeps the cast bar square too.
+            if not EllesmereUI.RoundedStyleOK(style) then radius = 0 end
             if radius > 0 and not customOn and pcb and simpleBorderFrame:IsShown() then
                 local bc = (DB() and DB().borderColor) or defaults.borderColor
                 simpleBorderFrame:Hide()
@@ -1107,15 +1110,20 @@ local function BuildNameplatePreview(parent, parentW)
                 EllesmereUI.ApplyBorderStyle(pcb, DBVal("borderSize") or defaults.borderSize,
                     bc.r, bc.g, bc.b, 1, "solid")
             end
-            EllesmereUI.RoundCorners(pf, radius, {
-                roots = {}, rect = health, border = pcb,
-                style = customOn and (DBVal("customBorderTexture") or defaults.customBorderTexture) or "solid",
-                textures = { health:GetStatusBarTexture(), healthBG },
-            })
-            EllesmereUI.RoundCorners(cast, radius, {
-                roots = {}, border = cast,
-                textures = { cast:GetStatusBarTexture(), castBG },
-            })
+            if radius > 0 then
+                EllesmereUI.RoundCorners(pf, radius, {
+                    roots = {}, rect = health, border = pcb, style = style,
+                    textures = { health:GetStatusBarTexture(), healthBG,
+                        pvAbs.absorb:GetStatusBarTexture(), pvAbs.absorbForward:GetStatusBarTexture() },
+                })
+                EllesmereUI.RoundCorners(cast, radius, {
+                    roots = {}, border = cast,
+                    textures = { cast:GetStatusBarTexture(), castBG },
+                })
+            else
+                EllesmereUI.RoundCorners(pf, 0)
+                EllesmereUI.RoundCorners(cast, 0)
+            end
         end
 
         -- Refresh all 1px AddBorder edges (cast icon, aura icons)
