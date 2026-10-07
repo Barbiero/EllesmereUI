@@ -1355,6 +1355,7 @@ do
         borders = setmetatable({}, { __mode = "k" }),        -- borderFrame -> true (backdrop path)
         secret = setmetatable({}, { __mode = "k" }),         -- borderFrame -> state (8-slice path)
         owners = setmetatable({}, { __mode = "k" }),         -- owner -> fn (RegisterPxReapply)
+        seam = setmetatable({}, { __mode = "k" }),           -- borderFrame -> true (SetBorderSeamFill)
     }
 
     --- px, step, tex of a *Px value; nil for nil / false / anything else.
@@ -1674,6 +1675,44 @@ do
             bdFrame:ClearAllPoints()
             bdFrame:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -offsetX + sx, offsetY + sy)
             bdFrame:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", offsetX + sx, -offsetY + sy)
+            -- Seam fill (opt-in, SetBorderSeamFill): the Pixels styles' solid line ends edge/28
+            -- inside the owner (texels 13-16 of a cell, owner edge at 16), so on an owner that
+            -- moves by sub-pixels the owner's edge pixel is left to the soft inner fade and what
+            -- is behind shows through. Hard strips 1px each side of the owner's edges, under the
+            -- art (BACKGROUND; the pieces are BORDER), at the default placement only.
+            local seam = bdFrame._seam
+            if _px.seam[borderFrame] and (textureKey == "pixels" or textureKey == "pixels-textured")
+                and adjX == 0 and adjY == 0 and sx == 0 and sy == 0 then
+                if not seam then
+                    seam = {}
+                    for i = 1, 4 do
+                        seam[i] = bdFrame:CreateTexture(nil, "BACKGROUND")
+                        seam[i]:SetColorTexture(1, 1, 1, 1)
+                    end
+                    bdFrame._seam = seam
+                    hooksecurefunc(bdFrame, "SetBackdropBorderColor", function(self, cr, cg, cb, ca)
+                        local s = self._seam
+                        for i = 1, 4 do s[i]:SetVertexColor(cr, cg, cb, ca or 1) end
+                    end)
+                end
+                local px1 = PP.perfect / ses
+                local t, bt, l, rt = seam[1], seam[2], seam[3], seam[4]
+                t:ClearAllPoints()
+                t:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", 0, px1)
+                t:SetPoint("BOTTOMRIGHT", borderFrame, "TOPRIGHT", 0, -px1)
+                bt:ClearAllPoints()
+                bt:SetPoint("TOPLEFT", borderFrame, "BOTTOMLEFT", 0, px1)
+                bt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", 0, -px1)
+                l:ClearAllPoints()
+                l:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -px1, 0)
+                l:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMLEFT", px1, 0)
+                rt:ClearAllPoints()
+                rt:SetPoint("TOPLEFT", borderFrame, "TOPRIGHT", -px1, 0)
+                rt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", px1, 0)
+                seam.on = true
+            elseif seam then
+                seam.on = nil
+            end
             -- SetBackdrop re-runs the nine-slice texcoord math, dividing by THIS frame's current
             -- width/height, and owners' sizes can be secret (map-pin tooltips); the upstream
             -- owner-width guard can pass while this anchored rect resolves secret, so the guard
@@ -1696,6 +1735,7 @@ do
             bdFrame:SetBackdropBorderColor(r, g, b, a)
             bdFrame:Show()
             borderFrame:Show()
+            if seam then EllesmereUI.SyncBorderSeam(borderFrame) end
             -- An exact edge is pixels at UIParent scale, so a UI scale change must re-apply
             -- it (the legacy edge is UI units and needs nothing): keep the call's arguments
             -- on our backdrop frame (scalars, no table per apply) for ReapplyPxBorders.
@@ -2016,6 +2056,26 @@ do
         local bdFrame = _bdBorderData[borderFrame]
         if bdFrame then bdFrame:Hide() end
         if bdFrame and bdFrame._pxEdge then bdFrame._pxEdge = nil; _px.borders[borderFrame] = nil end
+    end
+
+    --- Opts a textured border into the seam fill (see ApplyBorderStyle) from its next apply.
+    --- For owners that move by sub-pixels; off by default.
+    function EllesmereUI.SetBorderSeamFill(borderFrame, on)
+        _px.seam[borderFrame] = on or nil
+    end
+
+    --- Shows each seam strip only while its edge piece draws: an owner that hides a piece
+    --- (the nameplate cast bar wrap) calls this after toggling it.
+    function EllesmereUI.SyncBorderSeam(borderFrame)
+        local bdFrame = _bdBorderData[borderFrame]
+        local seam = bdFrame and bdFrame._seam
+        if not seam then return end
+        local on = seam.on == true
+        local te, be, le, re = bdFrame.TopEdge, bdFrame.BottomEdge, bdFrame.LeftEdge, bdFrame.RightEdge
+        seam[1]:SetShown(on and not (te and not te:IsShown()))
+        seam[2]:SetShown(on and not (be and not be:IsShown()))
+        seam[3]:SetShown(on and not (le and not le:IsShown()))
+        seam[4]:SetShown(on and not (re and not re:IsShown()))
     end
 end
 

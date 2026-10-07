@@ -625,6 +625,8 @@ function ns.ApplyCustomBorderStyle(plate, szOverride)
     -- text/aura layers). Set before ApplyBorderStyle so any backdrop child it creates inherits it.
     bf:SetFrameStrata("MEDIUM")
     bf:SetFrameLevel(behind and math.max(1, plate.health:GetFrameLevel() - 1) or (plate.health:GetFrameLevel() + 1))
+    -- Plates move by sub-pixels: the Pixels styles need their seam fill.
+    EllesmereUI.SetBorderSeamFill(bf, true)
     EllesmereUI.ApplyBorderStyle(bf, sz, col.r, col.g, col.b, a, tex,
         p and p.customBorderOffset, p and p.customBorderOffsetY,
         p and p.customBorderShiftX, p and p.customBorderShiftY,
@@ -719,6 +721,7 @@ function ns.NP_UpdateCustomBorderWrap(plate)
             or lower._sTex ~= tex or lower._sSz ~= sz or lower._sPx ~= px
             or lower._sOX ~= offX or lower._sOY ~= offY or lower._sSX ~= shX or lower._sSY ~= shY then
             lower:SetFrameLevel(lvl)
+            EUI.SetBorderSeamFill(lower, true)
             EUI.ApplyBorderStyle(lower, sz, r, g, b, a, tex, offX, offY, shX, shY, "nameplates", sz, nil, px)
             if PP.GetBorders(lower) then PP.CreateBorder(lower, nil, nil, nil, nil, nil, nil, nil, true) end
             lower._sTex, lower._sSz, lower._sPx = tex, sz, px
@@ -797,6 +800,7 @@ function ns.NP_SetWrapJoin(plate, on, tex, r, g, b, a)
             joined.BottomLeftCorner:Show()
             joined.BottomRightCorner:Show()
             bf._cbJoinBd = nil
+            EllesmereUI.SyncBorderSeam(bf)
         end
         if lower and lower._cbFillL then
             lower._cbFillL:Hide()
@@ -811,6 +815,8 @@ function ns.NP_SetWrapJoin(plate, on, tex, r, g, b, a)
     lbd.TopEdge:Hide()
     lbd.TopLeftCorner:Hide()
     lbd.TopRightCorner:Hide()
+    EllesmereUI.SyncBorderSeam(bf)
+    EllesmereUI.SyncBorderSeam(lower)
     local fl, fr = lower._cbFillL, lower._cbFillR
     if not fl then
         fl = lower:CreateTexture(nil, "BORDER")
