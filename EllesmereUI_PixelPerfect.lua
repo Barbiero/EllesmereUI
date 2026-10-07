@@ -183,6 +183,15 @@ do
         return result
     end
 
+    -- Half an edge (the scaleOffset styles' base offset) on whole pixels, a tie rounding
+    -- toward the frame: rounded outward (4.5 -> 5) the Pixels styles' solid line stopped
+    -- short of the frame at odd sizes and an odd size reached further out than the next even one.
+    function PP.SnapHalfEdge(edge, es)
+        if not (PP.IsNum(es) and es > 0) then es = 1 end
+        local onePixel = PP.perfect / es
+        return math.floor((edge / 2) / onePixel + 0.5 - 0.001) * onePixel
+    end
+
     ---------------------------------------------------------------------------
     --  SnapCenterForDim(value, dim, effectiveScale) -- snap a CENTER coord so both edges land
     --  on physical pixels: EVEN dim -> whole-pixel center; ODD -> half-pixel center (integer +
@@ -1652,14 +1661,6 @@ do
             sx, sy = sx * ratio, sy * ratio
             -- scaleOffset textures: base = edgeSize/2 (border tracks the edge at any size) plus fine-tune adj; other textures: absolute offset, no base.
             -- EllesmereUI.BorderReach mirrors this placement for size matching: change the two together.
-            local offsetX, offsetY
-            if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
-                offsetX = (edgeSize / 2) + adjX
-                offsetY = (edgeSize / 2) + adjY
-            else
-                offsetX = adjX
-                offsetY = adjY
-            end
             -- Snap the four anchor offsets to whole physical pixels at the backdrop's own
             -- scale. Offset/shift are units, and at any UI scale where a unit is not a whole
             -- pixel (1.75 px/unit: 2 units = 3.5 px) the backdrop's edges land between pixels;
@@ -1668,6 +1669,15 @@ do
             -- already on the grid (PP.Point/PP.Size); this keeps the border there with it.
             local sok, ses = pcall(bdFrame.GetEffectiveScale, bdFrame)
             if not (sok and ses and ses > 0.01) then ses = UIParent and UIParent:GetEffectiveScale() or 1 end
+            local offsetX, offsetY
+            if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
+                local half = PP.SnapHalfEdge(edgeSize, ses)
+                offsetX = half + adjX
+                offsetY = half + adjY
+            else
+                offsetX = adjX
+                offsetY = adjY
+            end
             -- Snap the offset once and mirror it (not each corner: round-half-up would put
             -- -3.5 at -3 and +3.5 at +4, one pixel more on the right/top than the left/bottom).
             offsetX, offsetY = PP.SnapForES(offsetX, ses), PP.SnapForES(offsetY, ses)
@@ -1803,14 +1813,15 @@ do
         end
         local ox, oy = (offX or dox) * ratio, (offY or doy) * ratio
         local sx, sy = (shX or dsx) * ratio, (shY or dsy) * ratio
-        if EllesmereUI.BorderTextureUsesScaleOffset(tex) then
-            ox, oy = edge / 2 + ox, edge / 2 + oy
-        end
         -- ApplyBorderStyle puts the backdrop's anchors on whole pixels at its own
         -- effective scale; the reach snaps the same four values the same way (the
         -- ink below stays fractional: it is texture content, not an anchor).
         if not (es and es > 0.01) then
             es = (UIParent and UIParent:GetEffectiveScale() or 1) / ratio
+        end
+        if EllesmereUI.BorderTextureUsesScaleOffset(tex) then
+            local half = PP.SnapHalfEdge(edge, es)
+            ox, oy = half + ox, half + oy
         end
         ox, oy = PP.SnapForES(ox, es), PP.SnapForES(oy, es)
         sx, sy = PP.SnapForES(sx, es), PP.SnapForES(sy, es)
@@ -2004,14 +2015,15 @@ do
         ox = offsetX ~= nil and offsetX or ox; oy = offsetY ~= nil and offsetY or oy
         sx = shiftX ~= nil and shiftX or sx; sy = shiftY ~= nil and shiftY or sy
         ox, oy, sx, sy = ox * edgeScale, oy * edgeScale, sx * edgeScale, sy * edgeScale
-        if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
-            ox, oy = edgeSize / 2 + ox, edgeSize / 2 + oy
-        end
         -- Same pixel snap as ApplyBorderStyle's backdrop anchors (see there): the
         -- corner pieces carry the outer edges, so their four anchor offsets go on the grid.
         local sok, ses = pcall(owner.GetEffectiveScale, owner)
         if not (sok and ses and ses > 0.01) then ses = UIParent and UIParent:GetEffectiveScale() or 1 end
         local PP = EllesmereUI.PP
+        if EllesmereUI.BorderTextureUsesScaleOffset(textureKey) then
+            local half = PP.SnapHalfEdge(edgeSize, ses)
+            ox, oy = half + ox, half + oy
+        end
         ox, oy = PP.SnapForES(ox, ses), PP.SnapForES(oy, ses)
         sx, sy = PP.SnapForES(sx, ses), PP.SnapForES(sy, ses)
         return edgeSize, -ox + sx, oy + sy, ox + sx, -oy + sy
