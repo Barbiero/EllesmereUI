@@ -643,11 +643,11 @@ function ns.UF_BossFrameBorderRows(W, parent, y, B, onChange)
                 if Inheriting() then return NEEDS_STYLE end
                 return "This option requires the Solid, Glow or Shadow border style."
             end,
-            rows = {
+            rows = EllesmereUI.RoundedCornerRows({
                 { type = "slider", label = "Corner Radius", min = 0, max = EllesmereUI.ROUNDED_MAX_RADIUS, step = 1,
                   get = function() return Src().cornerRadius or 0 end,
                   set = function(v) B.cornerRadius = v; onChange() end },
-            },
+            }, function() return Src().cornerMask end, function(v) B.cornerMask = v; onChange() end),
         })
     end
     return y0 - y

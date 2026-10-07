@@ -3314,6 +3314,7 @@ function ns.ERB_RoundBar(bar, cfg)
     EllesmereUI.RoundCorners(bar, radius, {
         roots = { bar._sb }, clip = bar._sb,
         border = bar._border and bar._border._frame, style = cfg.borderTexture or "solid",
+        corners = cfg.cornerMask,
     })
 end
 -- Class resource: the whole row rounds its outline; with Border on Pips each
@@ -3322,7 +3323,7 @@ end
 -- or were rounded before.
 do
     local pipsRounded = false
-    local function RoundPipList(list, radius, style)
+    local function RoundPipList(list, radius, style, corners)
         for i = 1, #list do
             local pip = list[i]
             if radius <= 0 then
@@ -3330,6 +3331,7 @@ do
             elseif pip:IsShown() then
                 EllesmereUI.RoundCorners(pip, radius, {
                     style = style, border = pip._border and pip._border._frame,
+                    corners = corners,
                 })
             end
         end
@@ -3344,14 +3346,15 @@ do
                 style = style,
                 border = not onPips and rowBorder and rowBorder._frame or nil,
                 clip = isBarType and secondaryBar and secondaryBar._sb or nil,
+                corners = sp.cornerMask,
             })
         else
             EllesmereUI.RoundCorners(secondaryFrame, 0)
         end
         local pipRadius = onPips and radius or 0
         if pipRadius > 0 or pipsRounded then
-            RoundPipList(pips, pipRadius, style)
-            RoundPipList(runeFrames, pipRadius, style)
+            RoundPipList(pips, pipRadius, style, sp.cornerMask)
+            RoundPipList(runeFrames, pipRadius, style, sp.cornerMask)
             pipsRounded = pipRadius > 0
         end
     end

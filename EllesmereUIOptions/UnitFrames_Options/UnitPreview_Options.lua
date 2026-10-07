@@ -3657,6 +3657,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
                         s.bottomTextBar and btbIsAtt and btbFrame or nil },
                     textures = { port and port._previewBg, port and port._previewTex },
                     border = border, rect = border, style = bds.borderTexture or "solid",
+                    corners = bds.cornerMask,
                 })
             else
                 EllesmereUI.RoundCorners(pf, 0)
@@ -3666,6 +3667,7 @@ function ns.UFO_BuildUnitPreview(parent, unitKey, side)
                 if det and radius > 0 then
                     EllesmereUI.RoundCorners(power, radius, {
                         border = power._pbBorder, style = s.powerBorderStyle or "solid",
+                        corners = bds.cornerMask,
                     })
                 else
                     EllesmereUI.RoundCorners(power, 0)

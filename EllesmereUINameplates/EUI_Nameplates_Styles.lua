@@ -959,6 +959,7 @@ function ns.NP_ApplyRounding(plate, part)
     if part ~= "cast" and (custom or not customOn) then
         local shape = custom or health
         HP_OPTS.rect, HP_OPTS.border, HP_OPTS.style = shape, shape, style
+        HP_OPTS.corners = p and p.cornerMask
         local ab, fw = plate.absorb, plate.absorbForward
         HP_TEX[1], HP_TEX[2], HP_TEX[3] = health:GetStatusBarTexture(), plate.healthBG, plate.hashLine
         HP_TEX[4], HP_TEX[5] = plate.highlight, plate.targetHighlight
@@ -973,7 +974,7 @@ function ns.NP_ApplyRounding(plate, part)
     end
     local cast = plate.cast
     if cast and part ~= "health" then
-        CAST_OPTS.border = cast
+        CAST_OPTS.border, CAST_OPTS.corners = cast, p and p.cornerMask
         CAST_TEX[1], CAST_TEX[2], CAST_TEX[3] = cast:GetStatusBarTexture(), plate.castBG, plate.castBarOverlay
         EllesmereUI.RoundCorners(cast, radius, CAST_OPTS)
     end

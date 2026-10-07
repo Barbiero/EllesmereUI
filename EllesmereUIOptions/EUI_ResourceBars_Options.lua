@@ -771,6 +771,7 @@ initFrame:SetScript("OnEvent", function(self)
                 if radius > 0 then
                     EllesmereUI.RoundCorners(pc, radius, {
                         style = style, border = not onPips and pc._barBorderFrame or nil,
+                        corners = sp.cornerMask,
                     })
                 else
                     EllesmereUI.RoundCorners(pc, 0)
@@ -779,7 +780,7 @@ initFrame:SetScript("OnEvent", function(self)
                 for i = 1, #_previewFrames.pips do
                     local pip = _previewFrames.pips[i]
                     if pipRadius > 0 then
-                        EllesmereUI.RoundCorners(pip, pipRadius, { style = style, border = pip._borderFrame })
+                        EllesmereUI.RoundCorners(pip, pipRadius, { style = style, border = pip._borderFrame, corners = sp.cornerMask })
                     else
                         EllesmereUI.RoundCorners(pip, 0)
                     end

@@ -1115,11 +1115,12 @@ local function BuildNameplatePreview(parent, parentW)
             if radius > 0 then
                 EllesmereUI.RoundCorners(pf, radius, {
                     roots = {}, rect = health, border = pcb, style = style,
+                    corners = DBVal("cornerMask"),
                     textures = { health:GetStatusBarTexture(), healthBG,
                         pvAbs.absorb:GetStatusBarTexture(), pvAbs.absorbForward:GetStatusBarTexture() },
                 })
                 EllesmereUI.RoundCorners(cast, radius, {
-                    roots = {}, border = cast,
+                    roots = {}, border = cast, corners = DBVal("cornerMask"),
                     textures = { cast:GetStatusBarTexture(), castBG },
                 })
             else
