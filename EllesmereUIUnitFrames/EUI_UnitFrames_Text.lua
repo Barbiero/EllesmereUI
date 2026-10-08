@@ -353,33 +353,24 @@ end
 local TagFns = {}
 
 do
-  local function AbbrevHP(unit)
-    if not unit or not UnitExists(unit) then return "" end
-    if not UnitIsConnected(unit) then return "OFFLINE" end
-    if UnitIsDeadOrGhost(unit) then return "DEAD" end
-    local hp = UnitHealth(unit) or 0
-    local cfg = _G._EUI_AbbrevDecimalCfg
-    -- Boss frames use the 2-decimal config when "Show 2 for Boss" is on.
-    if _G._EUI_BossExtraDecimal and string.sub(unit, 1, 4) == "boss" then
-      cfg = _G._EUI_AbbrevDecimalCfg2
+  -- Abbreviated health for the curhpshort / maxhpshort tags.
+  local function MakeAbbrevHP(getHP)
+    return function(unit)
+      if not unit or not UnitExists(unit) then return "" end
+      if not UnitIsConnected(unit) then return "OFFLINE" end
+      if UnitIsDeadOrGhost(unit) then return "DEAD" end
+      local hp = getHP(unit) or 0
+      local cfg = _G._EUI_AbbrevDecimalCfg
+      -- Boss frames use the 2-decimal config when "Show 2 for Boss" is on.
+      if _G._EUI_BossExtraDecimal and string.sub(unit, 1, 4) == "boss" then
+        cfg = _G._EUI_AbbrevDecimalCfg2
+      end
+      return cfg and AbbreviateNumbers(hp, cfg) or AbbreviateNumbers(hp)
     end
-    return cfg and AbbreviateNumbers(hp, cfg) or AbbreviateNumbers(hp)
   end
 
-  TagFns.curhpshort = AbbrevHP
-
-  -- Max health, abbreviated exactly like the current value.
-  TagFns.maxhpshort = function(unit)
-    if not unit or not UnitExists(unit) then return "" end
-    if not UnitIsConnected(unit) then return "OFFLINE" end
-    if UnitIsDeadOrGhost(unit) then return "DEAD" end
-    local hp = UnitHealthMax(unit) or 0
-    local cfg = _G._EUI_AbbrevDecimalCfg
-    if _G._EUI_BossExtraDecimal and string.sub(unit, 1, 4) == "boss" then
-      cfg = _G._EUI_AbbrevDecimalCfg2
-    end
-    return cfg and AbbreviateNumbers(hp, cfg) or AbbreviateNumbers(hp)
-  end
+  TagFns.curhpshort = MakeAbbrevHP(UnitHealth)
+  TagFns.maxhpshort = MakeAbbrevHP(UnitHealthMax)
 end
 
 do
