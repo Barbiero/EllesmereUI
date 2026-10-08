@@ -770,12 +770,11 @@ initFrame:SetScript("OnEvent", function(self)
         ["percent"]       = "Percent",
         ["percentNoSign"] = "Percent (No Sign)",
         ["number"]        = "Number",
-        ["numberMax"]     = "Number / Max",
         ["numberPercent"] = "Number | Percent",
         ["percentNumber"] = "Percent | Number",
         ["missing"]       = "Missing Number",
     }
-    local healthTextOrder = { "none", "percent", "percentNoSign", "number", "numberMax", "numberPercent", "percentNumber", "missing" }
+    local healthTextOrder = { "none", "percent", "percentNoSign", "number", "numberPercent", "percentNumber", "missing" }
 
     local absorbStyleValues = {
         ["none"]            = "None",

@@ -759,12 +759,6 @@ function ns.RF_HealthTextInto(fs, mode, pct, unit, perPct)
         else
             fs:SetFormattedText("%.0f%% | %s", pct, numStr)
         end
-    elseif mode == "numberMax" then
-        local mx
-        if unit then v, mx = UnitHealth(unit, true), UnitHealthMax(unit) else v, mx = pct * perPct, 100 * perPct end
-        local curStr = (v and AbbreviateNumbers) and AbbreviateNumbers(v) or tostring(v or 0)
-        local maxStr = (mx and AbbreviateNumbers) and AbbreviateNumbers(mx) or tostring(mx or 0)
-        fs:SetFormattedText("%s / %s", curStr, maxStr)
     elseif mode == "missing" then
         if unit then v = UnitHealthMissing(unit, true) else v = (100 - pct) * perPct end
         fs:SetText(C_StringUtil.TruncateWhenZero(v))
@@ -908,12 +902,6 @@ function ns.RF_PowerTextInto(fs, mode, pct, unit, pType, perPct)
         fs:SetFormattedText("%.0f%%", pct)
     elseif mode == "percentNoSign" then
         fs:SetFormattedText("%.0f", pct)
-    elseif mode == "numberMax" then
-        if unit then
-            fs:SetFormattedText("%s / %s", AbbreviateNumbers(UnitPower(unit, pType)), AbbreviateNumbers(UnitPowerMax(unit, pType)))
-        else
-            fs:SetFormattedText("%s / %s", AbbreviateNumbers(pct * perPct), AbbreviateNumbers(100 * perPct))
-        end
     elseif mode == "number" or mode == "numberPercent" or mode == "percentNumber" then
         local num
         if unit then num = AbbreviateNumbers(UnitPower(unit, pType)) else num = AbbreviateNumbers(pct * perPct) end
