@@ -239,11 +239,19 @@ function NameplateFrame:UpdateHealthValues()
         elseif curHealth ~= nil and not (isSec and isSec(curHealth)) then
             hpKey = curHealth
         end
-        local skipText = pctKey ~= nil and hpKey ~= nil
-            and self._hpTxtPct == pctKey and self._hpTxtCur == hpKey
+        -- The max only gates the skip when a Number / Max slot renders it.
+        local maxKey
+        if not ca._anyMax then
+            maxKey = 0
+        elseif maxHealth ~= nil and not (isSec and isSec(maxHealth)) then
+            maxKey = maxHealth
+        end
+        local skipText = pctKey ~= nil and hpKey ~= nil and maxKey ~= nil
+            and self._hpTxtPct == pctKey and self._hpTxtCur == hpKey and self._hpTxtMax == maxKey
         if not skipText then
         self._hpTxtPct = pctKey
         self._hpTxtCur = hpKey
+        self._hpTxtMax = maxKey
         local pctText, pctNoSignText, numText, maxText
         local pctTextDec, pctNoSignTextDec
         local anyDec = ca._anyDecimal
