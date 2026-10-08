@@ -1142,7 +1142,7 @@ local DEFAULTS = {
             fillR       = CUSTOM_FILL_DEFAULT[1], fillG = CUSTOM_FILL_DEFAULT[2], fillB = CUSTOM_FILL_DEFAULT[3], fillA = 1,
             fillOpacity = 100,  -- 0-100; below 100 the world shows through the fill
             bgR         = 0x11/255, bgG = 0x11/255, bgB = 0x11/255, bgA = 0.75,
-            textFormat  = "none",  -- "none","both","curhpshort","perhp"
+            textFormat  = "none",  -- "none","both","curhpshort","curmaxhp","perhp"
             textSize    = 11,
             textXOffset = 0,
             textYOffset = 0,
@@ -1207,7 +1207,7 @@ local DEFAULTS = {
             fillR       = CUSTOM_FILL_DEFAULT[1], fillG = CUSTOM_FILL_DEFAULT[2], fillB = CUSTOM_FILL_DEFAULT[3], fillA = 1,
             fillOpacity = 100,  -- 0-100; below 100 the world shows through the fill
             bgR         = 0x11/255, bgG = 0x11/255, bgB = 0x11/255, bgA = 0.75,
-            textFormat  = "perpp",  -- "none","smart","curpp","perpp","both"
+            textFormat  = "perpp",  -- "none","smart","curpp","curmaxpp","perpp","both"
             showPercent = true,
             textSize    = 10,
             textXOffset = 0,
@@ -1268,7 +1268,7 @@ local DEFAULTS = {
                 height      = 6,
                 offsetX     = 0,
                 offsetY     = 0,
-                textFormat  = "none",   -- "none","smart","curpp","perpp","both"
+                textFormat  = "none",   -- "none","smart","curpp","curmaxpp","perpp","both"
                 showPercent = true,
                 textSize    = 8,
                 textXOffset = 0,
@@ -4570,6 +4570,8 @@ local function UpdateHealthBar()
             txt = curStr .. " | " .. pctStr .. "%"
         elseif fmt == "curhpshort" then
             txt = curStr
+        elseif fmt == "curmaxhp" then
+            txt = curStr .. " / " .. ns.AbbreviateNumbers(mx)
         elseif fmt == "perhp" then
             txt = pctStr .. "%"
         elseif fmt == "perhpnosign" then
@@ -4875,6 +4877,8 @@ local function UpdatePrimaryBar()
                 txt = ns.AbbreviateNumbers(cur) .. " | " .. percentText
             elseif fmt == "curpp" then
                 txt = ns.AbbreviateNumbers(cur)
+            elseif fmt == "curmaxpp" then
+                txt = ns.AbbreviateNumbers(cur) .. " / " .. ns.AbbreviateNumbers(mx)
             elseif fmt == "perpp" then
                 txt = percentText
             else

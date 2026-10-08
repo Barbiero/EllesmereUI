@@ -242,13 +242,14 @@ function NameplateFrame:UpdateHealthValues()
         if not skipText then
         self._hpTxtPct = pctKey
         self._hpTxtCur = hpKey
-        local pctText, pctNoSignText, numText
+        local pctText, pctNoSignText, numText, maxText
         local pctTextDec, pctNoSignTextDec
         local anyDec = ca._anyDecimal
         if dead then
             pctText = "0%"
             pctNoSignText = "0"
             numText = "0"
+            maxText = "0"
             if anyDec then pctTextDec = "0.0%"; pctNoSignTextDec = "0.0" end
         elseif pctVal ~= nil then
             pctText = string.format("%d%%", pctVal)
@@ -256,7 +257,10 @@ function NameplateFrame:UpdateHealthValues()
             if ca._anyNoSign then pctNoSignText = string.format("%d", pctVal) end
             -- Number text only when a number/combo slot renders it (percent-only
             -- layouts were paying the abbreviation call + string every tick).
-            if anyNum then numText = ns.AbbreviateNumbers(curHealth) end
+            if anyNum then
+                numText = ns.AbbreviateNumbers(curHealth)
+                maxText = ns.AbbreviateNumbers(maxHealth)
+            end
             -- Decimal variants computed only when at least one slot opts in.
             if anyDec then
                 pctTextDec = string.format("%.1f%%", pctVal)
@@ -266,6 +270,7 @@ function NameplateFrame:UpdateHealthValues()
             pctText = ""
             pctNoSignText = ""
             numText = ""
+            maxText = ""
             if anyDec then pctTextDec = ""; pctNoSignTextDec = "" end
         end
         for si = 1, ca._count do
@@ -279,7 +284,7 @@ function NameplateFrame:UpdateHealthValues()
             elseif el == "healthNumber" then
                 fs:SetText(numText)
             elseif entry.combo then
-                SetCombinedHealthText(fs, el, entry.pctDecimal and pctTextDec or pctText, numText)
+                SetCombinedHealthText(fs, el, entry.pctDecimal and pctTextDec or pctText, numText, maxText)
             end
         end
         end -- skipText

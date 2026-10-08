@@ -632,6 +632,17 @@ ns._PaintButtonTail = function(button, d, s, unit)
                 d._htR, d._htG, d._htB = htr, htg, htb
                 d.healthText:SetTextColor(htr, htg, htb, 0.9)
             end
+        elseif mode == "numberMax" then
+            local curr = UnitHealth(unit, true)
+            local maxv = UnitHealthMax(unit)
+            local curStr = (curr and AbbreviateNumbers) and AbbreviateNumbers(curr) or tostring(curr or 0)
+            local maxStr = (maxv and AbbreviateNumbers) and AbbreviateNumbers(maxv) or tostring(maxv or 0)
+            d.healthText:SetFormattedText("%s / %s", curStr, maxStr)
+            local htr, htg, htb = GetHealthTextColor(unit, s)
+            if d._htR ~= htr or d._htG ~= htg or d._htB ~= htb then
+                d._htR, d._htG, d._htB = htr, htg, htb
+                d.healthText:SetTextColor(htr, htg, htb, 0.9)
+            end
         elseif mode == "missing" then
             local curr = UnitHealthMissing(unit, true)
             d.healthText:SetText(C_StringUtil.TruncateWhenZero(curr))
@@ -1300,6 +1311,17 @@ ns._UpdateButtonHealth = function(button, unit)
             local curr = UnitHealth(unit, true)
             local numStr = (curr and AbbreviateNumbers) and AbbreviateNumbers(curr) or tostring(curr or 0)
             d.healthText:SetFormattedText("%.0f%% | %s", pct, numStr)
+            local htr, htg, htb = GetHealthTextColor(unit, s)
+            if d._htR ~= htr or d._htG ~= htg or d._htB ~= htb then
+                d._htR, d._htG, d._htB = htr, htg, htb
+                d.healthText:SetTextColor(htr, htg, htb, 0.9)
+            end
+        elseif mode == "numberMax" then
+            local curr = UnitHealth(unit, true)
+            local maxv = UnitHealthMax(unit)
+            local curStr = (curr and AbbreviateNumbers) and AbbreviateNumbers(curr) or tostring(curr or 0)
+            local maxStr = (maxv and AbbreviateNumbers) and AbbreviateNumbers(maxv) or tostring(maxv or 0)
+            d.healthText:SetFormattedText("%s / %s", curStr, maxStr)
             local htr, htg, htb = GetHealthTextColor(unit, s)
             if d._htR ~= htr or d._htG ~= htg or d._htB ~= htb then
                 d._htR, d._htG, d._htB = htr, htg, htb

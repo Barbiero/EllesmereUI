@@ -110,6 +110,11 @@ local function BuildVisualBars(parent, y, W, onSection, EYE)
                                     if AbbreviateNumbers then
                                         f._healthText:SetText(AbbreviateNumbers(fakeHP))
                                     end
+                                elseif mode == "numberMax" then
+                                    local fakeHP = st.current * 12000
+                                    local curStr = AbbreviateNumbers and AbbreviateNumbers(fakeHP) or tostring(fakeHP)
+                                    local maxStr = AbbreviateNumbers and AbbreviateNumbers(1200000) or "1200000"
+                                    f._healthText:SetFormattedText("%s / %s", curStr, maxStr)
                                 elseif mode == "numberPercent" then
                                     local fakeHP = st.current * 12000
                                     local numStr = AbbreviateNumbers and AbbreviateNumbers(fakeHP) or tostring(fakeHP)
@@ -1623,8 +1628,8 @@ local function BuildVisualBars(parent, y, W, onSection, EYE)
         row, h = W:DualRow(parent, y,
             { type="dropdown", text="Power Text",
               values={ ["none"]="None", ["percent"]="Percent", ["percentNoSign"]="Percent (No Sign)",
-                       ["number"]="Number", ["numberPercent"]="Number | Percent", ["percentNumber"]="Percent | Number" },
-              order={ "none", "percent", "percentNoSign", "number", "numberPercent", "percentNumber" },
+                       ["number"]="Number", ["numberMax"]="Number / Max", ["numberPercent"]="Number | Percent", ["percentNumber"]="Percent | Number" },
+              order={ "none", "percent", "percentNoSign", "number", "numberMax", "numberPercent", "percentNumber" },
               disabled=IsPowerOff,
               disabledTooltip="Show Power Bar For",
               getValue=function() return SVal("powerTextMode", "none") end,
