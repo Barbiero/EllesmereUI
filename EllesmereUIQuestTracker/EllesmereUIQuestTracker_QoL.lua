@@ -48,10 +48,16 @@ end
 -- Auto-accept / auto-turn-in
 -------------------------------------------------------------------------------
 -- Blizzard's trivial flag never fires for a quest that scales to the player,
--- so quests from an earlier expansion have a toggle of their own.
+-- so quests from an earlier expansion have a toggle of their own. Leveling
+-- (below max level or in Chromie Time) runs through older content, so that
+-- toggle waits for max level; WoW Forever has no older expansions.
 local function IsIgnoredQuest(questID, isTrivial)
     if isTrivial and Cfg("autoAcceptIgnoreTrivial") then return true end
     if not Cfg("autoAcceptIgnoreOldExpansion") or not questID or questID == 0 then return false end
+    if EllesmereUI.IS_FOREVER or C_PlayerInfo.IsPlayerInChromieTime()
+        or UnitLevel("player") < GetMaxLevelForPlayerExpansion() then
+        return false
+    end
     local expansion = GetQuestExpansion(questID)
     return expansion ~= nil and expansion >= 0 and expansion < GetServerExpansionLevel()
 end
