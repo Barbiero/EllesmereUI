@@ -19,6 +19,8 @@ if EUI_CLIENT_BLOCKED then return end -- pre-12.1 client failsafe (EllesmereUI_C
 --    opts.rect     the region whose rect is the rounded shape (default owner)
 --    opts.corners  the corners that round, as bits (1 top left, 2 top right,
 --                  4 bottom left, 8 bottom right); nil = all, 0 = none
+--                  (EllesmereUI.RoundedJoinCorners splits them between two
+--                  bars that join one above the other)
 --  The opts tables are only read during the call, so callers may reuse them;
 --  at radius 0 no opts are needed.
 --  EllesmereUI.RoundedBorderColor(border, r, g, b, a) recolours the ring of a
@@ -130,6 +132,24 @@ function EllesmereUI.RoundedCornerRows(rows, get, set)
             end }
     end
     return rows
+end
+
+-- Options: the Join toggle for a bar that can sit right above or below its
+-- partner (a detached power bar, a nameplate cast bar). applies() returns
+-- true while the toggle applies; nil = always.
+function EllesmereUI.RoundedJoinRow(rows, label, tooltip, get, set, applies, need)
+    rows[#rows + 1] = { type = "toggle", label = label, tooltip = tooltip,
+        get = function() return get() == true end, set = set,
+        disabled = applies and function() return not applies() end or nil,
+        disabledTooltip = need }
+    return rows
+end
+
+-- Two bars joined one above the other share one outline: the upper bar takes
+-- the top corners, the lower one the bottom corners. Returns upper, lower.
+function EllesmereUI.RoundedJoinCorners(corners)
+    local m = corners or ALL_CORNERS
+    return bit.band(m, 3), bit.band(m, 12)
 end
 
 -- Guarded: a texture takes at most 3 masks; a full one stays square.

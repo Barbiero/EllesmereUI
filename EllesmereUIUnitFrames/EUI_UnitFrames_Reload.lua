@@ -1917,6 +1917,14 @@ ReloadFramesBody = function()
             local power = frame.Power
             local pp = us and us.powerPosition or "below"
             local det = pp == "detached_top" or pp == "detached_bottom"
+            -- Join Power Bar: a detached bar right above or below the frame
+            -- shares its outline (the frame keeps the far corners).
+            local pCorners = corners
+            if det and us.cornerJoinPower then
+                local upper, lower = EllesmereUI.RoundedJoinCorners(corners)
+                if pp == "detached_bottom" then corners, pCorners = upper, lower
+                else corners, pCorners = lower, upper end
+            end
             if radius > 0 then
                 local ps = us and us.portraitStyle or profile.portraitStyle or "attached"
                 local attached = ps == "attached" or ((isMini or isBoss) and ps == "detached")
@@ -1938,7 +1946,7 @@ ReloadFramesBody = function()
                 if det and radius > 0 then
                     EllesmereUI.RoundCorners(power, radius, {
                         border = power._pbBorder, style = us.powerBorderStyle or "solid",
-                        corners = corners,
+                        corners = pCorners,
                     })
                 else
                     EllesmereUI.RoundCorners(power, 0)
