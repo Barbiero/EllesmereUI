@@ -519,9 +519,11 @@ end
 
 local _anchorFrame, _anchorTo, _anchorOff
 
--- Concentric with Blizzard's frame, not stacked above it: theirs is already where the speaker
--- is, and the two grow to different sizes around the same text. offsetY is the only nudge the
--- user gets, and it rides in on PP.Point so it lands on the pixel grid.
+-- Concentric with Blizzard's balloon, not stacked above it: theirs is already where the speaker
+-- is, and the two grow to different sizes around the same text. Anchored to the child that
+-- draws the balloon, not the outer frame: after a bubble goes off screen and back, the outer
+-- can sit away from the balloon. offsetY is the only nudge the user gets, and it rides in on
+-- PP.Point so it lands on the pixel grid.
 --
 -- Guarded, because PP.Point ends in a plain SetPoint and anchoring to a frame that has been
 -- reclassified as forbidden raises there, not inside PP. The claim proved the frame readable
@@ -538,7 +540,7 @@ local function Anchor(f, cfg)
     local d = DEFAULTS
     local off = cfg.offsetY or d.offsetY or 0
     f:ClearAllPoints()
-    _anchorFrame, _anchorTo, _anchorOff = f, f.outer, off
+    _anchorFrame, _anchorTo, _anchorOff = f, childOf[f.outer] or f.outer, off
     local ok = pcall(RawAnchor)
     _anchorFrame, _anchorTo = nil, nil
     return ok
