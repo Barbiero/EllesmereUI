@@ -183,7 +183,6 @@ do
         return result
     end
 
-
     ---------------------------------------------------------------------------
     --  SnapCenterForDim(value, dim, effectiveScale) -- snap a CENTER coord so both edges land
     --  on physical pixels: EVEN dim -> whole-pixel center; ODD -> half-pixel center (integer +
@@ -1471,16 +1470,16 @@ do
         tex:Show()
     end
 
-    --- A scaleOffset texture's base offset (half its edge). The Pixels styles put it on
-    --- whole pixels with a tie rounding toward the frame: the final snap rounds ties
-    --- outward (4.5 -> 5), which left their solid line short of the frame at odd sizes
-    --- and made an odd size reach further out than the next even one.
+    -- The Pixels styles: their solid line sits just past their frame's edge (texels 13-16).
+    EllesmereUI._pixelArtBorders = { pixels = true, ["pixels-textured"] = true }
+
+    --- A scaleOffset texture's base offset (half its edge). For the Pixels styles a tie
+    --- rounds toward the frame, or an odd size leaves their line short of the frame.
     function EllesmereUI.BorderHalfEdge(textureKey, edge, es)
-        if textureKey ~= "pixels" and textureKey ~= "pixels-textured" then return edge / 2 end
+        if not EllesmereUI._pixelArtBorders[textureKey] then return edge / 2 end
         local PP = EllesmereUI.PP
         if not (PP.IsNum(es) and es > 0) then es = 1 end
-        local onePixel = PP.perfect / es
-        return math.floor((edge / 2) / onePixel + 0.5 - 0.001) * onePixel
+        return PP.SnapForES(edge / 2 - 0.002 * PP.perfect / es, es)
     end
 
     --- Check if a border texture uses scaled offset (edgeSize/2 base).
@@ -1689,13 +1688,10 @@ do
             bdFrame:ClearAllPoints()
             bdFrame:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -offsetX + sx, offsetY + sy)
             bdFrame:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", offsetX + sx, -offsetY + sy)
-            -- Edge fill (opt-in, SetBorderEdgeFill): the Pixels styles' solid line ends edge/28
-            -- inside the owner (texels 13-16 of a cell, owner edge at 16), so on an owner that
-            -- moves by sub-pixels the owner's edge pixel is left to the soft inner fade and what
-            -- is behind shows through. Hard strips 1px each side of the owner's edges, under the
-            -- art (BACKGROUND; the pieces are BORDER), at the default placement only.
+            -- Edge fill (SetBorderEdgeFill): on an owner that moves by sub-pixels the Pixels
+            -- line covers the owner's edge pixel only with its soft fade; hard strips under it.
             local fill = bdFrame._edgeFill
-            if _px.edgeFill[borderFrame] and (textureKey == "pixels" or textureKey == "pixels-textured")
+            if _px.edgeFill[borderFrame] and EllesmereUI._pixelArtBorders[textureKey]
                 and adjX == 0 and adjY == 0 and sx == 0 and sy == 0 then
                 if not fill then
                     fill = {}
@@ -1704,28 +1700,33 @@ do
                         fill[i]:SetColorTexture(1, 1, 1, 1)
                     end
                     bdFrame._edgeFill = fill
-                    -- Opaque only: a translucent strip under translucent art would stack darker.
+                    -- Opaque only: under translucent art a strip would stack darker.
                     hooksecurefunc(bdFrame, "SetBackdropBorderColor", function(self, cr, cg, cb, ca)
                         local f = self._edgeFill
                         for i = 1, 4 do f[i]:SetVertexColor(cr, cg, cb, 1) end
-                        f.opaque = (ca or 1) >= 0.999
-                        EllesmereUI.SyncBorderEdgeFill(self:GetParent())
+                        local opaque = (ca or 1) >= 0.999
+                        if f.opaque ~= opaque then
+                            f.opaque = opaque
+                            EllesmereUI.SyncBorderEdgeFill(self:GetParent())
+                        end
                     end)
                 end
+                -- 1px in; out no further than the solid line reaches (3/28 of the edge).
                 local px1 = PP.perfect / ses
+                local out = math.min(px1, edgeSize * 3 / 28)
                 local t, bt, l, rt = fill[1], fill[2], fill[3], fill[4]
                 t:ClearAllPoints()
-                t:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", 0, px1)
+                t:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", 0, out)
                 t:SetPoint("BOTTOMRIGHT", borderFrame, "TOPRIGHT", 0, -px1)
                 bt:ClearAllPoints()
                 bt:SetPoint("TOPLEFT", borderFrame, "BOTTOMLEFT", 0, px1)
-                bt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", 0, -px1)
+                bt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", 0, -out)
                 l:ClearAllPoints()
-                l:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -px1, 0)
+                l:SetPoint("TOPLEFT", borderFrame, "TOPLEFT", -out, 0)
                 l:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMLEFT", px1, 0)
                 rt:ClearAllPoints()
                 rt:SetPoint("TOPLEFT", borderFrame, "TOPRIGHT", -px1, 0)
-                rt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", px1, 0)
+                rt:SetPoint("BOTTOMRIGHT", borderFrame, "BOTTOMRIGHT", out, 0)
                 fill.on = true
             elseif fill then
                 fill.on = nil
@@ -2077,15 +2078,12 @@ do
         if bdFrame and bdFrame._pxEdge then bdFrame._pxEdge = nil; _px.borders[borderFrame] = nil end
     end
 
-    --- Opts a textured border into the edge fill (see ApplyBorderStyle) from its next apply.
-    --- For owners that move by sub-pixels; off by default.
+    --- Opts a border into the Pixels edge fill (see ApplyBorderStyle) from its next apply.
     function EllesmereUI.SetBorderEdgeFill(borderFrame, on)
         _px.edgeFill[borderFrame] = on or nil
     end
 
-    --- Shows each edge fill strip only while its edge piece draws (none before the backdrop
-    --- has laid its pieces out): an owner that hides a piece (the nameplate cast bar wrap)
-    --- calls this after toggling it.
+    --- Shows each edge fill strip only while its edge piece draws; call after hiding a piece.
     function EllesmereUI.SyncBorderEdgeFill(borderFrame)
         local bdFrame = _bdBorderData[borderFrame]
         local fill = bdFrame and bdFrame._edgeFill
