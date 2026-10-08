@@ -215,7 +215,7 @@ function NameplateFrame:UpdateHealthValues()
         local anyNum = ca._anyNum
         if anyNum == nil then
             anyNum = false
-            local anyNoSign = false
+            local anyNoSign, anyMax = false, false
             for si = 1, ca._count do
                 local entry = ca[si]
                 local el = entry.element
@@ -225,9 +225,11 @@ function NameplateFrame:UpdateHealthValues()
                 entry.combo = IsComboHealthText(el) or false
                 if el == "healthNumber" or entry.combo then anyNum = true end
                 if el == "healthPercentNoSign" then anyNoSign = true end
+                if el == "healthNumMax" then anyMax = true end
             end
             ca._anyNum = anyNum
             ca._anyNoSign = anyNoSign
+            ca._anyMax = anyMax
         end
         local hpKey
         if not anyNum then
@@ -259,7 +261,7 @@ function NameplateFrame:UpdateHealthValues()
             -- layouts were paying the abbreviation call + string every tick).
             if anyNum then
                 numText = ns.AbbreviateNumbers(curHealth)
-                maxText = ns.AbbreviateNumbers(maxHealth)
+                if ca._anyMax then maxText = ns.AbbreviateNumbers(maxHealth) end
             end
             -- Decimal variants computed only when at least one slot opts in.
             if anyDec then
