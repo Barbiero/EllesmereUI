@@ -591,6 +591,7 @@ for _, info in ipairs(BAR_CONFIG) do
         reverseIconOrder = false,
         alwaysShowButtons = true,
         showPagingArrows = false,
+        skipVisiblePagingBars = false,
         pagingArrowsRight = false,
         paging = {},
         -- Auto-paging opt-outs (MainBar only; see BuildPagingConditions).
@@ -1922,18 +1923,28 @@ local function HideBlizzardBars()
         end
         return curPage, maxPages
     end
-    ActionBar_PageUp = function()
+    -- Keep the non-secure legacy functions consistent with the secure wheel
+    -- buttons. The skip mask is derived from configured bars, not live visibility
+    -- (which can change in combat and cannot safely rewrite secure macros).
+    local function ChangeManualPage(delta)
         local curPage, maxPages = CurrentManualPage()
-        local newPage = curPage + 1
-        if newPage > maxPages then newPage = 1 end
-        ChangeActionBarPage(newPage)
+        local bars = EAB.db and EAB.db.profile and EAB.db.profile.bars
+        if not (bars and bars.MainBar and bars.MainBar.skipVisiblePagingBars) then
+            ChangeActionBarPage((curPage - 1 + delta + maxPages) % maxPages + 1)
+            return
+        end
+        local skip = ns.GetPagingSkipMask()
+        local newPage = curPage
+        for _ = 1, maxPages do
+            newPage = (newPage - 1 + delta + maxPages) % maxPages + 1
+            if not skip[newPage] then
+                ChangeActionBarPage(newPage)
+                return
+            end
+        end
     end
-    ActionBar_PageDown = function()
-        local curPage, maxPages = CurrentManualPage()
-        local newPage = curPage - 1
-        if newPage < 1 then newPage = maxPages end
-        ChangeActionBarPage(newPage)
-    end
+    ActionBar_PageUp = function() ChangeManualPage(1) end
+    ActionBar_PageDown = function() ChangeManualPage(-1) end
 
     -- Hide status tracking bar manager (unless user wants Blizzard data bars)
     if not (EAB.db and EAB.db.profile.useBlizzardDataBars) then
@@ -2537,9 +2548,74 @@ for i = 1, NUM_AB_PAGES - 1 do
     _macroPrev = _macroPrev .. "; [bar:" .. (i + 1) .. "] " .. i
 end
 
+-- Shared by the secure paging macros and the legacy non-secure functions.
+-- Only configured-on bars reserve their underlying page; hide-on-mouseover
+-- still reserves a page, while disabled/always-hidden bars do not.
+function ns.GetPagingSkipMask()
+    local skip = {}
+    local bars = EAB.db and EAB.db.profile and EAB.db.profile.bars
+    if not (bars and bars.MainBar and bars.MainBar.skipVisiblePagingBars) then return skip end
+    for barKey, page in pairs(EAB_VTABLE.BAR_KEY_TO_PAGE) do
+        if barKey ~= "MainBar" and page >= 1 and page <= NUM_AB_PAGES then
+            local settings = bars[barKey]
+            if settings and settings.enabled ~= false and not settings.alwaysHidden then
+                skip[page] = true
+            end
+        end
+    end
+    return skip
+end
+
+local function BuildFilteredPageMacro(delta, skip)
+    local macro = {}
+    for page = 1, NUM_AB_PAGES do
+        local target = page
+        for _ = 1, NUM_AB_PAGES do
+            target = (target - 1 + delta + NUM_AB_PAGES) % NUM_AB_PAGES + 1
+            if not skip[target] then break end
+        end
+        macro[#macro + 1] = "[bar:" .. page .. "] " .. target
+    end
+    return "/changeactionbar " .. table.concat(macro, "; ")
+end
+
 local function WireSecurePagingButton(btn, delta)
     btn:SetAttribute("type", "macro")
     btn:SetAttribute("macrotext", delta > 0 and _macroNext or _macroPrev)
+end
+
+local _filteredPagingActive = false
+
+-- Changes to secure macrotext must happen out of combat. Memoization avoids
+-- rewriting protected attributes during routine ApplyAll calls.
+function ns.RefreshPagingCycleMacros()
+    if InCombatLockdown() then return end
+
+    local bars = EAB.db and EAB.db.profile and EAB.db.profile.bars
+    local enabled = bars and bars.MainBar and bars.MainBar.skipVisiblePagingBars
+
+    if not enabled and not _filteredPagingActive then return end
+
+    local nextMacro, prevMacro
+    if enabled then
+        local skip = ns.GetPagingSkipMask()
+        nextMacro = BuildFilteredPageMacro(1, skip)
+        prevMacro = BuildFilteredPageMacro(-1, skip)
+    else
+        nextMacro = _macroNext
+        prevMacro = _macroPrev
+    end
+
+    local function UpdateButton(button, macro)
+        if button and button:GetAttribute("macrotext") ~= macro then
+            button:SetAttribute("macrotext", macro)
+        end
+    end
+    UpdateButton(_pagingFrame and _pagingFrame._upBtn, nextMacro)
+    UpdateButton(_pagingFrame and _pagingFrame._downBtn, prevMacro)
+    UpdateButton(_G.EABPageNext, nextMacro)
+    UpdateButton(_G.EABPagePrev, prevMacro)
+    _filteredPagingActive = not not enabled
 end
 
 local function InitPagingQuickKeybindButton(btn, atlas)
@@ -3300,6 +3376,52 @@ local function CaptureBlizzardDefaults()
     local uiW, uiH = UIParent:GetSize()
     local uiScale = UIParent:GetEffectiveScale()
 
+    -- Edit Mode stacks only the bottom bars that are SHOWN and parks a hidden
+    -- one in its default position at UIParent's top-left corner until it
+    -- shows. This returns the CENTER offsets of the slot the stack gives such
+    -- a bar once it shows: right above the last shown bar before it in
+    -- Blizzard's stack order, at the stack's left edge plus the bar's own
+    -- indent (WoW Forever's default anchors carry one). nil when the bar is
+    -- not parked there (moved in Edit Mode, or a layout with no stack).
+    local function StackSlot(bar)
+        local pt, rel, rpt, px, py = bar:GetPoint(1)
+        if pt ~= "TOPLEFT" or rel ~= UIParent or rpt ~= "TOPLEFT" or px ~= 0 or py ~= 0 then return nil end
+        local EU, EM = _G.EditModeUtil, _G.EditModeManagerFrame
+        local ok, list
+        if EU and EU.GetBottomActionBars then
+            ok, list = pcall(EU.GetBottomActionBars, EU)
+        elseif EM and EM.GetBottomActionBars then
+            ok, list = pcall(EM.GetBottomActionBars, EM)
+        end
+        if not ok or type(list) ~= "table" then return nil end
+        local function Anchor(f)
+            if not (EM and EM.GetDefaultAnchor) then return nil end
+            local okA, a = pcall(EM.GetDefaultAnchor, EM, f)
+            return okA and type(a) == "table" and a or nil
+        end
+        local below, listed
+        for i = 1, #list do
+            local f = list[i]
+            if f == bar then listed = true; break end
+            if f and f:IsShown() and not f.skipAutomaticPositioning
+                and (not f.IsInDefaultPosition or f:IsInDefaultPosition()) then
+                local a = Anchor(f)
+                if not (a and a.bottomBarExcludeFromStackIncrement) then below = f end
+            end
+        end
+        if not listed then return nil end
+        below = below or _G.MainActionBar
+        local l, t = below and below:GetLeft(), below and below:GetTop()
+        local w, h = bar:GetWidth(), bar:GetHeight()
+        if not (l and t and w and h) then return nil end
+        local kB = below:GetEffectiveScale() / uiScale
+        local k = bar:GetEffectiveScale() / uiScale
+        local aB, a = Anchor(below), Anchor(bar)
+        local left = (l - (aB and aB.bottomBarOffsetX or 0)) * kB + (a and a.bottomBarOffsetX or 0) * k
+        local bottom = t * kB + (tonumber(_G.BOTTOM_ACTION_BARS_SPACER_Y) or 4) * k
+        return left + w * k / 2 - uiW / 2, bottom + h * k / 2 - uiH / 2
+    end
+
     -- MainActionBar is the Edit Mode frame for Action Bar 1 (there is no MainMenuBar).
     -- Chain: ActionButton1 > MainActionBarButtonContainer1 > MainActionBar > UIParent
     local mainActionBar = _G["MainActionBar"]
@@ -3356,6 +3478,16 @@ local function CaptureBlizzardDefaults()
                 data.relPoint = "CENTER"
                 data.x = cx - (uiW / 2)
                 data.y = cy - (uiH / 2)
+            end
+
+            -- A stance or pet bar hidden right now (no forms yet, no pet out)
+            -- was never stacked: it takes the slot it gets once it shows.
+            if (info.isStance or info.isPetBar) and not bar:IsShown() then
+                local sx, sy = StackSlot(bar)
+                if sx then
+                    data.point, data.relPoint = "CENTER", "CENTER"
+                    data.x, data.y, data.stackSlot = sx, sy, true
+                end
             end
 
             -- Number of visible buttons try Edit Mode setting 2 first
@@ -4277,6 +4409,7 @@ local function LayoutBar(key)
             prevBtn:SetAlpha(0)
             prevBtn:RegisterForClicks("AnyUp", "AnyDown")
             WireSecurePagingButton(prevBtn, -1)
+            ns.RefreshPagingCycleMacros()
 
             local function ApplyPageBindings()
                 if InCombatLockdown() then return end
@@ -6017,6 +6150,7 @@ local function ApplyAll()
     -- the engine's SetPoint hook.
     ns.PartySpin_Refresh()
 
+    if not inCombat then ns.RefreshPagingCycleMacros() end
     _isApplyingAll = false
 end
 
@@ -6849,8 +6983,9 @@ function EAB:OnFirstLogin()
     -- WoW Forever keeps Blizzard's XP / reputation bars (useBlizzardDataBars),
     -- which Edit Mode stacks right above action bar 1 and restacks as they come
     -- and go (a watched reputation, max level). The bars it stacks above them
-    -- (2, 3, stance, pet) were captured over the stack as it stood, so they are
-    -- lifted by the steps its hidden containers would add (Edit Mode's
+    -- (2, 3, stance, pet; a hidden stance or pet bar at the slot it would
+    -- take) were captured over the stack as it stood, so they are lifted by
+    -- the steps its hidden containers would add (Edit Mode's
     -- UpdateBottomActionBarPositions: the secondary container height - 1, the
     -- main one height + 4), and a status bar that shows later never covers
     -- them. Only while the containers and the bar sit where Edit Mode puts them.
@@ -6872,7 +7007,9 @@ function EAB:OnFirstLogin()
                 for _, info in ipairs(BAR_CONFIG) do
                     local pos = self.db.profile.barPositions[info.key]
                     local bf = STACKED[info.blizzFrame] and _G[info.blizzFrame]
-                    if pos and pos.y and bf and bf:IsShown() and AtDefault(bf) then
+                    local cap = captured[info.key]
+                    if pos and pos.y and bf and AtDefault(bf)
+                        and (bf:IsShown() or (cap and cap.stackSlot)) then
                         pos.y = pos.y + lift * bf:GetEffectiveScale() / uiS
                     end
                 end
@@ -6884,13 +7021,13 @@ function EAB:OnFirstLogin()
     self.db.sv._capturedOnce_EAB = true
     self._needsCapture = false
 
-    -- Stance bar visibility must always be "Always" it manages its own
-    -- show/hide based on shapeshift form availability.
-    local sb = self.db.profile.bars["StanceBar"]
-    if sb then
-        sb.alwaysHidden       = false
-        sb.combatShowEnabled  = false
-        sb.combatHideEnabled  = false
+    -- The stance and pet bars start at "Always": each shows and hides itself
+    -- with its forms or its pet, so the Hidden captured while it had none (a
+    -- new character, no pet out) must not stick. Through ApplyMode, since
+    -- barVisibility wins over the legacy booleans.
+    for _, key in ipairs({ "StanceBar", "PetBar" }) do
+        local s = self.db.profile.bars[key]
+        if s then EAB.VisibilityCompat.ApplyMode(s, "always") end
     end
 
     -- Now proceed with normal setup

@@ -882,6 +882,22 @@ local defaults = {
             borderColor = { r = 0, g = 0, b = 0 },
             borderTexture = "solid",
             highlightColor = { r = 1, g = 1, b = 1 },
+            -- Buffs and Debuffs on the pet frame (opt-in: the containers are only
+            -- built once one of the two is on).
+            showBuffs = false,
+            buffAnchor = "topleft",
+            buffGrowth = "auto",
+            maxBuffs = 4,
+            buffSize = 22,
+            buffOffsetX = 0,
+            buffOffsetY = 0,
+            debuffAnchor = "none",
+            debuffGrowth = "auto",
+            maxDebuffs = 10,
+            debuffSize = 22,
+            debuffOffsetX = 0,
+            debuffOffsetY = 0,
+            onlyPlayerDebuffs = false,
             -- WoW Forever pets have power (hunter pet focus, warlock pet mana), so
             -- the pet frame carries a power bar there (retail: none).
             powerPosition = (EllesmereUI.IS_FOREVER == true) and "below" or "none",
@@ -1304,6 +1320,11 @@ local defaults = {
         dispelOverlayOpacity = 100,
         dispelOverlayByMe    = false,    -- only debuffs the player can dispel (engine filter token)
         dispelCustomBorder   = false,    -- Color Custom Borders: the frame border copied in the dispel type color
+        showDispelIcons      = false,    -- Type Icon Position: the type's icon on a health bar corner
+        dispelIconPosition   = "right",
+        dispelIconSize       = 16,
+        dispelIconOffsetX    = 0,
+        dispelIconOffsetY    = 0,
         dispelColorMagic   = { r = 0.349, g = 0.475, b = 1.0 },
         dispelColorCurse   = { r = 0.636, g = 0.0,   b = 0.64 },
         dispelColorDisease = { r = 0.671, g = 0.384, b = 0.098 },

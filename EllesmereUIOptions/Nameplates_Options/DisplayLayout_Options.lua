@@ -17,7 +17,7 @@ if not ns then return end  -- module disabled: no options page
 -- leaves the position free.
 local KNOWN = { enemyName = true, levelName = true, nameLevel = true, level = true, targetOfTarget = true,
     healthPercent = true, healthPercentNoSign = true, healthNumber = true, healthPctNum = true,
-    healthNumPct = true, healthPctNumDash = true, healthNumPctDash = true }
+    healthNumPct = true, healthPctNumDash = true, healthNumPctDash = true, healthNumMax = true }
 -- Add Text Slot's text: the first of these whose font string no shown text
 -- uses (one per font string: name, health %, level, health #, Target of
 -- Target).
@@ -137,6 +137,34 @@ local function BuildDisplayLayout(parent, y, ctx)
             UpdatePreview()
           end }))
     y = y - h
+    -- Corner Radius (EllesmereUI_RoundedCorners.lua): an inline cog on the
+    -- border size control. The stock styles keep every plate square, and so
+    -- does Wrap Around Castbar (the plates stand rounding down while it is on).
+    if not EllesmereUI._prebuilding then
+        EllesmereUI.BuildInlineCog(borderStyleRow._rightRegion, {
+            title = "Corner Radius", tip = "Corner Radius",
+            disabled = function()
+                if EllesmereUI.BlizzStyle.Get("nameplates") then return true end
+                if DBVal("wrapBorderCastbar") == true then return true end
+                return DBVal("customBorderEnabled") and not EllesmereUI.RoundedStyleOK(DBVal("customBorderTexture") or defaults.customBorderTexture)
+            end,
+            disabledTooltip = function()
+                if EllesmereUI.BlizzStyle.Get("nameplates") then return EllesmereUI.BlizzStyle.Label("nameplates") end
+                if DBVal("wrapBorderCastbar") == true then return "Wrap Around Castbar" end
+                return "This option requires the Solid, Glow or Shadow border style."
+            end,
+            requireState = "disabled",
+            rows = EllesmereUI.RoundedJoinRow(EllesmereUI.RoundedCornerRows({
+                { type = "slider", label = "Corner Radius", min = 0, max = EllesmereUI.ROUNDED_MAX_RADIUS, step = 1,
+                  get = function() return DBVal("cornerRadius") or 0 end,
+                  set = function(v) DB().cornerRadius = v; ns.RefreshBorder(); ns.RefreshCastBorder(); UpdatePreview() end },
+            }, function() return DBVal("cornerMask") end,
+               function(v) DB().cornerMask = v; ns.RefreshBorder(); ns.RefreshCastBorder(); UpdatePreview() end),
+                "Join Cast Bar", "While a cast shows, rounds the health bar and the cast bar under it as one shape.",
+                function() return DBVal("cornerJoinCast") end,
+                function(v) DB().cornerJoinCast = v; ns.RefreshBorder(); ns.RefreshCastBorder(); UpdatePreview() end),
+        })
+    end
     -- Inline swatch on the Border dropdown: standard (Basic) border color, dimmed unless mode is Basic.
     if not EllesmereUI._prebuilding then
         local leftRgn = borderStyleRow._leftRegion
@@ -200,8 +228,10 @@ local function BuildDisplayLayout(parent, y, ctx)
                 DB().wrapBorderCastbar = v
                 -- Unconditional re-apply so toggling OFF also unwraps any plate mid-cast and wrapped.
                 ns.ApplyBorderWrapToAll()
+                -- Corner Radius stands down while the wrap is on: square or re-round the plates.
+                if (DBVal("cornerRadius") or 0) > 0 then ns.RefreshBorder(); ns.RefreshCastBorder() end
                 UpdatePreview()
-                -- Show Seam Line's disabled state follows this toggle.
+                -- Show Seam Line's and Corner Radius's disabled states follow this toggle.
                 EllesmereUI:RefreshPage()
               end },
         }
@@ -2189,6 +2219,7 @@ local function BuildDisplayLayout(parent, y, ctx)
         topleft  = { coreRow3, "_leftRegion" },
         bottom   = { coreRow3, "_rightRegion" },
     }
+    ctx.corePosToRegion = posToRegion
 
     -- Eye icon that follows whichever Core Positions dropdown has "Raid Marker"
     do
@@ -2320,9 +2351,10 @@ local function BuildDisplayLayout(parent, y, ctx)
         healthNumPct         = "Health # | %",
         healthPctNumDash     = "Health % - #",
         healthNumPctDash     = "Health # - %",
+        healthNumMax         = "Health # / Max #",
         none                 = "Remove",
     }
-    local textElementOrder = { "none", "---", "enemyName", "levelName", "nameLevel", "level", "targetOfTarget", "healthPercent", "healthPercentNoSign", "healthNumber", "healthPctNum", "healthNumPct", "healthPctNumDash", "healthNumPctDash" }
+    local textElementOrder = { "none", "---", "enemyName", "levelName", "nameLevel", "level", "targetOfTarget", "healthPercent", "healthPercentNoSign", "healthNumber", "healthPctNum", "healthNumPct", "healthPctNumDash", "healthNumPctDash", "healthNumMax" }
 
     local function TextSlotSetValue(slotKey, v)
         -- Target of Target starts in Class mode whenever a slot newly takes it;

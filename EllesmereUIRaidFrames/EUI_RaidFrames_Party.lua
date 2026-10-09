@@ -100,7 +100,7 @@ do
         },
         powerBar = {
             "showPowerBar", "powerHeight", "powerBgDarkness", "powerBgColor", "powerBgPowerColored",
-            "powerBorderStyle", "powerBorderSize", "powerBorderColor", "powerBorderAlpha",
+            "powerBorderStyle", "powerBorderMatchFrame", "powerBorderMatchColor", "powerBorderSize", "powerBorderColor", "powerBorderAlpha",
             "powerShowForHealer", "powerShowForTank", "powerShowForDPS", "smoothPowerBars",
             "powerUniformAnchors", "extendHealthBehindPower",
         },
@@ -123,6 +123,7 @@ do
             "showPingMarker", "pingMarkerSize", "pingMarkerPosition", "pingMarkerOffsetX", "pingMarkerOffsetY",
             "showMissingBuffs", "missingBuffsSize", "missingBuffsPosition", "missingBuffsOffsetX", "missingBuffsOffsetY",
             "missingBuffsFort", "missingBuffsMark", "missingBuffsSpirit", "missingBuffsThorns", "missingBuffsBlessing",
+            "missingBuffsThornsTank", "missingBuffsBlessingTank", "missingBuffsBlessingHealer", "missingBuffsBlessingDPS",
             "missingBuffsGlowType", "missingBuffsGlowColorMode", "missingBuffsGlowR", "missingBuffsGlowG", "missingBuffsGlowB",
             "missingBuffsGlowLines", "missingBuffsGlowThickness", "missingBuffsGlowSpeed", "missingBuffsGlowBackground",
             "missingBuffsGlowBackgroundR", "missingBuffsGlowBackgroundG", "missingBuffsGlowBackgroundB",
@@ -135,7 +136,7 @@ do
             "combatIndicatorSize", "combatIndicatorPosition", "combatIndicatorOffsetX", "combatIndicatorOffsetY",
             "borderSize", "borderColor", "borderAlpha", "borderTexture",
             "borderBehind", "borderTextureOffset", "borderTextureOffsetY",
-            "borderTextureShiftX", "borderTextureShiftY",
+            "borderTextureShiftX", "borderTextureShiftY", "cornerRadius", "cornerMask",
             "hoverBorderEnabled", "hoverBorderSize", "hoverBorderColor", "hoverBorderAlpha",
             "targetBorderEnabled", "targetBorderSize", "targetBorderColor", "targetBorderAlpha",
             -- Exact-size companions (see ns._PARTY_PX_SIBLING): same section as their siblings.
@@ -158,6 +159,7 @@ do
         },
         topNameBar = {
             "topNameBarEnabled", "topNameBarHeight",
+            "topNameBarDivider", "topNameBarDividerMatchColor",
             "topNameBarBgColor", "topNameBarBgOpacity",
             "topNameBarTextSize", "topNameBarTextColorMode", "topNameBarTextColor",
             "topNameBarTextOffsetX", "topNameBarTextOffsetY", "topNameBarTextAlign",

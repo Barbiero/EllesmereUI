@@ -266,7 +266,7 @@ local function BuildBarAppearance(parent, y, ctx)
                   -- Full rebuild: the Width/Height Offset row exists only for a textured style.
                   EllesmereUI:RefreshPage(true)
               end },
-            EllesmereUI.BorderPxSliderCfg{ text="Border Size", tooltip=false,
+            EllesmereUI.BorderPxSliderCfg{ text="Border Size",
               disabled=BgDisabled,
               disabledTooltip="Bar Background Border",
               -- The step ApplyBackgroundForBar renders with: a thickness with no
@@ -625,7 +625,7 @@ local function BuildBarAppearance(parent, y, ctx)
                   SUpdatePreview()
               end }
         else
-            sizeCfg = EllesmereUI.BorderPxSliderCfg{ text="Border Size", tooltip=false,
+            sizeCfg = EllesmereUI.BorderPxSliderCfg{ text="Border Size",
               disabled=BlizzStyleOn, disabledTooltip=EllesmereUI.BlizzStyle.Label("actionbars"), requireState="disabled",
               -- The step the buttons render with (ResolveBorderThickness's regular
               -- column): an unknown or numeric thickness is thin.
@@ -1754,6 +1754,19 @@ local function BuildBarAppearance(parent, y, ctx)
                       getValue=function() return SGet("disableSkyridingPaging") or false end,
                       setValue=function(v) SetAutoPageOptOut("disableSkyridingPaging", v) end,
                       tooltip="Keeps this bar on its page while skyriding." });  y = y - h
+            end
+
+            if selKey == "MainBar" then
+                _, h = W:DualRow(parent, y,
+                    { type="toggle", text="Skip Visible Bars When Paging",
+                      getValue=function() return SGet("skipVisiblePagingBars") or false end,
+                      setValue=function(v)
+                          SSet("skipVisiblePagingBars", v, function()
+                              if ns.RefreshPagingCycleMacros then ns.RefreshPagingCycleMacros() end
+                          end)
+                      end,
+                      tooltip="Skips pages assigned to other enabled action bars, including mouseover and conditional bars. Applies to Next/Previous Action Bar keybindings and paging arrows." },
+                    EllesmereUI.BlankRowCfg()); y = y - h
             end
 
             local function PagingDropdown(stateId, text)
