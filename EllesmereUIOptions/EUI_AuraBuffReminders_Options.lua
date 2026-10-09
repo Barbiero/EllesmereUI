@@ -1425,7 +1425,7 @@ initFrame:SetScript("OnEvent", function(self)
                       RefreshAll()
                   end },
                 { type="toggle", text="Well Fed",
-                  tooltip="Reminds you when you have no Well Fed buff. Matched by name, so any food counts.",
+                  tooltip="Reminds you when you have no Well Fed buff.",
                   getValue=function() local f = FDB(); return f and f.wellFed == true end,
                   setValue=function(v)
                       local f = FDB(); if not f then return end; f.wellFed = v
