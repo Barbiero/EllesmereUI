@@ -1175,6 +1175,11 @@ local DEFAULTS = {
             bandMode = "percent",  -- "percent" | "value" (bar/health/power only)
             bandReverse = false,
             bands = {},            -- ordered ascending by `to`: { { to=N, r,g,b,a }, ... }
+            hashEnabled = false,
+            hashValues  = "",          -- e.g. "25, 50, 75"
+            hashMode    = "percent",
+            hashWidth   = 1,
+            hashColorR  = 1, hashColorG = 1, hashColorB = 1, hashColorA = 0.7,
         },
         primary = {
             -- Off by default on WoW Forever (vanilla content), on everywhere else.
@@ -1237,6 +1242,12 @@ local DEFAULTS = {
             bandMode = "percent",
             bandReverse = false,
             bands = {},
+            -- User hash lines (opt-in). See health.hashEnabled for semantics.
+            hashEnabled = false,
+            hashValues  = "",
+            hashMode    = "percent",
+            hashWidth   = 1,
+            hashColorR  = 1, hashColorG = 1, hashColorB = 1, hashColorA = 0.7,
             expandIfNoResource = false,
             -- Shift elements anchored to the power bar when the spec has no primary
             -- power (e.g. BM/MM Hunter, Focus shows as class resource). "None"/"Up"/
@@ -3243,10 +3254,15 @@ end
 
 -- Value mode needs a readable max: getMaxFn returns the current max; if it is
 -- secret, fall back to the last-known-good value cached on the bar frame.
+-- Source: the active threshold entry when it has its own hash lines, else the
+-- bar-wide hashEnabled/hashValues (which Spec Override / conditional layers can set).
 function ns.ApplyHashLines(sb, cfg, getMaxFn)
     if not sb then return end
     local tickCache = sb._userHashTicks
     local ent = cfg and ResolveThresholdSpecEntry(cfg)
+    if not (ent and ent.hashValues and ent.hashValues ~= "") then
+        ent = cfg and cfg.hashEnabled and cfg or nil
+    end
     local hashStr = ent and ent.hashValues
     if not hashStr or hashStr == "" then
         if tickCache then HideResourceBarTicks(tickCache, sb) end

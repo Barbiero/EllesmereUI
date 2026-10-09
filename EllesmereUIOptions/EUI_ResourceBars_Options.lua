@@ -1077,6 +1077,76 @@ initFrame:SetScript("OnEvent", function(self)
         UpdatePreviewHeader()
     end
 
+    -- Cog + popup for simple per-bar hash lines (Health/Power). cfg = { parentRgn, getBarData, refreshFn, popupTitle, anchorTo }; returns cogBtn.
+    local function BuildHashCog(cfg)
+        local getBarData = cfg.getBarData
+        local refreshFn  = cfg.refreshFn or function() end
+
+        local function SanitizePositions(str)
+            if not str or str == "" then return "" end
+            local out = {}
+            for token in tostring(str):gmatch("[^,]+") do
+                local n = tonumber((token:gsub("%s", "")))
+                if n and n >= 0 then out[#out + 1] = tostring(n) end
+            end
+            return table.concat(out, ", ")
+        end
+
+        local function HashOff()
+            local c = getBarData()
+            return not (c and c.hashEnabled)
+        end
+
+        local DIS_TIP = EllesmereUI.L("Enable hash lines first")
+        local rows = {
+            { type = "toggle", label = EllesmereUI.L("Show Hash Lines"),
+              tooltip = EllesmereUI.L("Draw tick lines across the bar at positions you choose."),
+              get = function() local c = getBarData(); return c and c.hashEnabled or false end,
+              set = function(v) local c = getBarData(); if not c then return end
+                  c.hashEnabled = v and true or false; refreshFn() end },
+            { type = "input", label = EllesmereUI.L("Positions"), inputWidth = 130,
+              commitOnBlur = true,
+              disabled = HashOff,
+              disabledTooltip = DIS_TIP,
+              get = function() local c = getBarData(); return c and c.hashValues or "" end,
+              set = function(v) local c = getBarData(); if not c then return end
+                  c.hashValues = SanitizePositions(v); refreshFn() end },
+            { type = "segmented", label = EllesmereUI.L("Mode"),
+              disabled = HashOff,
+              disabledTooltip = DIS_TIP,
+              keys = { "percent", "value" }, labels = { percent = "%", value = "Value" },
+              get = function() local c = getBarData(); return (c and c.hashMode) or "percent" end,
+              set = function(k) local c = getBarData(); if not c then return end
+                  c.hashMode = k; refreshFn() end },
+            { type = "slider", label = EllesmereUI.L("Thickness"), min = 1, max = 5, step = 1,
+              disabled = HashOff,
+              disabledTooltip = DIS_TIP,
+              get = function() local c = getBarData(); return c and c.hashWidth or 1 end,
+              set = function(v) local c = getBarData(); if not c then return end
+                  c.hashWidth = v; refreshFn() end },
+            { type = "colorpicker", label = EllesmereUI.L("Color"), hasAlpha = true,
+              disabled = HashOff,
+              disabledTooltip = DIS_TIP,
+              get = function()
+                  local c = getBarData()
+                  if not c then return 1, 1, 1, 0.7 end
+                  return c.hashColorR or 1, c.hashColorG or 1, c.hashColorB or 1, c.hashColorA or 0.7
+              end,
+              set = function(r, g, b, a)
+                  local c = getBarData(); if not c then return end
+                  c.hashColorR, c.hashColorG, c.hashColorB, c.hashColorA = r, g, b, a
+                  refreshFn()
+              end },
+        }
+
+        return EllesmereUI.BuildInlineCog(cfg.parentRgn, {
+            anchorTo = cfg.anchorTo, tip = EllesmereUI.L("Hash Lines"),
+            title = cfg.popupTitle or EllesmereUI.L("Hash Lines"), bgAlpha = 1,
+            frameStrata = "FULLSCREEN_DIALOG", frameLevel = 500,
+            rows = rows,
+        })
+    end
+
     -- Druid-only per-form popup button. `field` picks the map the toggles write: "textDisabledForms" (text rows) or "barDisabledForms" (whole-bar rows).
     local function AddFormDisableBtn(rgn, leftOf, cfgFn, refreshFn, field, title, tooltip)
         local _, classFile = UnitClass("player")
@@ -3936,7 +4006,7 @@ initFrame:SetScript("OnEvent", function(self)
         DB = DB, PP = PP, Refresh = Refresh,
         SmoothRefresh = SmoothRefresh, RefreshHealth = RefreshHealth, RebuildHealth = RebuildHealth,
         AddFormBarBtn = AddFormBarBtn, AddFormTextBtn = AddFormTextBtn, AttachThresholdNotice = AttachThresholdNotice,
-        BuildThresholdSettingsButton = BuildThresholdSettingsButton, RefreshPower = RefreshPower,
+        BuildHashCog = BuildHashCog, BuildThresholdSettingsButton = BuildThresholdSettingsButton, RefreshPower = RefreshPower,
         RebuildPower = RebuildPower, RefreshClass = RefreshClass, RebuildClass = RebuildClass,
         ShowBandEditor = ShowBandEditor, ShowBuffEditor = ShowBuffEditor, ShowSpenderEditor = ShowSpenderEditor,
         SkinCardButton = SkinCardButton,

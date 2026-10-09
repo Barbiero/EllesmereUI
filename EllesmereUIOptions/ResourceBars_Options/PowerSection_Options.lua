@@ -12,7 +12,7 @@ function ns.ERB_BuildPowerSection(parent, y, ctx)
     local env = ns._ERB_OptEnv
     local DB, PP, Refresh, SmoothRefresh = env.DB, env.PP, env.Refresh, env.SmoothRefresh
     local RefreshPower, RebuildPower, AddFormBarBtn, AddFormTextBtn = env.RefreshPower, env.RebuildPower, env.AddFormBarBtn, env.AddFormTextBtn
-    local AttachThresholdNotice, BuildThresholdSettingsButton = env.AttachThresholdNotice, env.BuildThresholdSettingsButton
+    local AttachThresholdNotice, BuildHashCog, BuildThresholdSettingsButton = env.AttachThresholdNotice, env.BuildHashCog, env.BuildThresholdSettingsButton
     local W = EllesmereUI.Widgets
     local _, h
     local function cfg() return ctx.cfg() end
@@ -757,6 +757,15 @@ function ns.ERB_BuildPowerSection(parent, y, ctx)
         formCapable = true,
     })
     _thrNoticeP = AttachThresholdNotice(powerSettingsBtn, cfg, ctx.advanced and ctx.specID or nil)
+
+    -- Bar-wide hash lines (the fallback when the active threshold entry has none of its own).
+    BuildHashCog({
+        parentRgn = powerColorRow._rightRegion,
+        anchorTo = powerSettingsBtn,
+        getBarData = function() return DB().primary end,
+        refreshFn = function() RebuildPower() end,
+        popupTitle = EllesmereUI.L("Power Bar Hash Lines"),
+    })
     end
     -- Thresholds have their own per-spec system, so lock the slot during a Spec Overrides editing session.
     if EllesmereUI.SpecOverrides_AttachEditLock and not EllesmereUI._prebuilding then

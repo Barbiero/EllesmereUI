@@ -14,7 +14,7 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
     local env = ns._ERB_OptEnv
     local DB, PP, Refresh, SmoothRefresh = env.DB, env.PP, env.Refresh, env.SmoothRefresh
     local RefreshHealth, RebuildHealth, AddFormBarBtn, AddFormTextBtn = env.RefreshHealth, env.RebuildHealth, env.AddFormBarBtn, env.AddFormTextBtn
-    local AttachThresholdNotice, BuildThresholdSettingsButton = env.AttachThresholdNotice, env.BuildThresholdSettingsButton
+    local AttachThresholdNotice, BuildHashCog, BuildThresholdSettingsButton = env.AttachThresholdNotice, env.BuildHashCog, env.BuildThresholdSettingsButton
     local W = EllesmereUI.Widgets
     local _, h
     local function cfg() return ctx.cfg() end
@@ -807,6 +807,15 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
         defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
     })
     _thrNoticeH = AttachThresholdNotice(healthSettingsBtn, cfg, ctx.advanced and ctx.specID or nil)
+
+    -- Bar-wide hash lines (the fallback when the active threshold entry has none of its own).
+    BuildHashCog({
+        parentRgn = healthColorRow._rightRegion,
+        anchorTo = healthSettingsBtn,
+        getBarData = function() return DB().health end,
+        refreshFn = function() RebuildHealth() end,
+        popupTitle = EllesmereUI.L("Health Bar Hash Lines"),
+    })
     end
     -- Thresholds have their own per-spec system, so lock the slot during a Spec Overrides editing session.
     if EllesmereUI.SpecOverrides_AttachEditLock and not EllesmereUI._prebuilding then
