@@ -335,14 +335,21 @@ function NameplateFrame:UpdateHealthColor()
         -- The redacted token still keys C_ClassColor (the slot painter does the same); the
         -- colour may be secret and goes straight to the setter.
         local _, tok = UnitClass(unit)
-        mirrored, mr, mg, mb = EllesmereUI.GetClassColorForRestrictedUnit(unit, tok)
-        if not mirrored then
-            local c = C_ClassColor.GetClassColor(tok)
-            if c then mirrored = true; mr, mg, mb = c:GetRGB() end
+        if tok then
+            local ok, found, r, g, b = pcall(EllesmereUI.GetClassColorForRestrictedUnit, unit, tok)
+            if ok and found then
+                mirrored, mr, mg, mb = true, r, g, b
+            else
+                local okC, c = pcall(C_ClassColor.GetClassColor, tok)
+                if okC and c then
+                    local okRGB, r2, g2, b2 = pcall(c.GetRGB, c)
+                    if okRGB then mirrored, mr, mg, mb = true, r2, g2, b2 end
+                end
+            end
         end
         if not mirrored then
-            -- No class colour: fall back to Blizzard's plate. Wanted to mirror but it was
-            -- not on this unit yet: the deferred setup pass retries.
+            -- Any failure above lands here: Blizzard's plate, the previous behaviour. Wanted
+            -- to mirror but it was not on this unit yet: the deferred setup pass retries.
             mirrored, mr, mg, mb = ns.GetBlizzardBarColor(self)
             self._mirrorPending = not mirrored or nil
         else
