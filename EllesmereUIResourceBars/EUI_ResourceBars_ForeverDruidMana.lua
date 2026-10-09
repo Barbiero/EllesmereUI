@@ -489,13 +489,13 @@ end
 -- Below / Above the Power Bar, an element linked to that side of "ERB_Power"
 -- measures from this bar's far edge, so a form change moves it clear of the
 -- mana bar instead of leaving it overlapped. The Power Bar keeps its own
--- edges everywhere else. Inert in unlock mode, where the Power Bar's mover is
--- its own rect (the same posture as the tracking bar extent provider).
--- Chained in front of any provider installed before this file loaded.
+-- edges everywhere else. Live in unlock mode too, so a linked element's mover
+-- stays clear of the bar and a drag measures from the same edge (Below: the
+-- Power Bar's mover wraps this bar, ns.FDM_BottomExtra). Chained in front of
+-- any provider installed before this file loaded.
 local prevExtent = EllesmereUI._GetAnchorTargetExtent
 EllesmereUI._GetAnchorTargetExtent = function(targetKey, side)
-    if targetKey == "ERB_Power" and S.shown and side == S.extSide
-       and not EllesmereUI._unlockActive then
+    if targetKey == "ERB_Power" and S.shown and side == S.extSide then
         local host, pb = S.host, S.pb
         local v, pv
         if side == "BOTTOM" then v, pv = host:GetBottom(), pb:GetBottom()
@@ -515,4 +515,15 @@ EllesmereUI._GetAnchorTargetExtent = function(targetKey, side)
     end
     if prevExtent then return prevExtent(targetKey, side) end
     return nil
+end
+
+-- Unlock mode: the Power Bar's getBottomExtra (main file). While this bar
+-- shows Below a horizontal Power Bar, the mover grows down to wrap it, to
+-- the same edge linked elements measure from; 0 otherwise. Power Bar units
+-- (this bar is its child: one scale).
+function ns.FDM_BottomExtra()
+    if not (S.shown and S.extSide == "BOTTOM") then return 0 end
+    local hb, pb = S.host:GetBottom(), S.pb:GetBottom()
+    if not (hb and pb) or hb >= pb then return 0 end
+    return pb - hb
 end
