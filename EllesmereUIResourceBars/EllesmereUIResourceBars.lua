@@ -3249,7 +3249,7 @@ function ns.ApplyHashLines(sb, cfg, getMaxFn)
     local ent = cfg and ResolveThresholdSpecEntry(cfg)
     local hashStr = ent and ent.hashValues
     if not hashStr or hashStr == "" then
-        if tickCache then for i = 1, #tickCache do tickCache[i]:Hide() end end
+        if tickCache then HideResourceBarTicks(tickCache, sb) end
         return
     end
     if not tickCache then tickCache = {}; sb._userHashTicks = tickCache end
