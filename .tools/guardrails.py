@@ -100,7 +100,29 @@ def check_client_gate(change, errors):
                           f"'{GUARD.decode()} -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)'")
 
 
-CHECKS = [check_compile, check_client_gate]
+REGEN_RE = re.compile(r"RegisterEvent\(\s*[\"']PLAYER_REGEN_ENABLED[\"']")
+REGEN_DISABLED_RE = re.compile(rb"RegisterEvent\(\s*[\"']PLAYER_REGEN_DISABLED[\"']")
+
+
+def check_combat_deferral(change, errors):
+    """Work deferred to combat end goes through the shared combat queue."""
+    tracks_combat = {}
+    for path, lineno, text in change.added_lines:
+        if not REGEN_RE.search(text):
+            continue
+        if path not in tracks_combat:
+            # A file that also listens for PLAYER_REGEN_DISABLED tracks combat
+            # state; that is not a deferral.
+            tracks_combat[path] = bool(REGEN_DISABLED_RE.search(change.read(path)))
+        where = f"{path}:{lineno}"
+        if tracks_combat[path] or allowed("combat-deferral", text, errors, where):
+            continue
+        errors.append(f"{where}: new PLAYER_REGEN_ENABLED registration. Defer with "
+                      f"EllesmereUI.CombatQueue.Defer(key, fn) in the parent addon, or the "
+                      f"child's ns.CombatQueue (EllesmereUI.NewCombatQueue, EllesmereUI_Ticker.lua)")
+
+
+CHECKS = [check_compile, check_client_gate, check_combat_deferral]
 
 
 def main():
