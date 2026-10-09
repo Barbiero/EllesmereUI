@@ -2515,6 +2515,10 @@ local function RegisterUnlockElements()
                 local w, h = OrientedSize(s.width or 214, s.height or 14, ori)
                 return ns.ERB_ClassicMatchPad(w, h, IsVerticalOrientation(ori), ns.ERB_BarFrameK(s))
             end,
+            -- WoW Forever druid: the mover wraps the Mana Bar while Shapeshifted
+            -- shown below the bar (EUI_ResourceBars_ForeverDruidMana.lua); nil
+            -- on every other client and class.
+            getBottomExtra = ns.FDM_BottomExtra,
             setWidth = function(_, w)
                 local s, g = SS(), ERB.db.profile.general
                 if IsVerticalOrientation(s.orientation or (g and g.orientation)) then
