@@ -10807,6 +10807,7 @@ BuildGCDBar = function()
                 return nil
             end)
             if ok and elapsed and not (issecretvalue and (issecretvalue(elapsed) or issecretvalue(dur))) then
+                self._gcdUnread = nil
                 local actualStart = GetTime() - elapsed
                 -- (Re)start whenever this is a genuinely NEWER GCD than the one we
                 -- last captured. Do NOT gate on how far the GCD has elapsed:
@@ -10849,6 +10850,7 @@ BuildGCDBar = function()
                     self._nativeGCD = true
                     self._gcdStart = GetTime()
                     self._gcdDur = 1.6
+                    self._gcdUnread = true
                     self._gcdActualStart = nil
                     ns.GCDTick.Start()
                     UpdateGCDBar()
@@ -11168,6 +11170,20 @@ UpdateGCDBar = function(_dt)
             gcdBarFrame._gcdStart = nil
             gcdBarFrame._gcdDur = nil
             gcdBarFrame._gcdActualStart = nil
+            active = false
+        end
+    end
+
+    -- Secret values: the real length is unreadable, so the window above is only a ceiling.
+    -- The cooldown's isActive stays a plain boolean; end the window when the GCD is over.
+    if active and gcdBarFrame._gcdUnread then
+        local cd = C_Spell.GetSpellCooldown(EllesmereUI.GCD_SPELL)
+        local act = cd and cd.isActive
+        if not (issecretvalue and issecretvalue(act)) and act == false then
+            gcdBarFrame._gcdStart = nil
+            gcdBarFrame._gcdDur = nil
+            gcdBarFrame._gcdActualStart = nil
+            gcdBarFrame._gcdUnread = nil
             active = false
         end
     end
