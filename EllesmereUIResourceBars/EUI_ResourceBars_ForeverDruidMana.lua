@@ -153,8 +153,10 @@ local function Paint(force)
         S.cur, S.mx = nil, nil
         sb:SetMinMaxValues(0, mx)
     end
-    if curPlain and not force then
-        sb:SetValue(cur, ns.EASE)
+    -- Eases only while the Power Bar's Smooth Bars item is on (its _smoothing)
+    local interp = curPlain and not force and S.pb and S.pb._smoothing
+    if interp then
+        sb:SetValue(cur, interp)
     else
         sb:SetValue(cur)
     end
@@ -169,6 +171,8 @@ local function Paint(force)
         local pctRaw = UnitPowerPercent and UnitPowerPercent("player", MANA, true, CurveConstants and CurveConstants.ScaleTo100) or 0
         local percentText = format("%d", pctRaw) .. S.suffix
         txt = (fmt == "both") and (ns.AbbreviateNumbers(cur) .. " | " .. percentText) or percentText
+    elseif fmt == "curmaxpp" then
+        txt = ns.AbbreviateNumbers(cur) .. " / " .. ns.AbbreviateNumbers(UnitPowerMax("player", MANA))
     else
         txt = ns.AbbreviateNumbers(cur)
     end

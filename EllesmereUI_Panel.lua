@@ -603,6 +603,10 @@ local function CreateMainFrame()
     -- No SetClampedToScreen: the whole window moves as one and drags freely off any edge.
     clickArea:SetScript("OnDragStart", function() mainFrame:StartMoving() end)
     clickArea:SetScript("OnDragStop",  function() mainFrame:StopMovingOrSizing() end)
+    -- Shift + mouse wheel over any part of the panel without a wheel of its own (the
+    -- header, the footer, the margins) scales it too; a plain wheel there does nothing.
+    clickArea:EnableMouseWheel(true)
+    clickArea:SetScript("OnMouseWheel", function(_, delta) EllesmereUI._ShiftWheelScale(delta) end)
     -- Controller cursor: the drag surface is not a stop; its children are.
     EllesmereUI.PadHint(clickArea, "nodepass")
 
@@ -965,8 +969,8 @@ local function CreateMainFrame()
         EllesmereUI._unlockSidebarBtn = btn
 
         -- One-time tutorial tip: play badge opening the Unlock Mode video guide, retired
-        -- once clicked. VideoGuides owns all gating (per-account seen map + the Enable
-        -- Tutorial Tips setting); nil-guarded for standalone builds.
+        -- once clicked. VideoGuides owns all gating (its per-account seen map);
+        -- nil-guarded for standalone builds.
         if EllesmereUI.VideoGuides and EllesmereUI.VideoGuides.AttachTip then
             EllesmereUI.VideoGuides.AttachTip(btn, "unlock_mode", {
                 tooltip = "Video Guide: Unlock Mode",
@@ -1478,6 +1482,7 @@ local function CreateMainFrame()
     end)
 
     addonScrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        if EllesmereUI._ShiftWheelScale(delta) then return end
         local maxScroll = EllesmereUI.SafeScrollRange(self) or 0
         if maxScroll <= 0 then return end
         local scale = self:GetEffectiveScale()
@@ -1611,7 +1616,7 @@ local function CreateMainFrame()
 
         -- One-time tutorial tip on the Cooldown Manager row: play badge in the indent
         -- gutter opening the CDM video guide, retired once clicked. VideoGuides owns all
-        -- gating (seen map + Enable Tutorial Tips); nil-guarded for standalone builds.
+        -- gating (its seen map); nil-guarded for standalone builds.
         if info.folder == "EllesmereUICooldownManager"
             and EllesmereUI.VideoGuides and EllesmereUI.VideoGuides.AttachTip then
             EllesmereUI.VideoGuides.AttachTip(btn, "cooldown_manager", {
@@ -2068,6 +2073,7 @@ local function CreateMainFrame()
         -- Mouse wheel on the whole area
         opacityFrame:EnableMouseWheel(true)
         opacityFrame:SetScript("OnMouseWheel", function(self, delta)
+            if EllesmereUI._ShiftWheelScale(delta) then return end
             local cur = mainFrame:GetAlpha()
             SetOpacity(cur + delta * 0.05)
         end)
@@ -2424,6 +2430,7 @@ local function CreateMainFrame()
     end
 
     scrollFrame:SetScript("OnMouseWheel", function(self, delta)
+        if EllesmereUI._ShiftWheelScale(delta) then return end
         local maxScroll = EllesmereUI.SafeScrollRange(self)
         if maxScroll <= 0 then return end
         -- Accumulate on top of the current target (not current position) for responsive chained scrolls
@@ -2847,7 +2854,7 @@ local function CreateMainFrame()
                 eb:SetFontObject(GameFontHighlight)
                 eb:SetAutoFocus(false)
                 eb:SetJustifyH("CENTER")
-                local ebBg = SolidTex(eb, "BACKGROUND", 0.10, 0.12, 0.16, 1)
+                local ebBg = SolidTex(eb, "BACKGROUND", 0.112, 0.105, 0.098, 1)
                 ebBg:SetPoint("TOPLEFT", -6, 4); ebBg:SetPoint("BOTTOMRIGHT", 6, -4)
                 MakeBorder(eb, BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.02)
                 eb:SetScript("OnEscapePressed", function(self) self:ClearFocus(); HideLinkPopup() end)
@@ -3857,11 +3864,12 @@ end
 --  this API"). For the suite's own pages:
 --   * the caller's file must resolve to a trusted folder; every other caller,
 --     including one without a file path (a loadstring chunk, a call routed
---     through a C function), takes that outside path, which never takes a
---     suite key;
+--     through a C function), and every key that is not a suite page, takes that
+--     outside path, which never takes a suite key;
 --   * outside standalone builds the only trusted caller is the options addon, and
---     only while the core itself is loading it (EUI_NS.CoreRegistrationOpen), so a
---     suite key cannot be claimed ahead of the real registration;
+--     only while it loads or the core drains its deferred inits
+--     (EUI_NS.CoreRegistrationOpen), so a suite key cannot be claimed ahead of
+--     the real registration;
 --   * only suite keys are accepted (suite folders + the fixed panel pages), and
 --     each one is sealed on first registration: it cannot be registered again.
 -------------------------------------------------------------------------------
@@ -3927,6 +3935,12 @@ do
         return sealed[folderName] == true
     end
 
+    -- One of the suite's own addon folders (exact names: an outside addon may
+    -- start its folder name with "EllesmereUI" too).
+    function EUI_NS.IsSuiteFolder(folder)
+        return ALLOWED[folder] == true
+    end
+
     -- A suite page's key: any suite folder (including one the running client
     -- hides from the sidebar), one of the fixed panel pages, or a key the core
     -- registered itself.
@@ -3950,24 +3964,29 @@ do
         -- The caller's addon folder, from its file path (nil without one).
         local caller = debugstack(2, 1, 0) or ""
         local callerFolder = caller:match("AddOns/([^/]+)/")
-        if not (callerFolder and ALLOWED[callerFolder]) then
-            -- Another addon: a page under a key of its own registers as it did
-            -- before the plugin API; a suite page is never replaced.
-            EUI_NS.RegisterExternal(callerFolder, folderName, config)
+        -- A suite page from one of our folders: accepted from the options addon
+        -- inside the registration window, never from anywhere else. Standalone
+        -- builds bundle the options files flat into the one addon.
+        if callerFolder and ALLOWED[callerFolder]
+           and (ALLOWED[folderName] or CORE_PAGE_KEYS[folderName]) then
+            if IS_STANDALONE
+               or (callerFolder == "EllesmereUIOptions" and EUI_NS.CoreRegistrationOpen()) then
+                -- Suite-core marker (module key is a suite folder), gating the toolbar whitelists:
+                -- the overrides icon renders for core modules only, the inline search for core
+                -- modules + Global Settings. Companion/external pages stay unmarked, so neither
+                -- control renders for them (see SelectModule).
+                EUI_NS.RegisterCoreModule(folderName, config, ALLOWED[folderName] == true)
+            end
             return
         end
-        -- Standalone builds bundle the options files flat into the one addon.
-        if not IS_STANDALONE
-           and (callerFolder ~= "EllesmereUIOptions" or not EUI_NS.CoreRegistrationOpen()) then
-            return
-        end
-        if not (ALLOWED[folderName] or CORE_PAGE_KEYS[folderName]) then return end
-        -- Suite-core marker (module key is a suite folder), gating the toolbar whitelists:
-        -- the overrides icon renders for core modules only, the inline search for core
-        -- modules + Global Settings. Companion/external pages stay unmarked, so neither
-        -- control renders for them (see SelectModule).
-        EUI_NS.RegisterCoreModule(folderName, config, ALLOWED[folderName] == true)
+        -- Anything else is another addon's, whatever folder its caller names: a
+        -- page under a key of its own registers as it did before the plugin API;
+        -- a suite page is never replaced.
+        EUI_NS.RegisterExternal(callerFolder, folderName, config)
     end
+    -- The core registers the suite's own pages through this one, never through
+    -- whatever may sit on the public slot by then (EllesmereUI.lua).
+    EUI_NS.CoreRegisterModule = EllesmereUI.RegisterModule
 end
 
 -------------------------------------------------------------------------------
@@ -4023,6 +4042,9 @@ function EllesmereUI:InvalidateModulePageCache(moduleName)
     end
 end
 
+-- The tab switch's re-snap roots: the page shown and its content header.
+local tabResnapRoots = {}
+
 function EllesmereUI:SelectPage(pageName)
     -- Excluded pages (CDM Bar Glows / Tracking Bars) lock during an override editing
     -- session: their systems keep their own per-spec storage, outside the capture.
@@ -4034,6 +4056,22 @@ function EllesmereUI:SelectPage(pageName)
     end
     if not activeModule or not modules[activeModule] then return end
     if pageName == activePage then return end
+
+    -- A link tab (config.pageLinks[pageName] = { module =, page = }) opens another
+    -- module's page instead of one of its own. Nothing here changes, so coming
+    -- back lands on the page that was open.
+    local links = modules[activeModule].pageLinks
+    local link = links and links[pageName]
+    if link then
+        if modules[link.module] then
+            -- SelectModule opens a module on its last page: make that the target,
+            -- so the module's previous page is never built on the way.
+            _lastPagePerModule[link.module] = link.page
+            self:SelectModule(link.module)
+            if activePage ~= link.page then self:SelectPage(link.page) end
+        end
+        return
+    end
 
     -- "Unlock Mode" is a fake nav item -- fire unlock mode without changing page state.
     -- Capture the current module + page so DoClose can restore them exactly.
@@ -4198,9 +4236,13 @@ function EllesmereUI:SelectPage(pageName)
     -- Re-snap PP borders after a tab switch: cached frames re-show without
     -- CreateBorder's built-in 2-frame re-snap, so borders misalign until reopen. Wait
     -- 1 frame so the hierarchy has finished layout before recalculating effective scales.
+    -- The content header goes with the page (one shown after a scale change it missed).
     C_Timer.After(0, function()
-        if PP and PP.ResnapBordersUnder and _activePageWrapper then
-            PP.ResnapBordersUnder(_activePageWrapper)
+        if PP and _activePageWrapper then
+            wipe(tabResnapRoots)
+            tabResnapRoots[_activePageWrapper] = true
+            if contentHeaderFrame then tabResnapRoots[contentHeaderFrame] = true end
+            PP.ResnapBordersUnderRoots(tabResnapRoots)
         elseif PP and PP.ResnapAllBorders then
             PP.ResnapAllBorders()
         end
@@ -4575,16 +4617,13 @@ local function ShowSidebarUnlockTip()
     if not anchor then return end
 
     if not _sidebarUnlockTip then
-        local TIP_W, TIP_H = 320, 100
-        local EG = ELLESMERE_GREEN
-        local ar, ag, ab = EG.r, EG.g, EG.b
-
-        local tip = CreateFrame("Frame", nil, EllesmereUI._panelBody)
-        tip:SetFrameStrata("FULLSCREEN_DIALOG")
-        tip:SetFrameLevel(200)
-        PanelPP.Size(tip, TIP_W, TIP_H)
-        tip:EnableMouse(true)
-
+        local tip = EllesmereUI.BuildTipCallout(EllesmereUI._panelBody, {
+            width = 320, height = 100,
+            text = EllesmereUI.L("Unlock Mode is where you can adjust\npositioning for all the elements of EllesmereUI"),
+            onOkay = function()
+                if EllesmereUIDB then EllesmereUIDB.sidebarUnlockTipSeen = true end
+            end,
+        })
         -- Center horizontally on the Unlock Mode label text
         local lbl = anchor._label
         if lbl then
@@ -4592,77 +4631,10 @@ local function ShowSidebarUnlockTip()
         else
             tip:SetPoint("TOP", anchor, "BOTTOM", 60, -12)
         end
-
-        -- Background
-        local bg = SolidTex(tip, "BACKGROUND", 0.06, 0.08, 0.10, 1)
-        bg:SetAllPoints()
-
-        -- Border (pixel-perfect via PanelPP)
-        MakeBorder(tip, ar, ag, ab, 0.25, PanelPP)
-
-        -- Arrow pointing up (clipped diamond)
-        local ARROW_SZ = 16
-        local arrowClip = CreateFrame("Frame", nil, tip)
-        arrowClip:SetFrameStrata("FULLSCREEN_DIALOG")
-        arrowClip:SetFrameLevel(tip:GetFrameLevel() + 10)
-        arrowClip:SetClipsChildren(true)
-        local clipH = ARROW_SZ
-        arrowClip:SetSize(ARROW_SZ * 2, clipH)
-        arrowClip:SetPoint("BOTTOM", tip, "TOP", 0, -1)
-
-        local arrowFrame = CreateFrame("Frame", nil, arrowClip)
-        arrowFrame:SetFrameLevel(arrowClip:GetFrameLevel() + 1)
-        arrowFrame:SetSize(ARROW_SZ + 4, ARROW_SZ + 4)
-        arrowFrame:SetPoint("CENTER", arrowClip, "BOTTOM", 0, 0)
-
-        local arrowBorder = arrowFrame:CreateTexture(nil, "ARTWORK", nil, 7)
-        arrowBorder:SetSize(ARROW_SZ + 2, ARROW_SZ + 2)
-        arrowBorder:SetPoint("CENTER")
-        arrowBorder:SetColorTexture(ar, ag, ab, 0.18)
-        arrowBorder:SetRotation(math.rad(45))
-        if arrowBorder.SetSnapToPixelGrid then arrowBorder:SetSnapToPixelGrid(false); arrowBorder:SetTexelSnappingBias(0) end
-
-        local arrowFill = arrowFrame:CreateTexture(nil, "OVERLAY", nil, 6)
-        arrowFill:SetSize(ARROW_SZ, ARROW_SZ)
-        arrowFill:SetPoint("CENTER")
-        arrowFill:SetColorTexture(0.06, 0.08, 0.10, 1)
-        arrowFill:SetRotation(math.rad(45))
-        if arrowFill.SetSnapToPixelGrid then arrowFill:SetSnapToPixelGrid(false); arrowFill:SetTexelSnappingBias(0) end
-
-        -- Message
-        local msg = MakeFont(tip, 12, nil, 1, 1, 1, 0.85)
-        msg:SetPoint("TOP", tip, "TOP", 0, -17)
-        msg:SetWidth(TIP_W - 30)
-        msg:SetJustifyH("CENTER")
-        msg:SetSpacing(6)
-        msg:SetText(EllesmereUI.L("Unlock Mode is where you can adjust\npositioning for all the elements of EllesmereUI"))
-
-        -- Okay button
-        local okBtn = CreateFrame("Button", nil, tip)
-        okBtn:SetSize(86, 26)
-        okBtn:SetPoint("BOTTOM", tip, "BOTTOM", 0, 13)
-        EllesmereUI.MakeStyledButton(okBtn, "Okay", 11,
-            EllesmereUI.RB_COLOURS, function()
-                tip:Hide()
-                if EllesmereUIDB then EllesmereUIDB.sidebarUnlockTipSeen = true end
-            end)
-
         _sidebarUnlockTip = tip
     end
 
-    _sidebarUnlockTip:SetAlpha(0)
-    _sidebarUnlockTip:Show()
-
-    local fadeIn = 0
-    _sidebarUnlockTip:SetScript("OnUpdate", function(self, dt)
-        fadeIn = fadeIn + dt
-        if fadeIn >= 0.3 then
-            self:SetAlpha(1)
-            self:SetScript("OnUpdate", nil)
-            return
-        end
-        self:SetAlpha(fadeIn / 0.3)
-    end)
+    EllesmereUI.ShowTipCallout(_sidebarUnlockTip)
 end
 
 -- FIRST-OPEN SPLIT: the session's first open pays two heavy bills --
@@ -4726,30 +4698,85 @@ function EllesmereUI:GetMainFrame() return mainFrame end
 function EllesmereUI:GetActivePage() return activePage end
 
 --- Apply a user-defined panel scale on top of the pixel-perfect base scale.
---- @param userScale number  multiplier (1.0 = default, 0.5-1.5 range)
+--- @param userScale number  multiplier (1.0 = default, PANEL_SCALE_MIN-MAX)
+--- @param pin table|string|nil  what stays put on screen while the panel glides to
+---   the new scale: a region of the panel (the header's Window Scale slider passes
+---   its track, so it never slides out from under the cursor), "cursor" (Shift +
+---   mouse wheel zooms about the point under the mouse), or nil for the panel's
+---   own centre.
 do
     local scaleAnimFrame = CreateFrame("Frame")
     local scaleFrom, scaleTo, scaleElapsed
-    local SCALE_DUR = 0.10
+    local SCALE_DUR = 0.12
     local isAnimating = false
+    -- Zoom origin: the pin's screen point (effective-scale-1 units) and its offset
+    -- from mainFrame's bottom-left in panel units. pinX nil = no pin.
+    local pinX, pinY, pinOX, pinOY
+    local settleRoots = {}
+
+    -- Re-anchor the panel so the pin's point lands back on its screen spot at the
+    -- current scale (anchor offsets are in the panel's own units). The final call
+    -- measures the same spot from the screen centre, so a centred panel stays
+    -- centred through later resolution changes.
+    local function HoldPin(final)
+        if not pinX then return end
+        local s = mainFrame:GetEffectiveScale()
+        local x, y = pinX / s - pinOX, pinY / s - pinOY
+        mainFrame:ClearAllPoints()
+        if final then
+            local k = UIParent:GetEffectiveScale() / s
+            mainFrame:SetPoint("CENTER", UIParent, "CENTER",
+                x + (mainFrame:GetWidth() - UIParent:GetWidth() * k) / 2,
+                y + (mainFrame:GetHeight() - UIParent:GetHeight() * k) / 2)
+        else
+            mainFrame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", x, y)
+        end
+    end
+
+    -- Once the glide lands, every border in the panel body (the visible page, its
+    -- content header, the chrome and the body's popups, shown or hidden) and the
+    -- popups (rescaled just before by their _onScaleChanged hook) re-snap to whole
+    -- pixels in one registry pass. Hidden cached pages are skipped: the tab switch
+    -- re-snaps a page whenever it is shown. The page and header are roots of their
+    -- own (their borders sit deeper than the walk reaches from the body).
+    local function ResnapAfterScale()
+        wipe(settleRoots)
+        settleRoots[EllesmereUI._panelBody] = true
+        for _, entry in pairs(_pageCache) do
+            local w = entry.wrapper
+            if w then settleRoots[w] = "skip" end
+        end
+        if _activePageWrapper then settleRoots[_activePageWrapper] = true end
+        if contentHeaderFrame then settleRoots[contentHeaderFrame] = true end
+        local pops = EllesmereUI._popupFrames
+        if pops then
+            for i = 1, #pops do
+                local root = pops[i].dimmer or pops[i].popup
+                if root then settleRoots[root] = true end
+            end
+        end
+        PP.ResnapBordersUnderRoots(settleRoots)
+    end
 
     local function OnScaleUpdate(self, dt)
         scaleElapsed = scaleElapsed + dt
         local t = math.min(1, scaleElapsed / SCALE_DUR)
         local ease = t * (2 - t)  -- ease-out quad
-        local cur = scaleFrom + (scaleTo - scaleFrom) * ease
-        if mainFrame then mainFrame:SetScale(cur) end
-        if t >= 1 then
+        local done = t >= 1
+        mainFrame:SetScale(done and scaleTo or (scaleFrom + (scaleTo - scaleFrom) * ease))
+        HoldPin(done)
+        if done then
             self:SetScript("OnUpdate", nil)
             isAnimating = false
-            if mainFrame then mainFrame:SetScale(scaleTo) end
+            pinX = nil
             if EllesmereUI._onScaleChanged then
                 for _, fn in ipairs(EllesmereUI._onScaleChanged) do fn() end
             end
+            ResnapAfterScale()
         end
     end
 
-    function EllesmereUI:SetPanelScale(userScale)
+    function EllesmereUI:SetPanelScale(userScale, pin)
         if not mainFrame then return end
         local physW = (GetPhysicalScreenSize())
         local baseScale = GetScreenWidth() / physW
@@ -4757,16 +4784,62 @@ do
         if EllesmereUIDB then EllesmereUIDB.panelScale = userScale end
         -- Recalculate PanelPP mult for the new scale
         if EllesmereUI.PanelPP then EllesmereUI.PanelPP.UpdateMult() end
-        if isAnimating then
-            -- Already animating: just redirect the target without restarting.
-            scaleTo = targetScale
+        -- The pin shares the panel's scale, so its centre and the panel's edges read
+        -- in the same units (the cursor is converted into them).
+        pinX = nil
+        local cx, cy
+        if pin == "cursor" then
+            local s = mainFrame:GetEffectiveScale()
+            local x, y = GetCursorPosition()
+            cx, cy = x / s, y / s
         else
-            scaleFrom = mainFrame:GetScale()
-            scaleTo = targetScale
-            scaleElapsed = 0
+            cx, cy = (pin or mainFrame):GetCenter()
+        end
+        local ml, mb = mainFrame:GetLeft(), mainFrame:GetBottom()
+        local isv = issecretvalue
+        if cx and cy and ml and mb and not (isv and (isv(cx) or isv(cy) or isv(ml) or isv(mb))) then
+            local s = mainFrame:GetEffectiveScale()
+            pinOX, pinOY = cx - ml, cy - mb
+            pinX, pinY = cx * s, cy * s
+        end
+        -- Every change glides on from where the panel is now, so a new target
+        -- mid-glide (a fast scroll) carries on smoothly instead of jumping.
+        scaleFrom = mainFrame:GetScale()
+        scaleTo = targetScale
+        scaleElapsed = 0
+        if not isAnimating then
             isAnimating = true
             scaleAnimFrame:SetScript("OnUpdate", OnScaleUpdate)
         end
+    end
+
+    --- One 5% step of the panel scale (delta > 0 grows), clamped to
+    --- PANEL_SCALE_MIN-MAX and gliding about `pin` as SetPanelScale does. An off-step
+    --- value (an older seed) steps to the next 5% mark. True when it changed.
+    function EllesmereUI:StepPanelScale(delta, pin)
+        local cur = ((EllesmereUIDB and EllesmereUIDB.panelScale) or 1) * 100
+        local v
+        if delta > 0 then
+            v = math.floor(cur / 5 + 1e-6) * 5 + 5
+        else
+            v = math.ceil(cur / 5 - 1e-6) * 5 - 5
+        end
+        v = math.max(EllesmereUI.PANEL_SCALE_MIN * 100, math.min(EllesmereUI.PANEL_SCALE_MAX * 100, v))
+        if math.abs(v - cur) < 0.01 then return false end
+        self:SetPanelScale(v / 100, pin)
+        return true
+    end
+
+    -- Shift + mouse wheel anywhere on the panel: one step about the cursor, then
+    -- the header's Window Scale control lights up so the change can be traced
+    -- (EllesmereUI._FlashWindowScale, set by that control once it is built). The
+    -- panel's wheel handlers call this first; true = the wheel was used here.
+    function EllesmereUI._ShiftWheelScale(delta)
+        if not IsShiftKeyDown() or EllesmereUI._sliderDragging then return false end
+        if EllesmereUI:StepPanelScale(delta, "cursor") and EllesmereUI._FlashWindowScale then
+            EllesmereUI._FlashWindowScale()
+        end
+        return true
     end
 end
 
@@ -5099,27 +5172,47 @@ do
     --  addon's group shows above or below the suite's block, wherever the addon
     --  inserted it. A row placed inside one of the suite's groups moves to a
     --  section of its own, as does a page with no row (named after its addon).
-    --  Anything aimed at a suite page is ignored, no suite config is ever handed
-    --  out, and the addon is named once in a notice when the panel opens.
+    --  Anything aimed at a suite page is ignored (a replaced or hooked
+    --  RegisterModule is put back before the suite registers, EllesmereUI.lua),
+    --  no suite config is ever handed out, and the addon is named once in a
+    --  notice when the panel opens.
     ---------------------------------------------------------------------------
-    -- owner: outside key -> the folder that registered it (false: no file path).
+    -- owner: outside key -> the addon that registered it (false: unknown).
     -- sections: source -> its section, a group table in the plugin lists.
     local owner, placed, sections, offenders = {}, {}, {}, {}
     local suiteGroup = {}
     for _, g in ipairs(EUI_NS.coreGroups) do suiteGroup[g.key] = true end
 
-    local function Offend(folder, what)
-        folder = folder or "?"
-        local o = offenders[folder]
-        if not o then o = {}; offenders[folder] = o end
-        o[what] = true
-    end
-    EUI_NS.RecordLegacyOffender = Offend  -- the outside options load (EllesmereUI.lua)
+    -- An addon whose change to a suite page was ignored (named in the notice).
+    local function Offend(folder) offenders[folder] = true end
+    EUI_NS.RecordLegacyOffender = Offend  -- the RegisterModule reclaim (EllesmereUI.lua)
 
     -- An addon's TOC title as plain text (nil if it has none).
     local function AddonTitle(folder)
         local ok, title = pcall(C_AddOns.GetAddOnMetadata, folder, "Title")
         return ok and PlainText(title, MAX_LABEL_CHARS) or nil
+    end
+
+    -- The outside addon that last wrote t[key] (nil for the suite's own writes
+    -- and for anything that is not an installed addon). Taint names the writer
+    -- even where the stack cannot: a wrapper's tail call, a path-less chunk,
+    -- a chunk named after one of our files.
+    local function WriterOf(t, key)
+        local _, by = issecurevariable(t, key)
+        if type(by) == "string" and not EUI_NS.IsSuiteFolder(by) and AddonTitle(by) then
+            return by
+        end
+    end
+    EUI_NS.WriterOf = WriterOf  -- the RegisterModule reclaim (EllesmereUI.lua)
+
+    -- The outside addon that built a table, from its fields' writers.
+    local function Author(t)
+        for k in pairs(t) do
+            if type(k) == "string" then
+                local by = WriterOf(t, k)
+                if by then return by end
+            end
+        end
     end
 
     -- The roster entry an addon published for one of its keys, if any.
@@ -5212,11 +5305,13 @@ do
     end
 
     -- A page another addon registers under a key of its own (folder: that
-    -- addon, nil for a caller without a file path). It may register again.
+    -- addon as the stack names it). It may register again.
     function EUI_NS.RegisterExternal(folder, key, config)
         if type(key) ~= "string" or type(config) ~= "table" then return end
+        -- No folder on the stack, or one of ours: the page's builder names it.
+        if not folder or EUI_NS.IsSuiteFolder(folder) then folder = Author(config) end
         if EUI_NS.IsSuiteKey(key) then
-            if folder then Offend(folder, "page") end
+            if folder then Offend(folder) end
             return
         end
         if EUI_NS.IsPluginKey(key) then return end
@@ -5237,30 +5332,20 @@ do
     })
 
     -- Whenever the panel opens: places what the outside addons added since,
-    -- then a notice naming the addons whose changes to suite pages were
-    -- ignored, and an addon that loaded the options early; never shown twice
-    -- for the same set of addons.
+    -- then the update notice naming the addons whose changes to suite pages
+    -- were ignored (EllesmereUI_VideoGuides.lua). Once per session for a set of
+    -- addons; nothing is saved. Standalone builds have no guide popups.
+    local noticeShownFor
     EllesmereUI:RegisterOnShow(function()
         EUI_NS.SyncExternal()
         if not next(offenders) then return end
-        local pages, loaders = {}, {}
-        for folder, o in pairs(offenders) do
-            local name = (folder ~= "?" and AddonTitle(folder)) or folder
-            if o.page then pages[#pages + 1] = name end
-            if o.loader then loaders[#loaders + 1] = name end
-        end
-        table.sort(pages)
-        table.sort(loaders)
-        local seen = table.concat(pages, ",") .. "|" .. table.concat(loaders, ",")
-        if not EllesmereUIDB or EllesmereUIDB._legacyAddonNotice == seen then return end
-        EllesmereUIDB._legacyAddonNotice = seen
-        local parts = {}
-        if #pages > 0 then
-            parts[#parts + 1] = EllesmereUI.Lf("These addons tried to change EllesmereUI's own settings pages, which is no longer allowed, so those changes are not shown:\n\n%1$s\n\nTheir own settings still appear in a section of their own. Updating them should fix this.", table.concat(pages, "\n"))
-        end
-        if #loaders > 0 then
-            parts[#parts + 1] = EllesmereUI.Lf("%1$s loaded EllesmereUI's settings too early, so they could not set up this session. Type /reload; if this keeps happening, update or disable it.", table.concat(loaders, ", "))
-        end
-        EllesmereUI:ShowInfoPopup({ title = EllesmereUI.L("Addons Need an Update"), content = table.concat(parts, "\n\n") })
+        local names = {}
+        for folder in pairs(offenders) do names[#names + 1] = AddonTitle(folder) or folder end
+        table.sort(names)
+        local seen = table.concat(names, "\n")
+        if noticeShownFor == seen then return end
+        noticeShownFor = seen
+        local guides = EllesmereUI.VideoGuides
+        if guides then guides.ShowAddonUpdate(names) end
     end)
 end

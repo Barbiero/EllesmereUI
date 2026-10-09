@@ -150,18 +150,13 @@ local function BuildNameplatePreview(parent, parentW)
     previewHashLine:SetPoint("BOTTOM", health, "BOTTOM", 0, 0)
     previewHashLine:Hide()
 
-    -- Absorb preview: mask + two StatusBars matching real absorb rendering
+    -- Absorb preview: the live plates' own clip-frame bars and placement
+    -- (ns.NP_BuildAbsorbBars), so the preview draws exactly what plates do.
     local absorbMask = health:CreateMaskTexture()
     absorbMask:SetAllPoints(health)
     absorbMask:SetTexture("Interface\\Buttons\\WHITE8X8")
-    local previewAbsorb = CreateFrame("StatusBar", nil, health)
-    previewAbsorb:SetPoint("TOPLEFT", health:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
-    previewAbsorb:SetPoint("BOTTOMLEFT", health:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
-    previewAbsorb:SetReverseFill(false)
-    previewAbsorb:SetMinMaxValues(0, 100)
-    previewAbsorb:SetValue(95)
-    previewAbsorb:SetFrameLevel(health:GetFrameLevel())
-    previewAbsorb:Hide()
+    local pvAbs = {}
+    ns.NP_BuildAbsorbBars(pvAbs, health, absorbMask)
     local function ApplyPreviewAbsorbStyle()
         local style = DBVal("absorbStyle") or "blizzard"
         local tex = ns.NP_ABSORB_STYLE_TEX[style] or ns.ResolveOverlayTexPath(style) or ns.NP_ABSORB_STYLE_TEX.blizzard
@@ -178,24 +173,37 @@ local function BuildNameplatePreview(parent, parentW)
             local c = (DB() and DB().absorbColor) or defaults.absorbColor or { r = 1, g = 1, b = 1 }
             r, g, b = c.r, c.g, c.b
         end
-        previewAbsorb:SetStatusBarTexture(tex)
-        previewAbsorb:SetStatusBarColor(r, g, b, alpha)
-        local fill = previewAbsorb:GetStatusBarTexture()
-        if fill then fill:SetDrawLayer("ARTWORK", 1); fill:AddMaskTexture(absorbMask) end
+        for _, bar in ipairs({ pvAbs.absorb, pvAbs.absorbForward }) do
+            bar:SetStatusBarTexture(tex)
+            bar:SetStatusBarColor(r, g, b, alpha)
+            local fill = bar:GetStatusBarTexture()
+            if fill then fill:SetDrawLayer("ARTWORK", 1); fill:AddMaskTexture(absorbMask) end
+        end
     end
     local function ToggleAbsorbPreview()
         if optState.showAbsorbPreview then
-            local barW = health:GetWidth()
-            local barH = health:GetHeight()
-            local hpPct = (previewHpPct or 75) / 100
-            -- Matches the live absorb bar: a full bar-width StatusBar windowed by fill value so the texture renders at bar scale (not squished into absorb width); visible absorb region is unchanged, only the texture scale differs. The mask clips the overrun past the edge.
-            previewAbsorb:SetSize(barW, barH)
-            previewAbsorb:SetMinMaxValues(0, 1)
-            previewAbsorb:SetValue((1 - hpPct) * 0.95)
+            local mode = DBVal("absorbEdgeMode") or "overlay"
+            -- A shield smaller than the empty health (preview health is
+            -- 60-75%), so each placement draws somewhere different: past the
+            -- health edge, back over it, or at either end of the bar. A shield
+            -- past empty health would draw Overlay and From Right Edge alike.
+            local shield = 0.15
+            ns.NP_SizeAbsorbBars(pvAbs, health:GetWidth(), health:GetHeight())
+            if pvAbs._absEdge ~= mode or pvAbs._absFill ~= health:GetStatusBarTexture() then
+                ns.NP_LayoutAbsorbBars(pvAbs, health, mode)
+            end
             ApplyPreviewAbsorbStyle()
-            previewAbsorb:Show()
+            pvAbs.absorb:SetMinMaxValues(0, 1)
+            pvAbs.absorb:SetValue(shield)
+            pvAbs._absCurClip:Show()
+            if pvAbs._absFwOn then
+                pvAbs.absorbForward:SetMinMaxValues(0, 1)
+                pvAbs.absorbForward:SetValue(shield)
+                pvAbs._absMissClip:Show()
+            end
         else
-            previewAbsorb:Hide()
+            pvAbs._absCurClip:Hide()
+            pvAbs._absMissClip:Hide()
         end
     end
 
@@ -999,6 +1007,7 @@ local function BuildNameplatePreview(parent, parentW)
         local pctStr = curHpPct .. "%"
         local pctNoSignStr = tostring(curHpPct)
         local hpNumStr = tostring(curHpVal):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+        local hpMaxStr = tostring(PV_CONST.FAKE_MAX_HP):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
         -- Synthetic fractional percent so "Show % Decimal" is visible here (the fake preview HP is a whole number).
         local pctStrDec = string.format("%.1f%%", curHpPct + 0.4)
         local pctNoSignStrDec = string.format("%.1f", curHpPct + 0.4)
@@ -1084,6 +1093,39 @@ local function BuildNameplatePreview(parent, parentW)
             else
                 borderFrame:Hide(); simpleBorderFrame:Hide()
                 for _, e in ipairs(_solidEdges) do e:Hide() end
+            end
+        end
+        -- Rounded corners, as on a live plate. The image border cannot round,
+        -- so a rounded Basic border draws as a Solid one on the custom border
+        -- frame (the live plate's Basic border is that same Solid border).
+        do
+            local radius = (not EllesmereUI.BlizzStyle.Get("nameplates") and DBVal("cornerRadius")) or 0
+            -- Wrap Around Castbar keeps the plates square, as on a live plate.
+            if DBVal("wrapBorderCastbar") == true then radius = 0 end
+            local style = customOn and (DBVal("customBorderTexture") or defaults.customBorderTexture) or "solid"
+            -- A custom style that cannot round keeps the cast bar square too.
+            if not EllesmereUI.RoundedStyleOK(style) then radius = 0 end
+            if radius > 0 and not customOn and pcb and simpleBorderFrame:IsShown() then
+                local bc = (DB() and DB().borderColor) or defaults.borderColor
+                simpleBorderFrame:Hide()
+                for _, e in ipairs(_solidEdges) do e:Hide() end
+                pcb:Show()
+                EllesmereUI.ApplyBorderStyle(pcb, DBVal("borderSize") or defaults.borderSize,
+                    bc.r, bc.g, bc.b, 1, "solid")
+            end
+            if radius > 0 then
+                EllesmereUI.RoundCorners(pf, radius, {
+                    roots = {}, rect = health, border = pcb, style = style,
+                    textures = { health:GetStatusBarTexture(), healthBG,
+                        pvAbs.absorb:GetStatusBarTexture(), pvAbs.absorbForward:GetStatusBarTexture() },
+                })
+                EllesmereUI.RoundCorners(cast, radius, {
+                    roots = {}, border = cast,
+                    textures = { cast:GetStatusBarTexture(), castBG },
+                })
+            else
+                EllesmereUI.RoundCorners(pf, 0)
+                EllesmereUI.RoundCorners(cast, 0)
             end
         end
 
@@ -1476,7 +1518,7 @@ local function BuildNameplatePreview(parent, parentW)
             elseif ns.IsComboHealthText(element) then
                 SetPVFont(hpText, fontPath, fontSize, npOutline)
                 hpText:SetParent(healthTextFrame)
-                ns.SetCombinedHealthText(hpText, element, dec and pctStrDec or pctStr, hpNumStr)
+                ns.SetCombinedHealthText(hpText, element, dec and pctStrDec or pctStr, hpNumStr, hpMaxStr)
                 hpText:SetPoint(point, health, anchor, xOff, yOff)
                 hpText:SetTextColor(cr, cg, cb, 1)
                 hpText:Show()
@@ -1529,7 +1571,7 @@ local function BuildNameplatePreview(parent, parentW)
                 hpNumber:Show()
             elseif ns.IsComboHealthText(element) then
                 SetPVFont(hpText, fontPath, fontSize, npOutline)
-                ns.SetCombinedHealthText(hpText, element, dec and pctStrDec or pctStr, hpNumStr)
+                ns.SetCombinedHealthText(hpText, element, dec and pctStrDec or pctStr, hpNumStr, hpMaxStr)
                 hpText:SetParent(topTextFrame)
                 hpText:SetPoint("BOTTOM", health, "TOP", txOff, 4 + nameYOff + cpPush + tyOff)
                 hpText:SetTextColor(cr, cg, cb, 1)
