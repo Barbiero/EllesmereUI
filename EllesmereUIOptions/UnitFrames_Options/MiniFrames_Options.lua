@@ -1726,8 +1726,15 @@ function ns.UFO_BuildPetOptions(W, parent, y)
         local function debuffsOn() return (P.debuffAnchor or "none") ~= "none" end
         _, h = W:SectionHeader(parent, "BUFFS AND DEBUFFS", y);  y = y - h
 
-        -- Row 1: Buffs Location | Debuffs Location
-        _, h = W:DualRow(parent, y,
+        local growthValues, growthOrder = env.buffGrowthValues, env.buffGrowthOrder
+        local function set(key, v) P[key] = v; ReloadAndUpdate() end
+        local function buffsOff() return not buffsOn() end
+        local function debuffsOff() return not debuffsOn() end
+
+        -- Buffs Location | Buff Size, then Debuffs Location | Debuff Size. The cog on the
+        -- location and the offsets cog on the size match the other unit frames.
+        local buffRow, debuffRow
+        buffRow, h = W:DualRow(parent, y,
             { type="dropdown", text="Buffs Location",
               values=anchorValues, order=anchorOrder,
               getValue=function() return buffsOn() and (P.buffAnchor or "topleft") or "none" end,
@@ -1742,6 +1749,11 @@ function ns.UFO_BuildPetOptions(W, parent, y)
                   auraApply()
                   EllesmereUI:RefreshPage()
               end },
+            { type="slider", text="Buff Size", min=10, max=70, step=1,
+              disabled=buffsOff, disabledTooltip="Buffs Location",
+              getValue=function() return P.buffSize or 22 end,
+              setValue=function(v) set("buffSize", v) end });  y = y - h
+        debuffRow, h = W:DualRow(parent, y,
             { type="dropdown", text="Debuffs Location",
               values=anchorValues, order=anchorOrder,
               getValue=function() return P.debuffAnchor or "none" end,
@@ -1750,29 +1762,67 @@ function ns.UFO_BuildPetOptions(W, parent, y)
                   if v ~= "none" and buffsOn() and (P.buffAnchor or "topleft") == v then P.buffAnchor = freeCorner(v) end
                   auraApply()
                   EllesmereUI:RefreshPage()
-              end });  y = y - h
-
-        -- Row 2: Buff Size | Debuff Size
-        _, h = W:DualRow(parent, y,
-            { type="slider", text="Buff Size", min=10, max=50, step=1,
-              disabled=function() return not buffsOn() end, disabledTooltip="Buffs Location",
-              getValue=function() return P.buffSize or 22 end,
-              setValue=function(v) P.buffSize = v; ReloadAndUpdate() end },
-            { type="slider", text="Debuff Size", min=10, max=50, step=1,
-              disabled=function() return not debuffsOn() end, disabledTooltip="Debuffs Location",
+              end },
+            { type="slider", text="Debuff Size", min=10, max=70, step=1,
+              disabled=debuffsOff, disabledTooltip="Debuffs Location",
               getValue=function() return P.debuffSize or 22 end,
-              setValue=function(v) P.debuffSize = v; ReloadAndUpdate() end });  y = y - h
+              setValue=function(v) set("debuffSize", v) end });  y = y - h
 
-        -- Row 3: Max Buffs | Max Debuffs
-        _, h = W:DualRow(parent, y,
-            { type="slider", text="Max Buffs", min=1, max=20, step=1,
-              disabled=function() return not buffsOn() end, disabledTooltip="Buffs Location",
-              getValue=function() return P.maxBuffs or 4 end,
-              setValue=function(v) P.maxBuffs = v; ReloadAndUpdate() end },
-            { type="slider", text="Max Debuffs", min=1, max=20, step=1,
-              disabled=function() return not debuffsOn() end, disabledTooltip="Debuffs Location",
-              getValue=function() return P.maxDebuffs or 10 end,
-              setValue=function(v) P.maxDebuffs = v; ReloadAndUpdate() end });  y = y - h
+        if not EllesmereUI._prebuilding then
+            -- One cog layout per kind: k is "buff" or "debuff".
+            local function settingsRows(k, maxKey, maxDefault, maxMax)
+                return {
+                    { type="dropdown", label="Growth Direction", values=growthValues, order=growthOrder,
+                      get=function() return P[k .. "Growth"] or "auto" end,
+                      set=function(v) set(k .. "Growth", v) end },
+                    { type="slider", label="Max Count", min=1, max=maxMax, step=1,
+                      get=function() return P[maxKey] or maxDefault end,
+                      set=function(v) set(maxKey, v) end },
+                    { type="slider", label="Max Per Row", min=1, max=maxMax, step=1,
+                      get=function() return P[k .. "MaxPerRow"] or P[maxKey] or maxDefault end,
+                      set=function(v) set(k .. "MaxPerRow", v) end },
+                    { type="toggle", label="Cropped Icons",
+                      get=function() return P[k .. "CropIcons"] == true end,
+                      set=function(v) set(k .. "CropIcons", v) end },
+                    { type="slider", label="Icon Zoom", min=0, max=0.20, step=0.01,
+                      disabled=function() return EllesmereUI.BlizzStyle.Get("unitframes") end,
+                      disabledTooltip=function() return EllesmereUI.BlizzStyle.Label("unitframes") end,
+                      requireState="disabled",
+                      get=function() return P[k .. "IconZoom"] or 0.07 end,
+                      set=function(v) set(k .. "IconZoom", v) end },
+                    { type="toggle", label="Dispel Type Borders",
+                      disabled=function() return EllesmereUI.BlizzStyle.Get("unitframes") end,
+                      disabledTooltip=function() return EllesmereUI.BlizzStyle.Label("unitframes") end,
+                      requireState="disabled",
+                      get=function() return P[k .. "DispelBorder"] == true end,
+                      set=function(v) set(k .. "DispelBorder", v) end },
+                }
+            end
+            local function positionRows(k)
+                return {
+                    { type="slider", label="Offset X", min=-1500, max=1500, step=1,
+                      get=function() return P[k .. "OffsetX"] or 0 end,
+                      set=function(v) set(k .. "OffsetX", v) end },
+                    { type="slider", label="Offset Y", min=-1500, max=1500, step=1,
+                      get=function() return P[k .. "OffsetY"] or 0 end,
+                      set=function(v) set(k .. "OffsetY", v) end },
+                    { type="slider", pixel=true, label="Spacing X", min=-1, max=10, step=1,
+                      get=function() return P[k .. "SpacingX"] or 1 end,
+                      set=function(v) set(k .. "SpacingX", v) end },
+                    { type="slider", pixel=true, label="Spacing Y", min=-1, max=10, step=1,
+                      get=function() return P[k .. "SpacingY"] or 1 end,
+                      set=function(v) set(k .. "SpacingY", v) end },
+                }
+            end
+            EllesmereUI.BuildInlineCog(buffRow._leftRegion, { disabled=buffsOff, disabledTooltip="Buffs Location",
+                title="Buff Settings", rows=settingsRows("buff", "maxBuffs", 4, 40) })
+            EllesmereUI.BuildInlineCog(buffRow._rightRegion, { icon=EllesmereUI.DIRECTIONS_ICON, disabled=buffsOff,
+                disabledTooltip="Buffs Location", title="Buff Position", rows=positionRows("buff") })
+            EllesmereUI.BuildInlineCog(debuffRow._leftRegion, { disabled=debuffsOff, disabledTooltip="Debuffs Location",
+                title="Debuff Settings", rows=settingsRows("debuff", "maxDebuffs", 10, 20) })
+            EllesmereUI.BuildInlineCog(debuffRow._rightRegion, { icon=EllesmereUI.DIRECTIONS_ICON, disabled=debuffsOff,
+                disabledTooltip="Debuffs Location", title="Debuff Position", rows=positionRows("debuff") })
+        end
     end
 
     -- Store click targets for hover highlight system
