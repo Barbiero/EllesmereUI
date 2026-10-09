@@ -332,10 +332,22 @@ function NameplateFrame:UpdateHealthColor()
     -- the few plates that take this path. hr/hg/hb stay the plain fallback for the tints below.
     local mirrored, mr, mg, mb = false
     if ns._reactionMirrorClass then
-        mirrored, mr, mg, mb = ns.GetBlizzardBarColor(self)
-        -- Wanted to mirror but Blizzard's plate was not on this unit yet: the deferred
-        -- setup pass retries. Only ever set on the plates that take this path.
-        self._mirrorPending = not mirrored or nil
+        -- The redacted token still keys C_ClassColor (the slot painter does the same); the
+        -- colour may be secret and goes straight to the setter.
+        local _, tok = UnitClass(unit)
+        mirrored, mr, mg, mb = EllesmereUI.GetClassColorForRestrictedUnit(unit, tok)
+        if not mirrored then
+            local c = C_ClassColor.GetClassColor(tok)
+            if c then mirrored = true; mr, mg, mb = c:GetRGB() end
+        end
+        if not mirrored then
+            -- No class colour: fall back to Blizzard's plate. Wanted to mirror but it was
+            -- not on this unit yet: the deferred setup pass retries.
+            mirrored, mr, mg, mb = ns.GetBlizzardBarColor(self)
+            self._mirrorPending = not mirrored or nil
+        else
+            self._mirrorPending = nil
+        end
     else
         self._mirrorPending = nil
     end
