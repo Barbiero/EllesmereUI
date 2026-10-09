@@ -10672,14 +10672,20 @@ end
 --  GCD Bar
 --  Uses the same detection logic as the cursor GCD Circle
 -------------------------------------------------------------------------------
--- Rogues and Cat Form druids run a flat 1 second GCD. Their lifecycle ceiling is that
+-- WoW Forever: Rogues and Cat Form druids run a flat 1 second GCD. Their lifecycle ceiling is that
 -- plus the same 0.1s margin the default 1.6s one carries (1.5 + 0.1), so the bar hides
 -- right after its fill finishes instead of lingering to 1.6. On ns: the file is near the
 -- local cap.
 function ns.GCDCeiling()
+    if EllesmereUI.IS_FOREVER ~= true then return end
     local _, class = UnitClass("player")
     if class == "ROGUE" then return 1.1 end
-    if class == "DRUID" and GetShapeshiftFormID and GetShapeshiftFormID() == 1 then return 1.1 end
+    if class == "DRUID" and GetShapeshiftFormID then
+        local form = GetShapeshiftFormID()
+        -- A secret answer cannot be compared: treat it as not Cat Form.
+        if issecretvalue and issecretvalue(form) then return end
+        if form == 1 then return 1.1 end
+    end
 end
 
 -- Idle fill render for the GCD bar. Debug-measured on the live client
