@@ -10672,6 +10672,16 @@ end
 --  GCD Bar
 --  Uses the same detection logic as the cursor GCD Circle
 -------------------------------------------------------------------------------
+-- Rogues and Cat Form druids run a flat 1 second GCD. Their lifecycle ceiling is that
+-- plus the same 0.1s margin the default 1.6s one carries (1.5 + 0.1), so the bar hides
+-- right after its fill finishes instead of lingering to 1.6. On ns: the file is near the
+-- local cap.
+function ns.GCDCeiling()
+    local _, class = UnitClass("player")
+    if class == "ROGUE" then return 1.1 end
+    if class == "DRUID" and GetShapeshiftFormID and GetShapeshiftFormID() == 1 then return 1.1 end
+end
+
 -- Idle fill render for the GCD bar. Debug-measured on the live client
 -- (2026-08-08): a COMPLETED bar timer keeps painting its finished state --
 -- SetValue(0) read back 0 while the fill still drew full -- so the idle
@@ -10803,6 +10813,8 @@ BuildGCDBar = function()
                 return nil
             end)
             if ok and elapsed and not (issecretvalue and (issecretvalue(elapsed) or issecretvalue(dur))) then
+                local ceiling = ns.GCDCeiling()
+                if ceiling and dur > ceiling then dur = ceiling end
                 local actualStart = GetTime() - elapsed
                 -- (Re)start whenever this is a genuinely NEWER GCD than the one we
                 -- last captured. Do NOT gate on how far the GCD has elapsed:
@@ -10844,7 +10856,7 @@ BuildGCDBar = function()
                 if armNativeGCD(bar, gc.depleteFill) then
                     self._nativeGCD = true
                     self._gcdStart = GetTime()
-                    self._gcdDur = 1.6
+                    self._gcdDur = ns.GCDCeiling() or 1.6
                     self._gcdActualStart = nil
                     ns.GCDTick.Start()
                     UpdateGCDBar()
