@@ -86,7 +86,21 @@ def check_compile(change, errors):
                           f"table if a 200-local or 60-upvalue limit is hit.")
 
 
-CHECKS = [check_compile]
+GUARD = b"if EUI_CLIENT_BLOCKED then return end"
+
+
+def check_client_gate(change, errors):
+    """Every suite file must stop on a blocked client before it runs anything."""
+    for path in change.lua_files:
+        if path == "EllesmereUI_ClientGate.lua":
+            continue
+        first = change.read(path).lstrip(b"\xef\xbb\xbf").split(b"\n", 1)[0]
+        if not first.startswith(GUARD):
+            errors.append(f"{path}:1: first line must be "
+                          f"'{GUARD.decode()} -- pre-12.1 client failsafe (EllesmereUI_ClientGate.lua)'")
+
+
+CHECKS = [check_compile, check_client_gate]
 
 
 def main():
