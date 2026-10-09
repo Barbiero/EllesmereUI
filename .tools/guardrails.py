@@ -153,7 +153,24 @@ def check_deprecated_globals(change, errors):
                           f"use {DEPRECATED[name]} (or local {name} = {DEPRECATED[name]})")
 
 
-CHECKS = [check_compile, check_client_gate, check_combat_deferral, check_deprecated_globals]
+def check_ascii(change, errors):
+    """CONTRIBUTING.md: ASCII only in code; multi-byte text corrupts in packaging."""
+    for path, lineno, text in change.added_lines:
+        if path.startswith("EllesmereUILocales/"):
+            continue
+        bad = sorted({c for c in text if ord(c) > 127})
+        if not bad:
+            continue
+        where = f"{path}:{lineno}"
+        if allowed("ascii", text, errors, where):
+            continue
+        shown = ", ".join(f"U+{ord(c):04X}" for c in bad)
+        errors.append(f"{where}: non-ASCII character(s) {shown}; use ASCII "
+                      f"(-- for a dash, plain quotes) or a byte escape such as \\226\\128\\148")
+
+
+CHECKS = [check_compile, check_client_gate, check_combat_deferral, check_deprecated_globals,
+          check_ascii]
 
 
 def main():
