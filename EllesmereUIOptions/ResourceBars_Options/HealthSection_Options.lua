@@ -774,7 +774,7 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
         AddFormTextBtn(rgn, cogBtn, cfg, RefreshHealth)
     end
 
-    -- Row 5: Text Size | Threshold Settings
+    -- Row 5: Text Size | Threshold & Hash Lines
     local healthColorRow
     healthColorRow, h = W:DualRow(parent, y,
         { type = "slider", text = "Text Size", min = 8, max = 24, step = 1,
@@ -785,9 +785,9 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
               local c = cfg(); if not c then return end
               c.textSize = v; RefreshHealth()
           end },
-        { type = "label", text = "Threshold Settings" }
+        { type = "label", text = "Threshold & Hash Lines" }
     );  y = y - h
-    -- Threshold Settings popup: edits DB().health (multi-spec, with the spec dropdown).
+    -- Threshold & Hash Lines editor: edits the health bar config (multi-spec, with the spec dropdown).
 
     if not EllesmereUI._prebuilding then
     local _thrNoticeH   -- assigned below: the notice badge lives on the button itself
@@ -796,19 +796,20 @@ function ns.ERB_BuildHealthSection(parent, y, ctx)
         getBarData = function() return cfg() end,
         noticeFn = function() if _thrNoticeH then _thrNoticeH() end end,
         singleSpec = ctx.advanced or nil,
+        specID = ctx.specID,
+        pageParent = parent, pageTopY = _advTop, pageBotY = function() return y end,
         refreshFn = function() RefreshHealth(); SmoothRefresh() end,
         rebuildFn = function() RebuildHealth() end,
         disabledFn = healthOff,
         disabledTip = "Health Bar",
-        showHash = false,
         showPartialCog = false,
         thresholdLabel = "Threshold %",
         threshMin = 1, threshMax = 99,
-        popupTitle = "Health Bar Threshold",
         defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
     })
     _thrNoticeH = AttachThresholdNotice(healthSettingsBtn, cfg, ctx.advanced and ctx.specID or nil)
 
+    -- Bar-wide hash lines (the fallback when the active threshold entry has none of its own).
     BuildHashCog({
         parentRgn = healthColorRow._rightRegion,
         anchorTo = healthSettingsBtn,

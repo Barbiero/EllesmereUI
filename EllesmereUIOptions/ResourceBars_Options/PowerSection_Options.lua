@@ -685,7 +685,7 @@ function ns.ERB_BuildPowerSection(parent, y, ctx)
           } }
     );  y = y - h
 
-    -- Row 5: Text Size | Threshold Settings
+    -- Row 5: Text Size | Threshold & Hash Lines
     local powerColorRow
     powerColorRow, h = W:DualRow(parent, y,
         { type = "slider", text = "Text Size", min = 8, max = 24, step = 1,
@@ -696,7 +696,7 @@ function ns.ERB_BuildPowerSection(parent, y, ctx)
               local c = cfg(); if not c then return end
               c.textSize = v; RefreshPower()
           end },
-        { type = "label", text = "Threshold Settings" }
+        { type = "label", text = "Threshold & Hash Lines" }
     );  y = y - h
     -- Power Text inline cog: percent sign, anchor, x/y offsets
     if not EllesmereUI._prebuilding then
@@ -744,21 +744,22 @@ function ns.ERB_BuildPowerSection(parent, y, ctx)
         getBarData = function() return cfg() end,
         noticeFn = function() if _thrNoticeP then _thrNoticeP() end end,
         singleSpec = ctx.advanced or nil,
+        specID = ctx.specID,
+        pageParent = parent, pageTopY = _advTop, pageBotY = function() return y end,
         refreshFn = function() RefreshPower(); SmoothRefresh() end,
         rebuildFn = function() RebuildPower() end,
         disabledFn = powerOff,
         disabledTip = "Power Bar",
-        showHash = false,
         showPartialCog = true,
         showSpenders = true,
         thresholdLabel = "Threshold %",
         threshMin = 1, threshMax = 99,
-        popupTitle = "Power Bar Threshold",
         defaultR = 1.0, defaultG = 0.2, defaultB = 0.2, defaultA = 1,
         formCapable = true,
     })
     _thrNoticeP = AttachThresholdNotice(powerSettingsBtn, cfg, ctx.advanced and ctx.specID or nil)
 
+    -- Bar-wide hash lines (the fallback when the active threshold entry has none of its own).
     BuildHashCog({
         parentRgn = powerColorRow._rightRegion,
         anchorTo = powerSettingsBtn,

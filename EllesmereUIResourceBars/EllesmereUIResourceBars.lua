@@ -3258,15 +3258,22 @@ end
 
 -- Value mode needs a readable max: getMaxFn returns the current max; if it is
 -- secret, fall back to the last-known-good value cached on the bar frame.
+-- Source: the active threshold entry when it has its own hash lines, else the
+-- bar-wide hashEnabled/hashValues (which Spec Override / conditional layers can set).
 function ns.ApplyHashLines(sb, cfg, getMaxFn)
     if not sb then return end
     local tickCache = sb._userHashTicks
-    if not (cfg and cfg.hashEnabled) then
-        if tickCache then for i = 1, #tickCache do tickCache[i]:Hide() end end
+    local ent = cfg and ResolveThresholdSpecEntry(cfg)
+    if not (ent and ent.hashValues and ent.hashValues ~= "") then
+        ent = cfg and cfg.hashEnabled and cfg or nil
+    end
+    local hashStr = ent and ent.hashValues
+    if not hashStr or hashStr == "" then
+        if tickCache then HideResourceBarTicks(tickCache, sb) end
         return
     end
     if not tickCache then tickCache = {}; sb._userHashTicks = tickCache end
-    local isPercent = (cfg.hashMode or "percent") == "percent"
+    local isPercent = (ent.hashMode or "percent") == "percent"
     local maxVal
     if isPercent then
         maxVal = 100
@@ -3289,8 +3296,8 @@ function ns.ApplyHashLines(sb, cfg, getMaxFn)
         hbs = EllesmereUI.BorderPx(cfg.borderSizePx, hbs, htex) or hbs
     end
     local vInset = hbs * ((PP and PP.mult) or 1)
-    ApplyResourceBarTicks(sb, maxVal, cfg.hashValues, tickCache,
-        cfg.hashWidth, cfg.hashColorR, cfg.hashColorG, cfg.hashColorB, cfg.hashColorA,
+    ApplyResourceBarTicks(sb, maxVal, hashStr, tickCache,
+        ent.hashWidth, ent.hashColorR, ent.hashColorG, ent.hashColorB, ent.hashColorA,
         isPercent, nil, vInset)
 end
 
