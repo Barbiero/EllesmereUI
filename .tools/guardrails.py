@@ -122,7 +122,38 @@ def check_combat_deferral(change, errors):
                       f"child's ns.CombatQueue (EllesmereUI.NewCombatQueue, EllesmereUI_Ticker.lua)")
 
 
-CHECKS = [check_compile, check_client_gate, check_combat_deferral]
+# Loose globals that only Blizzard_Deprecated defines: nil on WoW Forever.
+DEPRECATED = {
+    "GetSpecialization": "C_SpecializationInfo.GetSpecialization",
+    "GetSpecializationInfo": "C_SpecializationInfo.GetSpecializationInfo",
+    "GetItemInfo": "C_Item.GetItemInfo",
+    "GetItemInfoInstant": "C_Item.GetItemInfoInstant",
+    "GetItemQualityColor": "C_Item.GetItemQualityColor",
+}
+DEPRECATED_RE = re.compile(r"(?<![\w.:])(" + "|".join(DEPRECATED) + r")\b")
+
+
+def check_deprecated_globals(change, errors):
+    """Bare deprecated API globals break the Forever client."""
+    aliases = {}
+    for path, lineno, text in change.added_lines:
+        code = text.split("--", 1)[0]
+        for m in DEPRECATED_RE.finditer(code):
+            name = m.group(1)
+            if re.match(r"\s*local\s+" + name + r"\s*=\s*C_", code):
+                continue
+            if path not in aliases:
+                aliases[path] = change.read(path).decode("utf-8", "replace")
+            if re.search(r"^\s*local\s+" + name + r"\s*=\s*C_", aliases[path], re.M):
+                continue
+            where = f"{path}:{lineno}"
+            if allowed("deprecated-global", text, errors, where):
+                continue
+            errors.append(f"{where}: bare {name} is nil on WoW Forever; "
+                          f"use {DEPRECATED[name]} (or local {name} = {DEPRECATED[name]})")
+
+
+CHECKS = [check_compile, check_client_gate, check_combat_deferral, check_deprecated_globals]
 
 
 def main():
