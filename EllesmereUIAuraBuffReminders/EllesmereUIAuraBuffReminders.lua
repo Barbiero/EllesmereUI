@@ -20,7 +20,7 @@ local EABR = EllesmereUI.Lite.NewAddon("EllesmereUIAuraBuffReminders")
 -- nothing else changes there.
 EABR.FOREVER = EllesmereUI.IS_FOREVER == true
 EABR.CAMP_BENEFITS = 1229741
-EABR.WELL_FED = 19705  -- icon / localized-name source only; presence is matched by aura name
+EABR.WELL_FED = 19705
 
 local _B = {}  -- beacon state table, populated later
 local Known = function(id) return id and (IsPlayerSpell(id) or IsSpellKnown(id)) end
@@ -4315,7 +4315,6 @@ function EABR.CollectForever(missing, inInstance, inPvP, restricted)
     if fo.wellFed and not inPvP and not restricted then
         local name = SpellName(EABR.WELL_FED) or "Well Fed"
         local ok, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", name, "HELPFUL")
-        -- Unreadable (secret) answers show nothing rather than a false alarm.
         if ok and not isSecret(aura) and not aura then
             local e = AcquireEntry()
             e.mode = "texture"; e.spellID = EABR.WELL_FED
