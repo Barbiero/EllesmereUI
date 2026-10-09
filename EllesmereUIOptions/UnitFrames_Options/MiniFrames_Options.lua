@@ -1709,6 +1709,72 @@ function ns.UFO_BuildPetOptions(W, parent, y)
     local displayHeader, sizeRow, textHeader, textRow
     y, displayHeader, sizeRow, textHeader, textRow = BuildMiniTextAndSize(W, parent, y, db.profile.pet, "pet", enableRow, nil, petOpts)
 
+    -- BUFFS AND DEBUFFS: opt-in rows; the containers only exist once one is on.
+    do
+        local P = db.profile.pet
+        local anchorValues, anchorOrder = env.buffAnchorValues, env.buffAnchorOrder
+        local CORNERS = { "topleft", "bottomleft", "topright", "bottomright" }
+        local function auraApply()
+            if ns.UF_EnsurePetAuras then ns.UF_EnsurePetAuras() end
+            ReloadAndUpdate()
+        end
+        -- Buffs and debuffs never share a spot: the one set last keeps it, the other moves to a free corner.
+        local function freeCorner(taken)
+            for _, c in ipairs(CORNERS) do if c ~= taken then return c end end
+        end
+        local function buffsOn() return P.showBuffs == true end
+        local function debuffsOn() return (P.debuffAnchor or "none") ~= "none" end
+        _, h = W:SectionHeader(parent, "BUFFS AND DEBUFFS", y);  y = y - h
+
+        -- Row 1: Buffs Location | Debuffs Location
+        _, h = W:DualRow(parent, y,
+            { type="dropdown", text="Buffs Location",
+              values=anchorValues, order=anchorOrder,
+              getValue=function() return buffsOn() and (P.buffAnchor or "topleft") or "none" end,
+              setValue=function(v)
+                  if v == "none" then
+                      P.showBuffs = false
+                  else
+                      P.showBuffs = true
+                      P.buffAnchor = v
+                      if (P.debuffAnchor or "none") == v then P.debuffAnchor = freeCorner(v) end
+                  end
+                  auraApply()
+                  EllesmereUI:RefreshPage()
+              end },
+            { type="dropdown", text="Debuffs Location",
+              values=anchorValues, order=anchorOrder,
+              getValue=function() return P.debuffAnchor or "none" end,
+              setValue=function(v)
+                  P.debuffAnchor = v
+                  if v ~= "none" and buffsOn() and (P.buffAnchor or "topleft") == v then P.buffAnchor = freeCorner(v) end
+                  auraApply()
+                  EllesmereUI:RefreshPage()
+              end });  y = y - h
+
+        -- Row 2: Buff Size | Debuff Size
+        _, h = W:DualRow(parent, y,
+            { type="slider", text="Buff Size", min=10, max=50, step=1,
+              disabled=function() return not buffsOn() end, disabledTooltip="Buffs Location",
+              getValue=function() return P.buffSize or 22 end,
+              setValue=function(v) P.buffSize = v; ReloadAndUpdate() end },
+            { type="slider", text="Debuff Size", min=10, max=50, step=1,
+              disabled=function() return not debuffsOn() end, disabledTooltip="Debuffs Location",
+              getValue=function() return P.debuffSize or 22 end,
+              setValue=function(v) P.debuffSize = v; ReloadAndUpdate() end });  y = y - h
+
+        -- Row 3: Max Buffs | Max Debuffs
+        _, h = W:DualRow(parent, y,
+            { type="slider", text="Max Buffs", min=1, max=20, step=1,
+              disabled=function() return not buffsOn() end, disabledTooltip="Buffs Location",
+              getValue=function() return P.maxBuffs or 4 end,
+              setValue=function(v) P.maxBuffs = v; ReloadAndUpdate() end },
+            { type="slider", text="Max Debuffs", min=1, max=20, step=1,
+              disabled=function() return not debuffsOn() end, disabledTooltip="Debuffs Location",
+              getValue=function() return P.maxDebuffs or 10 end,
+              setValue=function(v) P.maxDebuffs = v; ReloadAndUpdate() end });  y = y - h
+    end
+
     -- Store click targets for hover highlight system
     parent._ufClickTargets = {
         healthBar  = { section = displayHeader,  target = sizeRow },
