@@ -2353,6 +2353,7 @@ EAB_VTABLE.PAGING_STATES = {
         WARRIOR = {
             { id = "battle",    macro = "[bonusbar:1]", label = "Battle Stance" },
             { id = "defensive", macro = "[bonusbar:2]", label = "Defensive Stance" },
+            { id = "berserker", macro = "[bonusbar:3]", label = "Berserker Stance" },
         },
         EVOKER = {
             { id = "soar", macro = "[bonusbar:1]", label = "Soar" },
